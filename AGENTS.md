@@ -31,9 +31,18 @@
 - Remove obsolete paths instead of keeping compatibility layers.
 - Be gentle with destiny.gg: one chat connection, chat-gui's backoff on
   reconnect, a User-Agent that names the app.
+- The chat server never answers websocket pings, so don't turn on OkHttp's
+  `pingInterval` (it would call every healthy connection dead). `ChatSocket`
+  sends the protocol's own `PING` event after 30 s of silence instead, and
+  answers the server's `PING` events with `PONG` as chat-gui does.
 - Dev builds (`debug`, package `…glorp.dev`) talk to destiny.gg's test site
   `https://www.omniliberal.dev`; release builds to `https://www.destiny.gg`.
   Try anything that writes (sending messages, settings) on the test site first.
+- A test-site login for dev builds: put `sid` and `rememberme` on two lines in
+  the app's private `files/dev-session` (`adb shell run-as <package> sh -c
+  'cat > files/dev-session'`, fed from the owner's secrets folder); the next
+  launch moves it into the encrypted store and deletes the file. Never put
+  the values in the repo, a command line, or the clipboard.
 
 ## Licence
 

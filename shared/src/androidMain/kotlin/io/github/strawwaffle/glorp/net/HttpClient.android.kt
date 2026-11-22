@@ -8,10 +8,9 @@ import java.util.concurrent.TimeUnit
 actual fun createHttpClient(): HttpClient = HttpClient(OkHttp) {
     engine {
         config {
-            // OkHttp closes the socket when a ping goes unanswered, which is
-            // how a connection that died without a close (a phone changing
-            // networks) gets noticed. The server pings every 10 s as well.
-            pingInterval(20, TimeUnit.SECONDS)
+            // No websocket pings: destiny.gg's chat server never answers them,
+            // so OkHttp would call every healthy connection dead. ChatSocket
+            // checks the connection with the chat protocol's own PING instead.
             connectTimeout(10, TimeUnit.SECONDS)
         }
     }

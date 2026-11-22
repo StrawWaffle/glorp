@@ -1,5 +1,7 @@
 package io.github.strawwaffle.glorp.chat
 
+import kotlin.random.Random
+
 /**
  * A line in chat. Immutable, so the UI can hold a snapshot of the log while
  * the next batch is applied.
@@ -11,6 +13,8 @@ data class ChatLine(
      * already shown.
      */
     val id: String,
+    val kind: Kind,
+    /** The sender for [Kind.User] and [Kind.Whisper]; null otherwise. */
     val nick: String?,
     val features: List<String>,
     val text: String,
@@ -20,7 +24,19 @@ data class ChatLine(
     /** The sender's subscription tier, which decides the emotes they may use. */
     val subTier: Int = 0,
 ) {
-    val isBroadcast: Boolean get() = nick == null
+    enum class Kind {
+        /** A chat message. */
+        User,
+
+        /** A site-wide announcement. */
+        Broadcast,
+
+        /** Something the app or the server tells only you: errors, sign-in changes. */
+        Info,
+
+        /** A private message to you. */
+        Whisper,
+    }
 
     companion object {
         fun user(nick: String, features: List<String>, raw: String, at: Long, subTier: Int = 0): ChatLine {
@@ -28,6 +44,7 @@ data class ChatLine(
             val text = if (action) raw.removePrefix("/me ") else raw
             return ChatLine(
                 id = "$nick\u0000$at\u0000$raw",
+                kind = Kind.User,
                 nick = nick,
                 features = features,
                 text = text,
@@ -40,6 +57,30 @@ data class ChatLine(
 
         fun broadcast(text: String, at: Long) = ChatLine(
             id = "broadcast\u0000$at\u0000$text",
+            kind = Kind.Broadcast,
+            nick = null,
+            features = emptyList(),
+            text = text,
+            at = at,
+            action = false,
+            green = false,
+        )
+
+        fun whisper(nick: String, text: String, at: Long, messageId: String?) = ChatLine(
+            id = "whisper\u0000${messageId ?: "$nick\u0000$at\u0000$text"}",
+            kind = Kind.Whisper,
+            nick = nick,
+            features = emptyList(),
+            text = text,
+            at = at,
+            action = false,
+            green = false,
+        )
+
+        /** Each notice is its own line, even when the same one repeats. */
+        fun info(text: String, at: Long) = ChatLine(
+            id = "info\u0000$at\u0000${Random.nextLong()}",
+            kind = Kind.Info,
             nick = null,
             features = emptyList(),
             text = text,

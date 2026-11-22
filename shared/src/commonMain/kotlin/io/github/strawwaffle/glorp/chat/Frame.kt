@@ -1,6 +1,5 @@
 package io.github.strawwaffle.glorp.chat
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -16,6 +15,14 @@ sealed interface ChatEvent {
     data class Message(val line: ChatLine) : ChatEvent
     data class History(val lines: List<ChatLine>) : ChatEvent
     data class Removal(val nick: String) : ChatEvent
+
+    /** Who the server thinks you are, sent first on every connect; null when signed out. */
+    data class Me(val nick: String?) : ChatEvent
+
+    /** The server refused something, by chat-gui's error code (`throttled`, `muted`…). */
+    data class Error(val code: String) : ChatEvent
+
+    data class Notice(val text: String) : ChatEvent
 }
 
 internal val chatJson = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -36,6 +43,17 @@ internal data class WireSubscription(val tier: Int = 0)
 internal data class WireText(
     val data: String = "",
     val timestamp: Long? = null,
+)
+
+@Serializable
+internal data class WireError(val description: String = "")
+
+@Serializable
+internal data class WirePrivate(
+    val nick: String = "",
+    val data: String = "",
+    val timestamp: Long? = null,
+    val messageid: Long? = null,
 )
 
 /** Parses one text frame. Returns null for events the app ignores or can't read. */
@@ -60,6 +78,19 @@ fun parseFrame(raw: String, now: () -> Long): ChatEvent? {
                 val target = chatJson.decodeFromString<WireText>(payload).data
                 if (target.isEmpty()) null else ChatEvent.Removal(target)
             }
+            "ME" -> ChatEvent.Me(chatJson.decodeFromString<WireUser?>(payload)?.nick?.takeIf { it.isNotEmpty() })
+            "ERR" -> ChatEvent.Error(chatJson.decodeFromString<WireError>(payload).description)
+            "PRIVMSG" -> {
+                val whisper = chatJson.decodeFromString<WirePrivate>(payload)
+                if (whisper.nick.isEmpty()) null
+                else ChatEvent.Message(
+                    ChatLine.whisper(whisper.nick, whisper.data, whisper.timestamp ?: now(), whisper.messageid?.toString()),
+                )
+            }
+            "SUBONLY" -> {
+                val on = chatJson.decodeFromString<WireText>(payload).data == "on"
+                ChatEvent.Notice(if (on) "Chat is now subscribers only." else "Chat is open to everyone again.")
+            }
             else -> null
         }
     } catch (_: IllegalArgumentException) {
@@ -75,3 +106,25 @@ private fun parseMessage(payload: String, now: () -> Long): ChatLine? {
     if (user.nick.isEmpty()) return null
     return ChatLine.user(user.nick, user.features, text, user.timestamp ?: now(), user.subscription?.tier ?: 0)
 }
+
+/** chat-gui's wording for the server's error codes. */
+fun errorText(code: String): String = when (code) {
+    "throttled" -> "Throttled! You were trying to send messages too fast."
+    "duplicate" -> "The message is identical to the last one you sent."
+    "muted" -> "You are muted."
+    "banned" -> "You have been banned. Your profile on the site says why and for how long."
+    "submode" -> "Chat is in subscriber only mode."
+    "needlogin" -> "You have to be signed in to do that."
+    "nopermission" -> "You don't have the permissions to do that."
+    "msgtoolong" -> "Messages can't be longer than 512 characters."
+    "invalidmsg" -> "The message was invalid."
+    "notfound" -> "That user was not found."
+    "privmsgbanned" -> "You can't send whispers while banned."
+    "privmsgaccounttooyoung" -> "Your account is too new to send whispers."
+    "nochatting" -> "You aren't allowed to chat: either you haven't picked a username, or a moderator turned chatting off for you."
+    "toomanyconnections" -> "Too many connections from your account. Close chat somewhere else and come back."
+    else -> "The server said: $code"
+}
+
+/** After these, chat-gui stops reconnecting, and so does this app. */
+fun isFatal(code: String) = code == "banned" || code == "toomanyconnections"
