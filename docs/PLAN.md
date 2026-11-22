@@ -109,6 +109,38 @@ with memory and battery throughout.
    (checksum checked, Android's installer), Obtainium-friendly. The signing
    key lives in `%USERPROFILE%\.secrets\glorp\`, never in the repo.
 
+## Community sites (researched 2026-11-22)
+
+None of these publish terms or a versioned API. Ask each maintainer before
+shipping, identify Glorp with its User-Agent, fetch only when a screen is
+open, and fall back to a link to the site when something changes.
+
+- **rustlesearch.dev** (chat log search). `https://api-v2.rustlesearch.dev`,
+  anonymous, CORS open, **200 requests a day per IP**.
+  `/anon/search?channel=Destinygg&username=&text=a|b&start_date=&end_date=&search_after=`
+  returns 100 messages per page, newest first (`{data:{messages:[{channel,text,ts,username,searchAfter}]}}`),
+  paged by the last `searchAfter`; `/anon/surrounds?channel=&username=&datetime=`
+  gives the lines around one; `/anon/channels`. chat-gui uses it for the
+  user menu's recent messages. Its /stalk and /mentions use destiny.gg's own
+  `/api/chat/stalk` and `/api/chat/mentions` instead (signed-in cookies).
+  Plan: a search screen rendered as chat lines, a user sheet from tapping a
+  nick, and mentions from destiny.gg's API so the shared quota isn't spent.
+- **mitchdev.net/dgg** (by Mitchdev). Poll archive and embed history.
+  `https://api.mitchdev.net/dgg/polls?before=&search=&startedBy=&sort=`,
+  `/dgg/poll/<id>`, `/dgg/polls/makers`, `/dgg/polls/yeevpepe`, and
+  `/dgg/embeds/chart?from=&to=` (a compact chart format with outages,
+  hosting, bans and Destiny's stream status); a `wss://api.mitchdev.net/live-ws`
+  pushes embeds every 30 s. Plan: a poll archive screen (paged by cursor) and
+  an embed-history tab; keep destiny.gg's live socket as the live source.
+- **dinkdonk.mov** (by Mitch). Community movie-night votes and ratings, no
+  media of its own. Mostly server-rendered pages; one public JSON endpoint,
+  `/api/page/history/full?offset=&limit=`; a keyed API exists behind login.
+  "Login with DGG" runs through Mitch's OpenID Connect server
+  `https://auth.mitch.my` (scopes `openid profile dgg`, public clients with
+  PKCE allowed), which might also give Glorp a cleaner destiny.gg login if
+  Mitch registers a client for it. Plan: read-only schedule, history and
+  results screens first; voting once there's a client or API key.
+
 ## iOS
 
 Everything in `commonMain` is meant to run on iOS. What an iOS build still
