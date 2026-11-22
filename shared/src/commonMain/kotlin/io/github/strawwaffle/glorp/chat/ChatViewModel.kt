@@ -3,8 +3,10 @@ package io.github.strawwaffle.glorp.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.strawwaffle.glorp.net.createHttpClient
+import io.github.strawwaffle.glorp.site.Emotes
 import io.github.strawwaffle.glorp.site.Flairs
 import io.github.strawwaffle.glorp.site.Site
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
@@ -31,6 +33,9 @@ class ChatViewModel(origin: String) : ViewModel() {
     private val _flairs = MutableStateFlow(Flairs.None)
     val flairs: StateFlow<Flairs> = _flairs.asStateFlow()
 
+    private val _emotes = MutableStateFlow(Emotes.None)
+    val emotes: StateFlow<Emotes> = _emotes.asStateFlow()
+
     private val _socketState = MutableStateFlow(SocketState.Connecting)
     val socketState: StateFlow<SocketState> = _socketState.asStateFlow()
 
@@ -39,19 +44,23 @@ class ChatViewModel(origin: String) : ViewModel() {
     // instead of once per message.
     private val frames = Channel<String>(capacity = 2_000, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     private var connection: Job? = null
-    private val ready: Job = viewModelScope.launch {
-        site = Site.discover(client, origin)
-        _flairs.value = Flairs.fetch(client, site)
-    }
+    private val siteKnown = CompletableDeferred<Unit>()
 
     init {
+        viewModelScope.launch {
+            site = Site.discover(client, origin)
+            siteKnown.complete(Unit)
+            // Chat connects once the site is known; the lists fill in alongside.
+            launch { _flairs.value = Flairs.fetch(client, site) }
+            launch { _emotes.value = Emotes.fetch(client, site) }
+        }
         viewModelScope.launch { applyFrames() }
     }
 
     fun start() {
         if (connection?.isActive == true) return
         connection = viewModelScope.launch {
-            ready.join()
+            siteKnown.join()
             val socket = ChatSocket(client, site.chatSocketUrl)
             launch { socket.state.collect { _socketState.value = it } }
             socket.run { frames.send(it) }

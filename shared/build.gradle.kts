@@ -33,9 +33,12 @@ kotlin {
             implementation(libs.serialization.json)
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.websockets)
+            implementation(libs.coil.compose)
+            implementation(libs.coil.network.ktor)
         }
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
+            implementation(libs.coil.gif)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

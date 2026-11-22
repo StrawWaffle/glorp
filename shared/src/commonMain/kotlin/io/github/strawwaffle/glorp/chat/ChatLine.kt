@@ -17,11 +17,13 @@ data class ChatLine(
     val at: Long,
     val action: Boolean,
     val green: Boolean,
+    /** The sender's subscription tier, which decides the emotes they may use. */
+    val subTier: Int = 0,
 ) {
     val isBroadcast: Boolean get() = nick == null
 
     companion object {
-        fun user(nick: String, features: List<String>, raw: String, at: Long): ChatLine {
+        fun user(nick: String, features: List<String>, raw: String, at: Long, subTier: Int = 0): ChatLine {
             val action = raw.startsWith("/me ")
             val text = if (action) raw.removePrefix("/me ") else raw
             return ChatLine(
@@ -32,6 +34,7 @@ data class ChatLine(
                 at = at,
                 action = action,
                 green = text.startsWith(">"),
+                subTier = subTier,
             )
         }
 

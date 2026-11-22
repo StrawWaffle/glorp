@@ -33,9 +33,15 @@ with memory and battery throughout.
 1. **Read-only chat** (done): connect, backlog, live lines, flair name
    colours, mutes and bans, a fixed-size log, reconnect with backoff,
    socket closed off screen.
-2. **Chat that looks like the site's**: emotes (static and animated, decoded
-   once and shared, animations paused off screen), flair badges, links,
-   mentions and highlights, timestamps, combos, polls, pinned message.
+2. **Chat that looks like the site's** (started): emotes as whole words the
+   sender's tier allows, sprite-strip animations read from `emotes.css`
+   (played once from when the message was sent, then resting on a frame),
+   GIFs, flair badges, links. Images go through one Coil loader with a
+   capped memory cache and a disk cache. Still to do: the hand-written CSS
+   effects on about 40 emotes (bounces, glows, neighbour effects), mentions
+   and highlights, timestamps, combos, polls, the pinned message, emotes
+   overlapping lines the way the site draws them rather than making lines
+   taller.
 3. **Logged in**: sign in on the site's own login page in the app and keep the
    `sid`/`rememberme` cookies (chat-gui uses the same); paste a login key as
    the fallback for providers that refuse in-app sign-in (Google). Send

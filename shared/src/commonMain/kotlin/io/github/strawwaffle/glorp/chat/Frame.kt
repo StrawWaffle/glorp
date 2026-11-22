@@ -26,7 +26,11 @@ internal data class WireUser(
     val features: List<String> = emptyList(),
     val timestamp: Long? = null,
     val data: String? = null,
+    val subscription: WireSubscription? = null,
 )
+
+@Serializable
+internal data class WireSubscription(val tier: Int = 0)
 
 @Serializable
 internal data class WireText(
@@ -69,5 +73,5 @@ private fun parseMessage(payload: String, now: () -> Long): ChatLine? {
     val user = chatJson.decodeFromString<WireUser>(payload)
     val text = user.data ?: return null
     if (user.nick.isEmpty()) return null
-    return ChatLine.user(user.nick, user.features, text, user.timestamp ?: now())
+    return ChatLine.user(user.nick, user.features, text, user.timestamp ?: now(), user.subscription?.tier ?: 0)
 }
