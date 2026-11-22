@@ -74,6 +74,29 @@ with memory and battery throughout.
    app leaves the screen. Next: Twitch, then Grayjay's plugin engine for
    YouTube, Rumble and the rest; picture in picture and background audio,
    with chat kept connected while playing.
+   **Catch-up (wanted, not built yet).** Behind live, play faster until
+   caught up, then return to normal speed without a stall. YouTube's version
+   shows the trap: it speeds up until it reaches the newest segment with an
+   empty buffer, stalls for seconds to refill, is now behind again, speeds up
+   again, and loops. The fix is to steer by how much is buffered ahead as
+   well as by the live offset:
+   - ease the speed down as the gap closes (proportional, e.g. 1.5× far
+     behind, approaching 1.0× near the target), rather than switching from
+     fast to normal at the edge;
+   - aim for a target offset that leaves a buffer of a couple of segments,
+     never for the newest segment, and never speed up while the buffer ahead
+     is below that floor;
+   - hysteresis: start catching up only beyond, say, target + 10 s, and treat
+     anything within target + 2 s as caught up, so small wobbles don't toggle
+     it;
+   - after a stall, don't resume catching up immediately.
+   Media3's `DefaultLivePlaybackSpeedControl` already adjusts speed by live
+   offset and buffer (by default only 0.97–1.03×); start from it with a higher
+   maximum speed and a tuned proportional factor before writing our own.
+   Tested well: unit tests that simulate offset, buffer and segment arrival
+   (including late segments and a stall at the edge) and check there is no
+   stall and no oscillation; then logging offset, speed, buffer and stalls on
+   a phone over long real streams on Kick and Twitch.
 6. **The rest of the site**: profile, subscriptions (opened in the browser),
    notifications, schedule, and whatever else a logged-in user can reach.
 7. **Releases**: signed APKs on GitHub Releases, self-update from there
