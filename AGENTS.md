@@ -65,6 +65,10 @@ licence; check it before using one.
 - `shared/src/{android,ios}Main`: the HTTP client per platform, the iOS entry.
 - `androidApp/`: the Android shell (activity, manifest, build types).
 - `docs/PLAN.md`: the architecture and the layers still to come.
+- `art/`: the icon art. `glorp-icon.png` is the original; `glorp-icon-plain.png`
+  is the alien cut out onto plain navy, which the launcher icon is made from
+  (`androidApp/src/main/res/mipmap-*`, an adaptive icon with a monochrome layer
+  for themed icons).
 
 ## Screenshots
 

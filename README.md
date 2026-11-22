@@ -1,5 +1,7 @@
 # Glorp
 
+<img src="art/glorp-icon-plain.png" alt="Glorp, a green furry alien with antennae" width="96" align="right">
+
 An unofficial destiny.gg app for Android: the chat, the bigscreen embeds in
 native players with picture in picture, and the rest of the site, made to go
 easy on memory and battery.
