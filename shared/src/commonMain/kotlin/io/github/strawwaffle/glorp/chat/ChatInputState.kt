@@ -22,6 +22,7 @@ class ChatInputState(
     val history = InputHistory(prefs)
     val ignored = NickSet(settings, "ignorenicks")
     val highlighted = NickSet(settings, "highlightnicks")
+    val tags = Tags(settings)
 
     /** A name tapped in chat, whose actions show above the input; null when none. */
     var tappedNick by mutableStateOf<String?>(null)

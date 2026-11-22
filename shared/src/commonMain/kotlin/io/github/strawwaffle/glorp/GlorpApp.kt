@@ -124,7 +124,10 @@ fun GlorpApp(
         val settings = chat.settings
         CompositionLocalProvider(
             LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it },
-            LocalChatLook provides ChatLook(settings.showTime, settings.timestampFormat, settings.hideFlairIcons),
+            LocalChatLook provides ChatLook(
+                settings.showTime, settings.timestampFormat, settings.hideFlairIcons,
+                settings.highlightSelf, chat.input.tags.colors, settings.taggedVisibility,
+            ),
         ) {
         ChatScreen(
             lines, flairs, emotes, state, account,

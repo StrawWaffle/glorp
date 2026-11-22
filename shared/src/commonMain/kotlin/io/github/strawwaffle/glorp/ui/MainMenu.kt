@@ -19,7 +19,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import io.github.strawwaffle.glorp.chat.ChatSettings
 import io.github.strawwaffle.glorp.chat.SocketState
+import io.github.strawwaffle.glorp.chat.highlightWords
 import io.github.strawwaffle.glorp.update.Release
 import io.github.strawwaffle.glorp.update.UpdateState
 import io.github.strawwaffle.glorp.site.Account
@@ -49,7 +68,7 @@ fun MainMenu(
     catchUp: Float = 1.5f,
     onToggleCatchUp: () -> Unit = {},
     /** Chat's settings, saved with the account when signed in with cookies. */
-    chatSettings: io.github.strawwaffle.glorp.chat.ChatSettings? = null,
+    chatSettings: ChatSettings? = null,
     /** Opens a community screen: "rustle", "polls" or "dinkdonk". */
     onCommunity: (String) -> Unit = {},
     unreadWhispers: Int = 0,
@@ -102,6 +121,19 @@ fun MainMenu(
                 Item("Flair icons: " + if (chatSettings.hideFlairIcons) "hidden" else "shown", null) {
                     chatSettings.setBool("hideflairicons", !chatSettings.hideFlairIcons)
                 }
+            }
+            item {
+                Item(
+                    "Highlight mentions of me: " + if (chatSettings.highlightSelf) "on" else "off",
+                    null,
+                ) { chatSettings.setBool("highlight", !chatSettings.highlightSelf) }
+            }
+            item { HighlightWords(chatSettings) }
+            item {
+                Item(
+                    "Tagged users stand out: " + if (chatSettings.taggedVisibility) "on" else "off",
+                    "Their messages get a lighter background as well as the colour bar (tag from a name, or /tag)",
+                ) { chatSettings.setBool("taggedvisibility", !chatSettings.taggedVisibility) }
             }
         }
 
@@ -188,6 +220,48 @@ private fun UpdateItem(update: UpdateState, onInstall: (Release) -> Unit) {
     ) {
         Text(title, color = Palette.Glorp, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
         detail?.let { Text(it, color = Palette.TextDim, fontSize = 12.sp) }
+    }
+}
+
+/** `customhighlight`: words that highlight a message, written as the site's settings take them, between commas. */
+@Composable
+private fun HighlightWords(settings: ChatSettings) {
+    val words = settings.list("customhighlight")
+    var editing by remember { mutableStateOf<TextFieldValue?>(null) }
+    val draft = editing
+    if (draft == null) {
+        Item(
+            "Highlight words",
+            if (words.isEmpty()) "None: messages with these words stand out" else words.joinToString(", "),
+        ) {
+            val text = words.joinToString(", ")
+            editing = TextFieldValue(text, TextRange(text.length))
+        }
+        return
+    }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    fun save() {
+        settings.setList("customhighlight", highlightWords(draft.text))
+        editing = null
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Text("Highlight words, between commas", color = Palette.White, fontSize = 15.sp)
+        BasicTextField(
+            draft,
+            onValueChange = { editing = it },
+            textStyle = TextStyle(color = Palette.White, fontSize = 15.sp),
+            cursorBrush = SolidColor(Palette.White),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { save() }),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).focusRequester(focus)
+                .background(Palette.Navy, RoundedCornerShape(6.dp)).padding(10.dp),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = { editing = null }) { Text("Cancel", color = Palette.TextDim) }
+            TextButton(onClick = ::save) { Text("Save", color = Palette.Blue) }
+        }
     }
 }
 

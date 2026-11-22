@@ -61,6 +61,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.strawwaffle.glorp.chat.ChatInputState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.key
+import io.github.strawwaffle.glorp.chat.TAG_COLORS
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
 import io.github.strawwaffle.glorp.chat.Suggestion
 import io.github.strawwaffle.glorp.chat.complete
 import io.github.strawwaffle.glorp.chat.insertWord
@@ -146,6 +151,14 @@ fun ChatInput(
             tapped != null -> NickActions(
                 nick = tapped,
                 highlighted = tapped in state.highlighted,
+                tag = state.tags.colors[tapped.lowercase()],
+                note = state.tags.notes[tapped.lowercase()].orEmpty(),
+                // A new tag keeps the note they had; notes are set with /tag.
+                onTag = { color ->
+                    val key = tapped.lowercase()
+                    if (color == null) state.tags.untag(key) else state.tags.tag(key, color, state.tags.notes[key].orEmpty())
+                    state.tappedNick = null
+                },
                 onMention = { insert(tapped); state.tappedNick = null; focus.requestFocus(); keyboard?.show() },
                 onWhisper = { state.setDraft("/w $tapped "); state.tappedNick = null; focus.requestFocus(); keyboard?.show() },
                 onIgnore = { onIgnore(tapped); state.tappedNick = null },
@@ -290,6 +303,9 @@ private fun HistoryStrip(recent: List<String>, onPick: (String) -> Unit) {
 private fun NickActions(
     nick: String,
     highlighted: Boolean,
+    tag: String?,
+    note: String,
+    onTag: (String?) -> Unit,
     onMention: () -> Unit,
     onWhisper: () -> Unit,
     onIgnore: () -> Unit,
@@ -297,18 +313,51 @@ private fun NickActions(
     onRecent: () -> Unit,
     onClose: () -> Unit,
 ) {
+    var picking by remember(nick) { mutableStateOf(false) }
+    if (note.isNotEmpty()) {
+        Text(
+            note,
+            color = Palette.TextDim,
+            fontSize = 12.sp,
+            maxLines = 2,
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 6.dp),
+        )
+    }
+    // Each set of actions starts at its beginning, the name in view.
+    val rowState = key(picking) { rememberLazyListState() }
     LazyRow(
         Modifier.fillMaxWidth().height(40.dp),
+        state = rowState,
         contentPadding = PaddingValues(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        item { Text(nick, color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(end = 4.dp)) }
-        item { Action("Mention", onMention) }
-        item { Action("Whisper", onWhisper) }
-        item { Action("Recent messages", onRecent) }
-        item { Action(if (highlighted) "Unhighlight" else "Highlight", onHighlight) }
-        item { Action("Ignore", onIgnore) }
-        item { Action("Close", onClose, Palette.TextDim) }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 4.dp)) {
+                if (tag != null) Box(Modifier.padding(end = 6.dp).size(10.dp).background(tagColor(tag), CircleShape))
+                Text(nick, color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            }
+        }
+        if (picking) {
+            // chat-gui's colours; the one they have is ringed.
+            items(TAG_COLORS) { color ->
+                Box(
+                    Modifier.padding(horizontal = 4.dp).size(28.dp)
+                        .then(if (color == tag) Modifier.border(2.dp, Palette.White, CircleShape) else Modifier)
+                        .padding(4.dp).background(tagColor(color), CircleShape)
+                        .clickable(onClickLabel = "Tag $color") { onTag(color) },
+                )
+            }
+            if (tag != null) item { Action("Untag", { onTag(null) }) }
+            item { Action("Back", { picking = false }, Palette.TextDim) }
+        } else {
+            item { Action("Mention", onMention) }
+            item { Action("Whisper", onWhisper) }
+            item { Action("Recent messages", onRecent) }
+            item { Action(if (highlighted) "Unhighlight" else "Highlight", onHighlight) }
+            item { Action(if (tag != null) "Tag colour" else "Tag", { picking = true }) }
+            item { Action("Ignore", onIgnore) }
+            item { Action("Close", onClose, Palette.TextDim) }
+        }
     }
 }
 

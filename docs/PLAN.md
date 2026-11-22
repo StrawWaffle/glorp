@@ -72,7 +72,7 @@ with memory and battery throughout.
    commands are read as it reads them: `/r`, `/ignore`, `/highlight`,
    `/help`, `/emotes`, `/embed` are handled in the app, moderator commands
    go to the server as the same events, and the ones that need the site's
-   login or features Glorp lacks (`/stalk`, tags) say so. Polls show above
+   login or features Glorp lacks (`/stalk`) say so. Polls show above
    chat as chat-gui shows them (bars, a timer, hidden and sub-weighted
    polls, the winner); tapping an option or typing its number votes, and
    `/poll`, `/pollstop`, `/showpoll` work for accounts with the `POLLS`
@@ -84,8 +84,14 @@ with memory and battery throughout.
    sync, the account's copy after that unless this device has unsent
    changes, uploaded a second after a change. With a login key they stay on
    the device. Glorp uses the ignore and highlight lists, timestamps
-   (`showtime`, `timestampformat` and `/timestampformat`) and hiding flair
-   icons. Tapping a name offers mention, whisper, highlight and ignore.
+   (`showtime`, `timestampformat` and `/timestampformat`), hiding flair
+   icons, highlighting mentions (`highlight`), highlight words
+   (`customhighlight`, read as chat-gui reads them: each word can be a
+   pattern) and tags (`taggednicks`, `taggednotes`, `taggedvisibility`,
+   `/tag`, `/untag`, `/untagall`; a bar of the tag's colour down the left
+   of the line, as chat-gui draws it). Tapping a name offers mention,
+   whisper, highlight, tag (a row of chat-gui's colours) and ignore, and
+   shows a tagged user's note.
    Whispers have their own screen (menu → Whispers, `/open nick`, or the
    "new whispers" tab over chat): conversations newest first with unread
    counts, each with a reply box. A whisper shows as sent only once the
@@ -93,8 +99,8 @@ with memory and battery throughout.
    They're kept in memory only. With the site's cookies the site's
    conversation list and history load too (`/api/messages/...`, which
    refuses login keys).
-   Still to do: the rest of chat-gui's settings (custom highlight words,
-   tags and notes, notifications, `showremoved`, hiding NSFW links),
+   Still to do: the rest of chat-gui's settings (notifications,
+   `showremoved`, hiding NSFW links),
    cookies for site pages.
 4. **Embeds** (started): a player above chat. It shows what bigscreen would
    (Destiny on the preferred platform, else the first live one, else what's

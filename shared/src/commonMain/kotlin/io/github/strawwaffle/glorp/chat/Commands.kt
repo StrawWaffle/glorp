@@ -18,6 +18,11 @@ sealed interface Command {
 
     /** Null [nick] asks for the list. */
     data class Highlight(val nick: String?, val on: Boolean) : Command
+
+    /** Null [nick] asks for the list; [args] are the colour and note. */
+    data class Tag(val nick: String?, val args: List<String>) : Command
+    data class Untag(val nick: String?) : Command
+    data object UntagAll : Command
     data object Help : Command
 
     /** Null [format] asks for the current one. */
@@ -76,6 +81,7 @@ val commandList = listOf(
     CommandInfo("reply", listOf("r"), "Reply to the last whisper you received."),
     CommandInfo("showpoll", listOf("showvote"), "Show the last poll again after closing it."),
     CommandInfo("subonly", emptyList(), "Set subscriber-only chat mode <on>, <off>, or to a specific <tier> (1-5).", mod = true),
+    CommandInfo("tag", emptyList(), "Mark <nick>'s messages."),
     CommandInfo("timestampformat", emptyList(), "Set the time format of the chat."),
     CommandInfo("unban", emptyList(), "Unban <nick>.", mod = true),
     CommandInfo("unhighlight", emptyList(), "Unhighlight <nick>."),
@@ -83,6 +89,8 @@ val commandList = listOf(
     CommandInfo("unignoreall", emptyList(), "Remove all users from your ignore list."),
     CommandInfo("unmute", emptyList(), "Unmute <nick>.", mod = true),
     CommandInfo("unpin", listOf("unmotd"), "Unpin a message from chat.", mod = true),
+    CommandInfo("untag", emptyList(), "Untag <nick>."),
+    CommandInfo("untagall", emptyList(), "Untag all your tagged users."),
 )
 
 /** chat-gui's commands Glorp doesn't do, and why, so they don't go to chat as text. */
@@ -94,9 +102,6 @@ private val notHere = mapOf(
     "baninfo" to "needs the site's own login; your profile on the site shows bans",
     "host" to "needs the site's own login",
     "unhost" to "needs the site's own login",
-    "tag" to "tags aren't in Glorp yet",
-    "untag" to "tags aren't in Glorp yet",
-    "untagall" to "tags aren't in Glorp yet",
     "exit" to "conversations close with the back button",
     "maxlines" to "Glorp keeps a fixed number of lines",
     "hint" to "there are no hints in Glorp",
@@ -189,6 +194,20 @@ fun parseCommand(text: String, mod: Boolean): Command {
                 !isNick(nick) -> Command.Problem("Invalid nick - /$name nick")
                 else -> Command.Highlight(nick, name == "highlight")
             }
+        }
+        "tag" -> when {
+            args.isEmpty() -> Command.Tag(null, emptyList())
+            !isNick(args[0]) -> Command.Problem("Invalid nick - /tag <nick> [<color>, <note>]")
+            else -> Command.Tag(args[0], args.drop(1))
+        }
+        "untag" -> when {
+            args.isEmpty() -> Command.Untag(null)
+            !isNick(args[0]) -> Command.Problem("Invalid nick - /untag <nick> [<color>, <note>]")
+            else -> Command.Untag(args[0])
+        }
+        "untagall" -> when (args.firstOrNull()?.lowercase()) {
+            "yes", "y" -> Command.UntagAll
+            else -> Command.Problem("This command requires confirmation - /untagall yes OR /untagall y")
         }
         "help" -> Command.Help
         "timestampformat" -> when {

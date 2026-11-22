@@ -131,6 +131,12 @@ class Completer(private val recentCap: Int = 500) {
         version++
     }
 
+    /** Whether [nick] is in the roster or has spoken lately. */
+    fun knows(nick: String): Boolean {
+        val key = nick.lowercase()
+        return key in heard || roster.range(key).any { roster.lower[it] == key }
+    }
+
     /** Someone spoke. The most recent [recentCap] speakers are kept. */
     fun heard(nick: String, at: Long) {
         val key = nick.lowercase()

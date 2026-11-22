@@ -401,6 +401,17 @@ class ChatViewModel(
                 notice("Your ignore list has been cleared.")
             }
             is Command.Highlight -> highlight(command.nick, command.on)
+            is Command.Tag -> tag(command.nick, command.args, me.nick)
+            is Command.Untag -> if (command.nick == null) {
+                notice(tagList(input.tags.colors, input.tags.notes))
+                notice("Usage. /untag <nick>")
+            } else {
+                untag(command.nick)
+            }
+            Command.UntagAll -> {
+                input.tags.clear()
+                notice("Your tags have been cleared.")
+            }
             is Command.TimestampFormat -> if (command.format == null) {
                 notice("Current format: ${settings.timestampFormat} (the default is 'HH:mm', for more info: http://momentjs.com/docs/#/displaying/format/)")
             } else {
@@ -518,6 +529,37 @@ class ChatViewModel(
         val lower = nick.lowercase()
         if (on) input.highlighted.add(listOf(lower)) else input.highlighted.remove(listOf(lower))
         notice(if (on) "Highlighting $lower." else "No longer highlighting $lower.")
+    }
+
+    /** `/tag`, as chat-gui does it: the list, one tag, or a new or changed tag. */
+    private fun tag(nick: String?, args: List<String>, me: String) {
+        val usage = "Usage. /tag <nick> [<color>, <note>]\n(Available colors:${TAG_COLORS.joinToString(", ")})"
+        val tags = input.tags
+        if (nick == null) {
+            notice(tagList(tags.colors, tags.notes))
+            notice(usage)
+            return
+        }
+        val n = nick.lowercase()
+        val color = tags.colors[n]
+        when {
+            n == me.lowercase() -> notice("Cannot tag yourself")
+            !input.completer.knows(n) -> notice("User must be present in chat to tag.")
+            color != null && args.isEmpty() -> {
+                notice("$n ($color) ${tags.notes[n].orEmpty()}".trimEnd())
+                notice(usage)
+            }
+            else -> {
+                val (newColor, note) = readTag(args, tags.notes[n].orEmpty()) { TAG_COLORS.random() }
+                tags.tag(n, newColor, note)
+                notice("Tagged $nick as $newColor.")
+            }
+        }
+    }
+
+    private fun untag(nick: String) {
+        input.tags.untag(nick)
+        notice("Un-tagged ${nick.lowercase()}.")
     }
 
     private fun transmit(action: suspend () -> Boolean) {

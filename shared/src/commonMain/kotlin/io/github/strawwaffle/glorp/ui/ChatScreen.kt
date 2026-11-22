@@ -40,6 +40,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
@@ -64,6 +66,7 @@ import coil3.compose.AsyncImage
 import io.github.strawwaffle.glorp.chat.ChatInputState
 import io.github.strawwaffle.glorp.chat.ChatLine
 import io.github.strawwaffle.glorp.chat.ChatViewModel
+import io.github.strawwaffle.glorp.chat.Highlighter
 import io.github.strawwaffle.glorp.chat.Poll
 import io.github.strawwaffle.glorp.chat.Segment
 import io.github.strawwaffle.glorp.chat.SocketState
@@ -181,7 +184,10 @@ private fun ChatBody(
         // Signed out there is no input to act from.
         val signedIn = account != null
         val tapNick: (String) -> Unit = remember(input, signedIn) { { if (signedIn) input.tappedNick = it } }
-        val highlighted = input.highlighted.nicks
+        // Highlights by name and by word; mentions of you are the row's own business.
+        val highlightNicks = input.highlighted.nicks
+        val words = input.settings.list("customhighlight")
+        val highlighter = remember(me, highlightNicks, words) { Highlighter(me, self = false, highlightNicks, words) }
         if (pinned != null && !pinned.dismissed) PinnedBar(pinned, flairs, emotes, me, openEmbed, tapNick, onShowPin)
         if (poll != null && !poll.dismissed) PollCard(poll, onVote, onClosePoll)
         val list = rememberLazyListState()
@@ -198,7 +204,9 @@ private fun ChatBody(
         Box(Modifier.fillMaxWidth().weight(1f)) {
             LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true) {
                 items(reversed, key = { it.line.id }, contentType = { it.line.kind }) { shown ->
-                    val marked = shown.line.kind == ChatLine.Kind.User && shown.line.nick?.lowercase() in highlighted
+                    val marked = remember(shown.line, highlighter) {
+                        shown.line.kind == ChatLine.Kind.User && highlighter.highlights(shown.line.nick, shown.line.text)
+                    }
                     ChatRow(shown.line, shown.continued, flairs, emotes, me, mention, marked, openEmbed, tapNick)
                 }
             }
@@ -265,8 +273,35 @@ internal fun continues(previous: ChatLine, line: ChatLine): Boolean =
     previous.kind == ChatLine.Kind.User && line.kind == ChatLine.Kind.User &&
         previous.nick.equals(line.nick, ignoreCase = true)
 
-/** How chat's settings say lines look: the time before each, flair icons or not. */
-data class ChatLook(val showTime: Boolean = false, val timeFormat: String = "HH:mm", val hideFlairIcons: Boolean = false)
+/**
+ * How chat's settings say lines look: the time before each, flair icons or
+ * not, whether mentions of you stand out, and tagged users' colours (lower
+ * case nick to a [tagColor] name).
+ */
+data class ChatLook(
+    val showTime: Boolean = false,
+    val timeFormat: String = "HH:mm",
+    val hideFlairIcons: Boolean = false,
+    val highlightSelf: Boolean = true,
+    val tags: Map<String, String> = emptyMap(),
+    val taggedVisibility: Boolean = false,
+)
+
+/** chat-gui's tag colours. */
+internal fun tagColor(name: String): Color = when (name) {
+    "green" -> Color(0xFF61BD4F)
+    "yellow" -> Color(0xFFF2D600)
+    "orange" -> Color(0xFFFFAB4A)
+    "red" -> Color(0xFFEB5A46)
+    "purple" -> Color(0xFFC377E0)
+    "blue" -> Color(0xFF0079BF)
+    "sky" -> Color(0xFF00C2E0)
+    "lime" -> Color(0xFF51E898)
+    "pink" -> Color(0xFFFF80CE)
+    else -> Color(0xFF4D4D4D)
+}
+
+private val taggedBackground = Color(0xFF232323)
 
 val LocalChatLook = staticCompositionLocalOf { ChatLook() }
 
@@ -290,15 +325,21 @@ internal fun ChatRow(
     val rendered = remember(line, continued, flairs, emotes, density, me, look) {
         render(line, continued, flairs, emotes, density, me, mention, look, onEmbed, onNick)
     }
+    // A tagged user's lines get a bar of their colour down the left, as chat-gui draws them.
+    val tag = if (line.kind == ChatLine.Kind.User) line.nick?.lowercase()?.let { look.tags[it] } else null
     val background = when {
         line.kind == ChatLine.Kind.Whisper -> Palette.Blue.copy(alpha = 0.12f)
-        rendered.mentionsMe || highlighted -> Palette.Orange.copy(alpha = 0.14f)
+        (rendered.mentionsMe && look.highlightSelf) || highlighted -> Palette.Orange.copy(alpha = 0.14f)
+        tag != null && look.taggedVisibility -> taggedBackground
         else -> Color.Transparent
     }
+    val bar = tag?.let(::tagColor)
     Text(
         rendered.text,
         inlineContent = rendered.inline,
-        modifier = Modifier.fillMaxWidth().background(background).padding(horizontal = 10.dp, vertical = 2.dp),
+        modifier = Modifier.fillMaxWidth().background(background)
+            .then(if (bar == null) Modifier else Modifier.drawBehind { drawRect(bar, size = Size(4.dp.toPx(), size.height)) })
+            .padding(horizontal = 10.dp, vertical = 2.dp),
         color = Palette.White,
         fontSize = 14.sp,
         lineHeight = 20.sp,
