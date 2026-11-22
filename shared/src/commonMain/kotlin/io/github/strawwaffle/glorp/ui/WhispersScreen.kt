@@ -51,7 +51,12 @@ fun WhispersScreen(
     /** The conversation to show first, from `/open` or a whisper tapped in chat. */
     start: String?,
     history: Boolean,
-    me: String,
+    account: io.github.strawwaffle.glorp.site.Account,
+    connected: Boolean,
+    /** The reply box's draft and history, sharing chat's suggestions. */
+    input: io.github.strawwaffle.glorp.chat.ChatInputState,
+    /** Opens the cookie sign-in, offered when only a login key is in. */
+    onCookies: () -> Unit,
     flairs: Flairs,
     emotes: Emotes,
     onOpen: (String) -> Unit,
@@ -71,15 +76,15 @@ fun WhispersScreen(
     val nick = open
     if (nick == null) {
         OnBack(true, onBack)
-        ConversationList(inbox, history, onPick = { open = it })
+        ConversationList(inbox, history, onCookies, onPick = { open = it })
     } else {
         OnBack(true) { open = null }
-        ConversationView(inbox[nick] ?: Conversation(nick), me, flairs, emotes, { onSend(nick, it) }, onEmbed)
+        ConversationView(inbox[nick] ?: Conversation(nick), account, connected, input, flairs, emotes, { onSend(nick, it) }, onEmbed)
     }
 }
 
 @Composable
-private fun ConversationList(inbox: Inbox, history: Boolean, onPick: (String) -> Unit) {
+private fun ConversationList(inbox: Inbox, history: Boolean, onCookies: () -> Unit, onPick: (String) -> Unit) {
     var to by remember { mutableStateOf("") }
     LazyColumn(Modifier.fillMaxSize().background(Palette.Black)) {
         item {
@@ -92,6 +97,12 @@ private fun ConversationList(inbox: Inbox, history: Boolean, onPick: (String) ->
                         color = Palette.TextDim,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 4.dp),
+                    )
+                    Text(
+                        "Sign in with cookies",
+                        color = Palette.Blue,
+                        fontSize = 14.sp,
+                        modifier = Modifier.clickable(onClick = onCookies).padding(vertical = 8.dp),
                     )
                 }
             }
@@ -147,7 +158,9 @@ private fun ConversationList(inbox: Inbox, history: Boolean, onPick: (String) ->
 @Composable
 private fun ConversationView(
     conversation: Conversation,
-    me: String,
+    account: io.github.strawwaffle.glorp.site.Account,
+    connected: Boolean,
+    input: io.github.strawwaffle.glorp.chat.ChatInputState,
     flairs: Flairs,
     emotes: Emotes,
     onSend: (String) -> Boolean,
@@ -161,11 +174,6 @@ private fun ConversationView(
     }
     val list = rememberLazyListState()
     LaunchedEffect(lines.size) { list.scrollToItem(0) }
-    var draft by rememberSaveable(conversation.key) { mutableStateOf("") }
-    val send = {
-        val text = draft.trim()
-        if (text.isNotEmpty() && onSend(text)) draft = ""
-    }
     Column(Modifier.fillMaxSize().background(Palette.Black)) {
         Text(
             "Whispers with ${conversation.nick}",
@@ -180,17 +188,21 @@ private fun ConversationView(
             }
             LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true) {
                 items(lines, key = { it.first.id }) { (line, continued) ->
-                    ChatRow(line, continued, flairs, emotes, me, null, false, onEmbed) {}
+                    ChatRow(line, continued, flairs, emotes, account.nick, null, false, onEmbed) {}
                 }
             }
         }
         conversation.problem?.let {
             Text(it, color = Palette.Orange, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().background(Palette.Navy).padding(horizontal = 16.dp, vertical = 6.dp))
         }
-        Row(Modifier.fillMaxWidth().background(Palette.Navy).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Field(draft, { draft = it }, "Whisper to ${conversation.nick}…", Modifier.weight(1f), Palette.Black, send)
-            Text("Send", color = Palette.Blue, modifier = Modifier.clickable(onClick = send).padding(12.dp))
-        }
+        // Chat's own input: the same emote and name suggestions and picker.
+        ChatInput(
+            input, emotes, account, connected,
+            onSend = onSend,
+            onIgnore = {},
+            onHighlight = { _, _ -> },
+            hint = "Whisper to ${conversation.nick} ...",
+        )
     }
 }
 

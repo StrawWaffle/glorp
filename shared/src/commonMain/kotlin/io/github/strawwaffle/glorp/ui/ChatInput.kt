@@ -100,6 +100,8 @@ fun ChatInput(
     onHighlight: (String, Boolean) -> Unit,
     /** Opens the chat log search for a name. */
     onSearchUser: (String) -> Unit = {},
+    /** The placeholder; chat's own when null. */
+    hint: String? = null,
 ) {
     val draft = state.draft
     var focused by remember { mutableStateOf(false) }
@@ -203,7 +205,7 @@ fun ChatInput(
                     Box {
                         if (draft.text.isEmpty()) {
                             Text(
-                                if (connected) "Write something ${account.nick} ..." else "Waiting for chat ...",
+                                if (!connected) "Waiting for chat ..." else hint ?: "Write something ${account.nick} ...",
                                 color = Palette.TextDim, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             )
                         }

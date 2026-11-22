@@ -54,8 +54,10 @@ fun SignInScreen(
     busy: Boolean,
     onSession: (Session, (String?) -> Unit) -> Unit,
     onClose: () -> Unit,
+    /** Opens on the cookie form, for what a login key can't open (whisper history). */
+    startWithCookies: Boolean = false,
 ) {
-    var cookies by remember { mutableStateOf(false) }
+    var cookies by remember { mutableStateOf(startWithCookies) }
     var error by remember { mutableStateOf<String?>(null) }
     val submit: (Session) -> Unit = { session -> error = null; onSession(session) { error = it } }
 

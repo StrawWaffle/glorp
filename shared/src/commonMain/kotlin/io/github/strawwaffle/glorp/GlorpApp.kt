@@ -16,6 +16,7 @@ import io.github.strawwaffle.glorp.chat.ChatPrefs
 import io.github.strawwaffle.glorp.chat.ChatViewModel
 import io.github.strawwaffle.glorp.chat.MemoryChatPrefs
 import io.github.strawwaffle.glorp.site.Embed
+import io.github.strawwaffle.glorp.chat.SocketState
 import io.github.strawwaffle.glorp.ui.Bigscreen
 import io.github.strawwaffle.glorp.ui.ChatScreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
@@ -148,16 +149,18 @@ fun GlorpApp(
                         )
                     }
                 }
-                "signin" -> {
+                "signin", "signin-cookies" -> {
                     {
+                        val forWhispers = screen == "signin-cookies"
                         SignInScreen(
+                            startWithCookies = forWhispers,
                             origin = origin,
                             host = chat.host,
                             busy = signingIn,
                             onSession = { session, result ->
                                 chat.signIn(session) { error ->
                                     result(error)
-                                    if (error == null) screen = "chat"
+                                    if (error == null) screen = if (forWhispers) "whispers" else "chat"
                                 }
                             },
                             onClose = { screen = "menu" },
@@ -166,11 +169,17 @@ fun GlorpApp(
                 }
                 "whispers" -> {
                     {
-                        WhispersScreen(
+                        // Signed out (the login ran out): back to the menu.
+                        val me = account
+                        if (me == null) LaunchedEffect(Unit) { screen = "menu" }
+                        else WhispersScreen(
                             inbox = inbox,
                             start = communityArg,
                             history = chat.whisperHistory,
-                            me = account?.nick.orEmpty(),
+                            account = me,
+                            connected = state == SocketState.Connected,
+                            input = chat.whisperInput,
+                            onCookies = { screen = "signin-cookies" },
                             flairs = flairs,
                             emotes = emotes,
                             onOpen = chat::openConversation,

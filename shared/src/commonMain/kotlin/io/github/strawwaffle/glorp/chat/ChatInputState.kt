@@ -12,13 +12,12 @@ import androidx.compose.ui.text.input.TextFieldValue
  * the ignore and highlight lists and the suggestion lists. The view model
  * holds it.
  */
-class ChatInputState(prefs: ChatPrefs) {
+class ChatInputState(prefs: ChatPrefs, val completer: Completer = Completer()) {
     var draft by mutableStateOf(TextFieldValue())
 
     val history = InputHistory(prefs)
     val ignored = NickSet(prefs, "ignore")
     val highlighted = NickSet(prefs, "highlight")
-    val completer = Completer()
 
     /** A name tapped in chat, whose actions show above the input; null when none. */
     var tappedNick by mutableStateOf<String?>(null)

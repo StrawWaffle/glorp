@@ -60,6 +60,13 @@ class ChatViewModel(
     /** The input's draft, history, suggestions and the ignore and highlight lists. */
     val input = ChatInputState(prefs)
 
+    /**
+     * The whisper box's input: the same suggestions as chat's, its own draft
+     * and history, kept in memory only, as whispers are.
+     */
+    val whisperInput = ChatInputState(MemoryChatPrefs(), input.completer)
+    private var whisperingTo: String? = null
+
     private val _lines = MutableStateFlow<List<ChatLine>>(emptyList())
     val lines: StateFlow<List<ChatLine>> = _lines.asStateFlow()
 
@@ -123,6 +130,8 @@ class ChatViewModel(
     /** Opens a conversation: its unread count clears and, with a cookie login, the site's history loads. */
     fun openConversation(nick: String) {
         _opening.value = null
+        if (!nick.equals(whisperingTo, ignoreCase = true)) whisperInput.setDraft("")
+        whisperingTo = nick
         _inbox.value = _inbox.value.opened(nick)
         val me = _account.value?.nick ?: return
         if (_inbox.value[nick]?.loaded == true) return
@@ -134,13 +143,17 @@ class ChatViewModel(
     }
 
     /** Whispers from a conversation, leaving chat's own draft alone. */
-    fun whisper(nick: String, text: String): Boolean {
+    fun whisper(nick: String, typed: String): Boolean {
+        val text = typed.trim()
+        if (text.isEmpty()) return false
         val chat = socket
         when {
             _account.value == null -> notice("Sign in to whisper.")
             chat == null || _socketState.value != SocketState.Connected -> notice("Not connected. Wait for the transmission to come back.")
             else -> {
                 input.replyTo = nick
+                whisperInput.history.add(text)
+                whisperInput.setDraft("")
                 unconfirmed.addLast(nick to text)
                 transmit { chat.sendWhisper(nick, text).also { if (!it) unconfirmed.removeLastOrNull() } }
                 return true
