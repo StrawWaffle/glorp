@@ -57,6 +57,7 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
             "twitch-vod" -> twitch(embed.id, vod = true, startSeconds = embed.startSeconds)
             "twitch-clip" -> twitchClip(embed.id)
             "youtube" -> youtube(embed.id)
+            "angelthump" -> angelThump(client, embed.id, io.github.strawwaffle.glorp.chat.ChatSocket.USER_AGENT)
             else -> Resolution.Web
         }
     } catch (e: kotlinx.coroutines.CancellationException) {

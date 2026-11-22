@@ -11,7 +11,9 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
@@ -27,7 +29,7 @@ import androidx.media3.session.MediaSessionService
  */
 @OptIn(UnstableApi::class)
 object Playback {
-    class Active(val url: String, val player: ExoPlayer, val controller: ExoController, val session: MediaSession)
+    class Active(val url: String, val player: ExoPlayer, val controller: ExoController, val session: MediaSession, val edges: EdgeChoice)
 
     var active: Active? = null
         private set
@@ -41,12 +43,14 @@ object Playback {
     private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
     private val logTick = object : Runnable {
         override fun run() {
-            val player = active?.player ?: return
+            val current = active ?: return
+            val player = current.player
             if (player.isCurrentMediaItemLive) {
                 android.util.Log.d(
                     "GlorpLive",
                     "offset=${player.currentLiveOffset}ms buffered=${player.totalBufferedDuration}ms " +
-                        "speed=${player.playbackParameters.speed} state=${player.playbackState} playing=${player.isPlaying}",
+                        "state=${player.playbackState} playing=${player.isPlaying}" +
+                        (current.edges.current?.let { " edge=$it" } ?: ""),
                 )
             }
             ticker.postDelayed(this, 1_000)
@@ -58,7 +62,11 @@ object Playback {
         active?.let { if (it.url == playable.hlsUrl) return it.also { start(context, background) } }
         release(context)
         val app = context.applicationContext
+        // AngelThump streams come from one of several edges; requests go to
+        // the chosen one and fall over to its neighbours (see EdgeFailover).
+        val edges = EdgeChoice(AngelThumpEdges.hostOf(playable.hlsUrl)?.takeIf(AngelThumpEdges::isEdge))
         val player = ExoPlayer.Builder(app)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(EdgeFailoverDataSource.Factory(DefaultDataSource.Factory(app), edges)))
             // Pauses for calls and other apps' sound, as a video app should.
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
@@ -76,6 +84,23 @@ object Playback {
             .setViewportSizeToPhysicalDisplaySize(app, true)
             .build()
         player.addListener(object : Player.Listener {
+            private val stalls = ArrayDeque<Long>()
+            private var wasReady = false
+
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) wasReady = true
+                val edge = edges.current ?: return
+                if (state != Player.STATE_BUFFERING || !wasReady || !player.playWhenReady) return
+                // Three stalls within a minute on one edge: try the next.
+                val now = android.os.SystemClock.elapsedRealtime()
+                stalls.addLast(now)
+                while (stalls.isNotEmpty() && now - stalls.first() > 60_000) stalls.removeFirst()
+                if (stalls.size >= 3) {
+                    stalls.clear()
+                    edges.leave(edge)
+                }
+            }
+
             override fun onPlayerError(error: PlaybackException) {
                 // A live stream fallen too far behind: jump back to live.
                 if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
@@ -101,7 +126,7 @@ object Playback {
         // the notification play and pause.
         val session = MediaSession.Builder(app, player).setId("glorp").build()
         if (logLive) { ticker.removeCallbacks(logTick); ticker.postDelayed(logTick, 1_000) }
-        return Active(playable.hlsUrl, player, ExoController(player), session).also {
+        return Active(playable.hlsUrl, player, ExoController(player), session, edges).also {
             active = it
             start(context, background)
         }

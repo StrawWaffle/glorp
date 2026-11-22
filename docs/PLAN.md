@@ -115,7 +115,14 @@ with memory and battery throughout.
    lookup would break; the embed works in the web view. Twitch clips (MP4)
    and Kick VODs (HLS from kick.com's video lookup) are native.
 
-   **AngelThump (later).** The community userscript "AngelThump Edge
+   **AngelThump (done, 0.1.3).** `video/AngelThump.kt`: the API's stream
+   listing (offline when none), a token from `vigor.angelthump.com/<ch>/token`
+   (with the id AngelThump's web player sends), the master playlist, then its
+   media playlist timed on all five edges at once and played from the
+   fastest. `EdgeFailoverDataSource` sends every edge request to the chosen
+   edge, retries a failed one on the two nearest, moves on after a read
+   fails, and after three stalls in a minute. Catch-up covers falling behind.
+   The research it follows: the community userscript "AngelThump Edge
    Picker" (greasyfork.org/en/scripts/597526, MIT) shows how to play it well:
    the same `/hls/...` stream is served by five edge servers
    (`nyc1`, `sfo1`, `ams1`, `fra1`, `sgp1` `.angelthump.com`), so any request

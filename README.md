@@ -15,8 +15,8 @@ or Destiny.
   their own conversations, polls you can vote in, the pinned message, the
   site's commands, and an input with emote, name and command suggestions.
 - **Bigscreen**: plays what bigscreen shows, or anything chat is watching.
-  Kick, Twitch (live, VODs and clips) and YouTube live play in Android's own
-  player, with a quality menu, a live button and picture in picture, and keep
+  Kick, Twitch (live, VODs and clips), YouTube live and AngelThump play in
+  Android's own player, with a quality menu, a live button and picture in picture, and keep
   their sound with the screen off. Other platforms use their web player.
 - **Sideways and full screen**: the video beside chat, or the whole screen.
 - **Community screens**: chat log search (rustlesearch.dev), the poll archive
@@ -53,6 +53,8 @@ Logins are kept on the phone, encrypted with a key in Android's keystore.
 - [rustlesearch.dev](https://rustlesearch.dev/), [mitchdev.net](https://mitchdev.net/dgg/)
   (by Mitchdev) and [dinkdonk.mov](https://dinkdonk.mov/) (by Mitch), whose
   data the community screens show.
+- The "AngelThump Edge Picker" userscript, whose way of choosing and
+  falling back between AngelThump's servers Glorp follows.
 - [FUTO's Grayjay](https://grayjay.app/): YouTube plays through Grayjay's
   YouTube plugin, run by code adapted from Grayjay.
 
