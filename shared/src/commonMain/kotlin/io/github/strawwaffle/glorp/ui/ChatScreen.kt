@@ -86,7 +86,11 @@ fun ChatScreen(
         player?.invoke()
         // Newest at the bottom, in a reversed list: only the rows on screen are
         // composed, so only their emotes are drawn or animated.
-        val reversed = remember(lines) { lines.asReversed() }
+        // A run of messages from one person shows their name once, as chat
+        // does: the lines after the first are "continued".
+        val reversed = remember(lines) {
+            lines.mapIndexed { i, line -> Shown(line, i > 0 && continues(lines[i - 1], line)) }.asReversed()
+        }
         val me = account?.nick
         val mention = remember(me) { me?.let(::mentionPattern) }
         val embedHandler = rememberUpdatedState(onEmbed)
@@ -104,8 +108,8 @@ fun ChatScreen(
         LaunchedEffect(reversed) { if (following) list.scrollToItem(0) }
         Box(Modifier.fillMaxWidth().weight(1f)) {
             LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true) {
-                items(reversed, key = { it.id }, contentType = { it.kind }) { line ->
-                    ChatRow(line, flairs, emotes, me, mention, openEmbed)
+                items(reversed, key = { it.line.id }, contentType = { it.line.kind }) { shown ->
+                    ChatRow(shown.line, shown.continued, flairs, emotes, me, mention, openEmbed)
                 }
             }
             if (!following) {
@@ -187,13 +191,30 @@ private fun MessageBox(enabled: Boolean, onSend: (String) -> Boolean) {
 
 private const val MAX_MESSAGE = 512
 
+private class Shown(val line: ChatLine, val continued: Boolean)
+
+/** Whether [line] carries on a run started by [previous]: two chat messages from the same person. */
+internal fun continues(previous: ChatLine, line: ChatLine): Boolean =
+    previous.kind == ChatLine.Kind.User && line.kind == ChatLine.Kind.User &&
+        previous.nick.equals(line.nick, ignoreCase = true)
+
 /** A line laid out once per change of its inputs, with pictures as inline content. */
 private class RenderedLine(val text: AnnotatedString, val inline: Map<String, InlineTextContent>, val mentionsMe: Boolean)
 
 @Composable
-private fun ChatRow(line: ChatLine, flairs: Flairs, emotes: Emotes, me: String?, mention: Regex?, onEmbed: (Embed) -> Unit) {
+private fun ChatRow(
+    line: ChatLine,
+    continued: Boolean,
+    flairs: Flairs,
+    emotes: Emotes,
+    me: String?,
+    mention: Regex?,
+    onEmbed: (Embed) -> Unit,
+) {
     val density = LocalDensity.current
-    val rendered = remember(line, flairs, emotes, density, me) { render(line, flairs, emotes, density, me, mention, onEmbed) }
+    val rendered = remember(line, continued, flairs, emotes, density, me) {
+        render(line, continued, flairs, emotes, density, me, mention, onEmbed)
+    }
     val background = when {
         line.kind == ChatLine.Kind.Whisper -> Palette.Blue.copy(alpha = 0.12f)
         rendered.mentionsMe -> Palette.Orange.copy(alpha = 0.14f)
@@ -219,6 +240,7 @@ internal fun mentions(text: String, nick: String): Boolean = mentionPattern(nick
 
 private fun render(
     line: ChatLine,
+    continued: Boolean,
     flairs: Flairs,
     emotes: Emotes,
     density: Density,
@@ -252,19 +274,24 @@ private fun render(
             ChatLine.Kind.User -> Unit
         }
         mentionsMe = mention != null && !line.nick.equals(me, ignoreCase = true) && mention.containsMatchIn(line.text)
-        for (badge in flairs.badges(line.features)) {
-            val id = "badge:${badge.name}"
-            inline.getOrPut(id) {
-                InlineTextContent(placeholder(badge.width, badge.height)) {
-                    AsyncImage(badge.url, contentDescription = badge.label, modifier = Modifier.size(badge.width.dp, badge.height.dp))
-                }
-            }
-            appendInlineContent(id, badge.label)
-            append(' ')
-        }
         val nameColor = flairs.nameColor(line.features)?.let { Color(it) } ?: Palette.White
-        withStyle(SpanStyle(color = nameColor, fontWeight = FontWeight.Bold)) { append(line.nick) }
-        append(if (line.action) " " else ": ")
+        if (continued) {
+            // The rest of a run: no badges or name, a dim marker instead.
+            withStyle(SpanStyle(color = Palette.TextDim)) { append("> ") }
+        } else {
+            for (badge in flairs.badges(line.features)) {
+                val id = "badge:${badge.name}"
+                inline.getOrPut(id) {
+                    InlineTextContent(placeholder(badge.width, badge.height)) {
+                        AsyncImage(badge.url, contentDescription = badge.label, modifier = Modifier.size(badge.width.dp, badge.height.dp))
+                    }
+                }
+                appendInlineContent(id, badge.label)
+                append(' ')
+            }
+            withStyle(SpanStyle(color = nameColor, fontWeight = FontWeight.Bold)) { append(line.nick) }
+            append(if (line.action) " " else ": ")
+        }
 
         val style = when {
             line.action -> SpanStyle(fontStyle = FontStyle.Italic, color = nameColor)

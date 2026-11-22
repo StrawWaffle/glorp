@@ -63,3 +63,30 @@ class SignedInTest {
         assertFalse(mentions("glorpy things", "glorp"))
     }
 }
+
+class ChatLooksTest {
+    private val now = { 1L }
+
+    @Test
+    fun aRunFromOnePersonIsContinued() {
+        val a1 = ChatLine.user("Glorp", emptyList(), "one", 1)
+        val a2 = ChatLine.user("glorp", emptyList(), "two", 2)
+        val b = ChatLine.user("other", emptyList(), "three", 3)
+        assertTrue(io.github.strawwaffle.glorp.ui.continues(a1, a2))
+        assertFalse(io.github.strawwaffle.glorp.ui.continues(a2, b))
+        assertFalse(io.github.strawwaffle.glorp.ui.continues(ChatLine.info("x", 1), a1))
+        assertFalse(io.github.strawwaffle.glorp.ui.continues(a1, ChatLine.whisper("Glorp", "hi", 2, null)))
+    }
+
+    @Test
+    fun subscriberOnlyNoticesNameTheModerator() {
+        assertEquals(
+            "Subscriber only mode disabled by vyneer.",
+            assertIs<ChatEvent.Notice>(parseFrame("""SUBONLY {"nick":"vyneer","data":"off","timestamp":1}""", now)).text,
+        )
+        assertEquals(
+            "Subscriber only mode (Tier 2+) enabled by vyneer.",
+            assertIs<ChatEvent.Notice>(parseFrame("""SUBONLY {"nick":"vyneer","data":"on","tier":2}""", now)).text,
+        )
+    }
+}

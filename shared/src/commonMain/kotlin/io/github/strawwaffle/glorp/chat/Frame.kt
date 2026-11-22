@@ -47,6 +47,17 @@ internal data class WireText(
 )
 
 @Serializable
+internal data class WireSubOnly(val data: String = "", val nick: String? = null, val tier: Int? = null)
+
+/** chat-gui's wording: "Subscriber only mode (Tier 2+) enabled by nick." */
+internal fun subOnlyText(event: WireSubOnly): String {
+    val on = event.data == "on"
+    val tier = if (on && (event.tier ?: 1) > 1) " (Tier ${event.tier}+)" else ""
+    val by = event.nick?.takeIf { it.isNotEmpty() }?.let { " by $it" } ?: ""
+    return "Subscriber only mode$tier ${if (on) "enabled" else "disabled"}$by."
+}
+
+@Serializable
 internal data class WireError(val description: String = "")
 
 @Serializable
@@ -91,10 +102,7 @@ fun parseFrame(raw: String, now: () -> Long): ChatEvent? {
                     ChatLine.whisper(whisper.nick, whisper.data, whisper.timestamp ?: now(), whisper.messageid?.toString()),
                 )
             }
-            "SUBONLY" -> {
-                val on = chatJson.decodeFromString<WireText>(payload).data == "on"
-                ChatEvent.Notice(if (on) "Chat is now subscribers only." else "Chat is open to everyone again.")
-            }
+            "SUBONLY" -> ChatEvent.Notice(subOnlyText(chatJson.decodeFromString<WireSubOnly>(payload)))
             else -> null
         }
     } catch (_: IllegalArgumentException) {
