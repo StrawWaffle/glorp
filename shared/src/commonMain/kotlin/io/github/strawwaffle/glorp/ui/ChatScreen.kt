@@ -208,6 +208,9 @@ private fun ChatRow(
 
 private val linkStyle = TextLinkStyles(SpanStyle(color = Palette.Blue, textDecoration = TextDecoration.Underline))
 
+// A name is tappable but looks like a name, not a link.
+private val nickStyle = TextLinkStyles(SpanStyle(textDecoration = TextDecoration.None))
+
 /** Matches [nick] as a word, the way chat highlights mentions. Built once per name. */
 internal fun mentionPattern(nick: String) =
     Regex("""(^|[^\w])${Regex.escape(nick)}($|[^\w])""", RegexOption.IGNORE_CASE)
@@ -273,7 +276,7 @@ private fun render(
             }
             ChatLine.Kind.Whisper -> {
                 withStyle(SpanStyle(color = Palette.Blue)) { append("Whisper from ") }
-                withLink(LinkAnnotation.Clickable("nick", linkInteractionListener = { onNick(line.nick!!) })) {
+                withLink(LinkAnnotation.Clickable("nick", nickStyle) { onNick(line.nick!!) }) {
                     withStyle(SpanStyle(color = Palette.White, fontWeight = FontWeight.Bold)) { append(line.nick) }
                 }
                 append(": ")
@@ -298,7 +301,7 @@ private fun render(
                 appendInlineContent(id, badge.label)
                 append(' ')
             }
-            withLink(LinkAnnotation.Clickable("nick", linkInteractionListener = { onNick(line.nick!!) })) {
+            withLink(LinkAnnotation.Clickable("nick", nickStyle) { onNick(line.nick!!) }) {
                 withStyle(SpanStyle(color = nameColor, fontWeight = FontWeight.Bold)) { append(line.nick) }
             }
             append(if (line.action) " " else ": ")
