@@ -17,7 +17,11 @@ data class PollQuery(val search: String = "", val startedBy: String? = null, val
  * is fetched once it closes. At most [MAX_PAGES] pages are kept; reading on
  * past that drops the earliest page, and the list offers to start over.
  */
-internal class PollFeed(private val api: PollApi, private val scope: CoroutineScope) {
+internal class PollFeed(
+    private val scope: CoroutineScope,
+    /** One page of [PollQuery]'s results from a cursor: [PollApi.page]. */
+    private val fetch: suspend (PollCursor?, PollQuery) -> PollPage,
+) {
     var query by mutableStateOf(PollQuery())
         private set
     val polls = mutableStateListOf<Poll>()
@@ -69,7 +73,7 @@ internal class PollFeed(private val api: PollApi, private val scope: CoroutineSc
         error = null
         job = scope.launch {
             try {
-                val page = api.page(next, q.search, q.startedBy, q.oldestFirst)
+                val page = fetch(next, q)
                 if (gen != generation) return@launch
                 val seen = polls.mapTo(HashSet()) { it.id }
                 val fresh = page.polls.filter { seen.add(it.id) }

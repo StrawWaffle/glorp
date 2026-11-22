@@ -83,7 +83,7 @@ import kotlin.time.Clock
 fun PollArchiveScreen(env: CommunityEnv) {
     val scope = rememberCoroutineScope()
     val api = remember(env.http) { PollApi(env.http) }
-    val feed = remember(api) { PollFeed(api, scope) }
+    val feed = remember(api) { PollFeed(scope) { cursor, q -> api.page(cursor, q.search, q.startedBy, q.oldestFirst) } }
     val listState = rememberLazyListState()
     var detail by remember { mutableStateOf<Poll?>(null) }
     var detailError by remember { mutableStateOf<String?>(null) }
