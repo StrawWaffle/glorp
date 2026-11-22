@@ -76,7 +76,8 @@ internal actual fun NativePlayer(playable: Playable, modifier: Modifier) {
                 }
             }
         })
-        val item = MediaItem.Builder().setUri(playable.hlsUrl).setMimeType(MimeTypes.APPLICATION_M3U8).build()
+        val item = MediaItem.Builder().setUri(playable.hlsUrl)
+            .setMimeType(if (playable.mp4) MimeTypes.VIDEO_MP4 else MimeTypes.APPLICATION_M3U8).build()
         val start = playable.startSeconds
         if (start != null && !playable.live) player.setMediaItem(item, start * 1000L) else player.setMediaItem(item)
         player.playWhenReady = true

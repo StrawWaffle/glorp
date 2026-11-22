@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlin.random.Random
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
@@ -23,12 +24,14 @@ import kotlinx.serialization.Serializable
 
 /** A stream the app's own player can play. */
 data class Playable(
-    /** An HLS playlist with every quality; the player picks one. */
+    /** An HLS playlist with every quality (the player picks one), or one MP4 file. */
     val hlsUrl: String,
     val title: String?,
     val live: Boolean,
     /** Where a recording starts, from a `?t=` in the link. */
     val startSeconds: Int? = null,
+    /** True for a single MP4 file rather than an HLS playlist. */
+    val mp4: Boolean = false,
 )
 
 /** What looking up an embed found. */
@@ -51,6 +54,7 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
             "kick" -> kick(embed.id)
             "twitch" -> twitch(embed.id, vod = false)
             "twitch-vod" -> twitch(embed.id, vod = true, startSeconds = embed.startSeconds)
+            "twitch-clip" -> twitchClip(embed.id)
             "youtube" -> youtube(embed.id)
             else -> Resolution.Web
         }
@@ -154,7 +158,51 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
         }
     }
 
+    @Serializable
+    private data class ClipQuality(val quality: String = "", val frameRate: Double = 0.0, val sourceURL: String = "")
+
+    /**
+     * A clip, the way twitch.tv's clip player gets it: a clip playback token
+     * and the clip's MP4 files, one per quality. Phones get 1080p if the
+     * clip has it and the screen is big enough to matter, else the best below.
+     */
+    private suspend fun twitchClip(slug: String): Resolution {
+        val body = JsonObject(
+            mapOf(
+                "operationName" to JsonPrimitive("VideoAccessToken_Clip"),
+                "query" to JsonPrimitive(TWITCH_CLIP_QUERY),
+                "variables" to JsonObject(mapOf("slug" to JsonPrimitive(slug))),
+            ),
+        )
+        val response = client.post("https://gql.twitch.tv/gql") {
+            header("Client-ID", TWITCH_WEB_CLIENT_ID)
+            header(HttpHeaders.UserAgent, BROWSER_USER_AGENT)
+            contentType(ContentType.Text.Plain)
+            setBody(body.toString())
+        }
+        if (!response.status.isSuccess()) return Resolution.Web
+        val clip = chatJson.parseToJsonElement(response.bodyAsText()).jsonObject["data"]?.jsonObject?.get("clip")
+        if (clip == null || clip is JsonNull) return Resolution.Web
+        val o = clip.jsonObject
+        val token = o["playbackAccessToken"]?.takeIf { it !is JsonNull }
+            ?.let { chatJson.decodeFromJsonElement(TwitchToken.serializer(), it) } ?: return Resolution.Web
+        val qualities = (o["videoQualities"] as? kotlinx.serialization.json.JsonArray).orEmpty()
+            .map { chatJson.decodeFromJsonElement(ClipQuality.serializer(), it) }
+            .filter { it.sourceURL.isNotEmpty() }
+            .sortedByDescending { it.quality.toIntOrNull() ?: 0 }
+        val pick = qualities.firstOrNull { (it.quality.toIntOrNull() ?: 0) <= MAX_CLIP_HEIGHT } ?: qualities.lastOrNull() ?: return Resolution.Web
+        val url = pick.sourceURL + "?sig=" + token.signature.encodeURLParameter() + "&token=" + token.value.encodeURLParameter()
+        val title = (o["title"] as? JsonPrimitive)?.contentOrNull
+        return Resolution.Native(Playable(url, title, live = false, mp4 = true))
+    }
+
     companion object {
+        private const val MAX_CLIP_HEIGHT = 1080
+        private const val TWITCH_CLIP_QUERY =
+            "query VideoAccessToken_Clip(\$slug: ID!) { clip(slug: \$slug) { id title " +
+                "playbackAccessToken(params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"embed\"}) { signature value } " +
+                "videoQualities { frameRate quality sourceURL } } }"
+
         // The id twitch.tv's own web player uses; it's public in every page.
         private const val TWITCH_WEB_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
         private const val TWITCH_TOKEN_QUERY =
