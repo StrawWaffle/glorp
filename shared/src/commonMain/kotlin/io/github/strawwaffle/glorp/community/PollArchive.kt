@@ -133,9 +133,9 @@ private fun PollList(feed: PollFeed, listState: LazyListState, env: CommunityEnv
     // Back to the top whenever the query changes.
     LaunchedEffect(feed.query) { listState.scrollToItem(0) }
 
-    Header(env)
     Filters(feed)
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        item { Header(env, feed.total) }
         if (notice != null) item { Dim(notice, Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }
         if (feed.trimmed) {
             item(key = "top") {
@@ -150,7 +150,8 @@ private fun PollList(feed: PollFeed, listState: LazyListState, env: CommunityEnv
         items(feed.polls, key = { it.id }) { poll ->
             PollCard(poll, env, Modifier.clickable { onOpen(poll) })
         }
-        item(key = "end") {
+        // Unkeyed, so a page arriving above it doesn't drag the list down with it.
+        item {
             val error = feed.error
             when {
                 error != null -> Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -170,11 +171,11 @@ private val linkStyle = TextLinkStyles(SpanStyle(color = Palette.Blue, textDecor
 
 /** The credit, and YEE vs PEPE when it has come in. */
 @Composable
-private fun Header(env: CommunityEnv) {
-    Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 4.dp)) {
-        Text("Chat polls", color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+private fun Header(env: CommunityEnv, total: Int?) {
+    Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 4.dp)) {
         Text(
             buildAnnotatedString {
+                total?.let { append(if (it == 1) "1 poll · " else "${grouped(it)} polls · ") }
                 append("Poll archive by ")
                 withLink(LinkAnnotation.Url(PollApi.SITE, linkStyle)) { append("mitchdev.net") }
             },
@@ -193,7 +194,7 @@ private fun Header(env: CommunityEnv) {
                 line.add("  in every YEE vs PEPE poll", SpanStyle(color = Palette.TextDim, fontSize = 12.sp))
                 line.build()
             }
-            Text(rendered.text, inlineContent = rendered.inline, color = Palette.White, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(rendered.text, inlineContent = rendered.inline, color = Palette.White, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
@@ -238,7 +239,7 @@ private fun Filters(feed: PollFeed) {
                 )
             }
         }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             StarterPicker(feed)
             Spacer(Modifier.weight(1f))
             Text(
@@ -248,7 +249,6 @@ private fun Filters(feed: PollFeed) {
                 modifier = Modifier.clickable { feed.show(feed.query.copy(oldestFirst = !feed.query.oldestFirst)) }.padding(6.dp),
             )
         }
-        feed.total?.let { Dim(if (it == 1) "1 poll" else "${grouped(it)} polls", Modifier.padding(top = 2.dp)) }
     }
 }
 
