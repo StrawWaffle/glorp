@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,14 +96,27 @@ fun PlayerControls(controller: VideoController, modifier: Modifier = Modifier, r
             // rewound a long way (a VOD still being recorded); a live stream
             // with only the last few seconds has nothing to scrub.
             var dragging by remember { mutableStateOf<Float?>(null) }
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 40.dp, start = 12.dp, end = 12.dp)) {
+            // A tap on the timeline seeks; it mustn't also reach the player
+            // behind, which would hide the controls (and the timeline with
+            // them) before the seek is made.
+            Column(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 40.dp, start = 12.dp, end = 12.dp)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { touched++ },
+            ) {
+                // The same callbacks every time: the slider starts its state
+                // over when they change, which drops a tap halfway through.
+                val duration by rememberUpdatedState(state.durationMs)
+                val change = remember { { v: Float -> touched++; dragging = v } }
+                val finish = remember(controller) {
+                    {
+                        dragging?.let { controller.seekTo((it * duration).toLong()) }
+                        dragging = null
+                    }
+                }
                 Slider(
                     value = dragging ?: (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f),
-                    onValueChange = { touched++; dragging = it },
-                    onValueChangeFinished = {
-                        dragging?.let { controller.seekTo((it * state.durationMs).toLong()) }
-                        dragging = null
-                    },
+                    onValueChange = change,
+                    onValueChangeFinished = finish,
                     colors = SliderDefaults.colors(thumbColor = Palette.Glorp, activeTrackColor = Palette.Glorp),
                 )
             }
