@@ -134,12 +134,16 @@ fun RustleSearchScreen(env: CommunityEnv) {
 }
 
 /** At most this many messages are kept; past it the next ones replace them. */
-private const val MAX_KEPT = 5 * RustleApi.PAGE
+internal const val MAX_KEPT = 5 * RustleApi.PAGE
 
 /** Below this many requests left, the screen says how many. */
 private const val LOW_QUOTA = 20
 
-private class SearchState(private val api: RustleApi, private val scope: CoroutineScope) {
+internal class SearchState(
+    private val api: RustleSource,
+    private val scope: CoroutineScope,
+    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+) {
     var results by mutableStateOf<List<LogMessage>>(emptyList())
         private set
     /** The search the results are for; null before the first. */
@@ -269,11 +273,9 @@ private class SearchState(private val api: RustleApi, private val scope: Corouti
         val hours = ((until - now()) / 3_600_000L) + 1
         return "rustlesearch.dev's daily limit is reached. Try again in about $hours h."
     }
-
-    private fun now() = Clock.System.now().toEpochMilliseconds()
 }
 
-private class ContextState(val message: LogMessage) {
+internal class ContextState(val message: LogMessage) {
     var surrounds by mutableStateOf<Surrounds?>(null)
     var error by mutableStateOf<String?>(null)
 }

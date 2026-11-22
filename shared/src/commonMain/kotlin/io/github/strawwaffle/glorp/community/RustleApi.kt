@@ -13,15 +13,26 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.time.Instant
 
+/** What the search screen asks rustlesearch for; a fake stands in for it in tests. */
+interface RustleSource {
+    /** One page (up to [RustleApi.PAGE] messages, newest first) of [query], continuing after [searchAfter] when given. */
+    suspend fun search(query: RustleQuery, searchAfter: Long? = null): RustleReply<List<LogMessage>>
+
+    /** The lines logged around [message]. */
+    suspend fun surrounds(message: LogMessage): RustleReply<Surrounds>
+
+    /** The channels rustlesearch logs. */
+    suspend fun channels(): RustleReply<List<String>>
+}
+
 /**
  * rustlesearch.dev's anonymous API: chat log search, the lines around a
  * message, and the channels it logs. Anonymous use is limited per address
  * (200 requests a day when written), and every reply says how many are left.
  */
-class RustleApi(private val http: HttpClient, private val base: String = BASE) {
+class RustleApi(private val http: HttpClient, private val base: String = BASE) : RustleSource {
 
-    /** One page (up to [PAGE] messages, newest first) of [query], continuing after [searchAfter] when given. */
-    suspend fun search(query: RustleQuery, searchAfter: Long? = null): RustleReply<List<LogMessage>> =
+    override suspend fun search(query: RustleQuery, searchAfter: Long?): RustleReply<List<LogMessage>> =
         call("/anon/search", buildList {
             add("channel" to query.channel)
             if (query.username.isNotBlank()) add("username" to query.username.trim())
@@ -31,16 +42,15 @@ class RustleApi(private val http: HttpClient, private val base: String = BASE) {
             searchAfter?.let { add("search_after" to it.toString()) }
         }, ::parseSearch)
 
-    /** The lines logged around [message]. */
-    suspend fun surrounds(message: LogMessage): RustleReply<Surrounds> =
+    override suspend fun surrounds(message: LogMessage): RustleReply<Surrounds> =
         call("/anon/surrounds", listOf(
             "channel" to message.channel,
             "username" to message.username,
             "datetime" to message.ts,
         ), ::parseSurrounds)
 
-    /** The channels rustlesearch logs. Asked once per run of the app. */
-    suspend fun channels(): RustleReply<List<String>> {
+    /** Asked once per run of the app. */
+    override suspend fun channels(): RustleReply<List<String>> {
         cachedChannels?.let { return RustleReply.Ok(it, null) }
         val reply = call("/anon/channels", emptyList(), ::parseChannels)
         if (reply is RustleReply.Ok && reply.value.isNotEmpty()) cachedChannels = reply.value
