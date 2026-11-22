@@ -98,6 +98,8 @@ fun ChatInput(
     onSend: (String) -> Boolean,
     onIgnore: (String) -> Unit,
     onHighlight: (String, Boolean) -> Unit,
+    /** Opens the chat log search for a name. */
+    onSearchUser: (String) -> Unit = {},
 ) {
     val draft = state.draft
     var focused by remember { mutableStateOf(false) }
@@ -146,6 +148,7 @@ fun ChatInput(
                 onWhisper = { state.setDraft("/w $tapped "); state.tappedNick = null; focus.requestFocus(); keyboard?.show() },
                 onIgnore = { onIgnore(tapped); state.tappedNick = null },
                 onHighlight = { onHighlight(tapped, tapped !in state.highlighted); state.tappedNick = null },
+                onRecent = { state.tappedNick = null; onSearchUser(tapped) },
                 onClose = { state.tappedNick = null },
             )
             suggestions.isNotEmpty() -> SuggestionStrip(suggestions, emotes, ::take)
@@ -289,6 +292,7 @@ private fun NickActions(
     onWhisper: () -> Unit,
     onIgnore: () -> Unit,
     onHighlight: () -> Unit,
+    onRecent: () -> Unit,
     onClose: () -> Unit,
 ) {
     LazyRow(
@@ -301,6 +305,7 @@ private fun NickActions(
         item { Action("Whisper", onWhisper) }
         item { Action(if (highlighted) "Unhighlight" else "Highlight", onHighlight) }
         item { Action("Ignore", onIgnore) }
+        item { Action("Recent messages", onRecent) }
         item { Action("Close", onClose, Palette.TextDim) }
     }
 }
