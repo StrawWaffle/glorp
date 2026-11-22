@@ -29,7 +29,14 @@ import androidx.media3.session.MediaSessionService
  */
 @OptIn(UnstableApi::class)
 object Playback {
-    class Active(val url: String, val player: ExoPlayer, val controller: ExoController, val session: MediaSession, val edges: EdgeChoice)
+    class Active(
+        val url: String,
+        val key: String?,
+        val player: ExoPlayer,
+        val controller: ExoController,
+        val session: MediaSession,
+        val edges: EdgeChoice,
+    )
 
     var active: Active? = null
         private set
@@ -74,13 +81,23 @@ object Playback {
                 return it.also { start(context, background) }
             }
         }
+        // The same recording at a new address (the old one expired): carry on from where it was.
+        val resumeAt = active?.takeIf { playable.key != null && it.key == playable.key && !playable.live }
+            ?.player?.currentPosition?.takeIf { it > 0 }
         release(context)
         val app = context.applicationContext
         // AngelThump streams come from one of several edges; requests go to
         // the chosen one and fall over to its neighbours (see EdgeFailover).
         val edges = EdgeChoice(AngelThumpEdges.hostOf(playable.hlsUrl)?.takeIf(AngelThumpEdges::isEdge))
         val player = ExoPlayer.Builder(app)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(EdgeFailoverDataSource.Factory(DefaultDataSource.Factory(app), edges)))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(
+                    EdgeFailoverDataSource.Factory(DefaultDataSource.Factory(app), edges).let {
+                        // YouTube's recordings (a manifest of separate files) are read by byte range.
+                        if (playable.format == Playable.Format.Dash) YouTubeRangesDataSource.Factory(it, playable.headers) else it
+                    },
+                ),
+            )
             // Pauses for calls and other apps' sound, as a video app should.
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
@@ -116,7 +133,13 @@ object Playback {
             }
         })
         val item = MediaItem.Builder().setUri(playable.hlsUrl)
-            .setMimeType(if (playable.mp4) MimeTypes.VIDEO_MP4 else MimeTypes.APPLICATION_M3U8)
+            .setMimeType(
+                when (playable.format) {
+                    Playable.Format.Hls -> MimeTypes.APPLICATION_M3U8
+                    Playable.Format.Mp4 -> MimeTypes.VIDEO_MP4
+                    Playable.Format.Dash -> MimeTypes.APPLICATION_MPD
+                },
+            )
             .setLiveConfiguration(
                 MediaItem.LiveConfiguration.Builder()
                     .setMaxPlaybackSpeed(FASTEST_CATCH_UP)
@@ -125,14 +148,19 @@ object Playback {
             )
             .build()
         val start = playable.startSeconds
-        if (start != null && !playable.live) player.setMediaItem(item, start * 1000L) else player.setMediaItem(item)
+        when {
+            playable.live -> player.setMediaItem(item)
+            resumeAt != null -> player.setMediaItem(item, resumeAt)
+            start != null -> player.setMediaItem(item, start * 1000L)
+            else -> player.setMediaItem(item)
+        }
         player.playWhenReady = true
         player.prepare()
         // The session gives the picture-in-picture window, headset buttons and
         // the notification play and pause.
         val session = MediaSession.Builder(app, player).setId("glorp").build()
         if (logLive) { ticker.removeCallbacks(logTick); ticker.postDelayed(logTick, 1_000) }
-        return Active(playable.hlsUrl, player, ExoController(player), session, edges).also {
+        return Active(playable.hlsUrl, playable.key, player, ExoController(player), session, edges).also {
             active = it
             start(context, background)
         }

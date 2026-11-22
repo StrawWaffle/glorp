@@ -123,6 +123,23 @@ with memory and battery throughout.
    lookup would break; the embed works in the web view. Twitch clips (MP4)
    and Kick VODs (HLS from kick.com's video lookup) are native.
 
+   **YouTube recordings (done, 0.1.8).** The plugin gives each quality and
+   each audio track as a separate file with the byte ranges of its init and
+   index; `video/YouTubeDash.kt` makes them one DASH manifest (one set per
+   container, only the original audio where there are dubs), played from a
+   `data:` address. `YouTubeRangesDataSource` makes the requests as the
+   plugin's request modifier does: the range in the address (`&range=`), a
+   request number (`&rn=`), and the headers the modifier gives (the
+   User-Agent of the client the addresses were issued to, sampled from the
+   plugin so it follows FUTO's changes). Live HLS is left alone. A recording
+   whose addresses expire is looked up again and carries on from where it
+   was.
+
+   **Stalls (0.1.7).** An error or 25 s of loading marks the player failed:
+   a dropped connection is retried in place twice, then the screen looks
+   the stream up again with growing waits (3 s doubling to a minute) and
+   shows "Retry now".
+
    **AngelThump (done, 0.1.3).** `video/AngelThump.kt`: the API's stream
    listing (offline when none), a token from `vigor.angelthump.com/<ch>/token`
    (with the id AngelThump's web player sends), the master playlist, then its
@@ -189,7 +206,10 @@ with memory and battery throughout.
    Release builds check for a newer one once a day and offer it at the top
    of the menu; the download is checked against its SHA-256 and handed to
    Android's installer, which refuses another key's signature. Obtainium
-   reads the same releases. Still to do: an APK per processor type.
+   reads the same releases. An APK per processor type was weighed and
+   dropped: the only native library is QuickJS, about 1 MB of the 6.6 MB
+   download, not worth separate files for updates and Obtainium to pick
+   between.
 
 ## Community sites (researched 2026-11-22)
 

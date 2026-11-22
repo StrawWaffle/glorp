@@ -18,12 +18,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okio.FileSystem
 import okio.Path
 import kotlin.time.Clock
@@ -52,15 +48,12 @@ class YouTubePlugin(
     private var runtime: PluginRuntime? = null
     private var idle: Job? = null
 
-    /** A live stream's HLS playlist, or null when the video isn't live or can't be read. */
-    suspend fun liveHls(videoId: String): String? = mutex.withLock {
+    /** What the plugin finds for a video: a live stream's playlist or a recording's files. */
+    internal suspend fun details(videoId: String): YtDetails? = mutex.withLock {
         idle?.cancel()
         val rt = runtime ?: load().also { runtime = it }
         try {
-            val answer = Json.parseToJsonElement(rt.contentDetails("https://www.youtube.com/watch?v=$videoId")).jsonObject
-            val live = answer["isLive"]?.jsonPrimitive?.booleanOrNull == true
-            val url = (answer["live"] as? JsonObject)?.get("url")?.let { (it as? JsonPrimitive)?.contentOrNull }
-            if (live) url else null
+            parseYtDetails(rt.contentDetails("https://www.youtube.com/watch?v=$videoId"))
         } finally {
             idle = scope.launch {
                 delay(3.minutes)

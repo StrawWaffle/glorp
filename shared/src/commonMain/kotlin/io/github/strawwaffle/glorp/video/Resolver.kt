@@ -24,15 +24,26 @@ import kotlinx.serialization.Serializable
 
 /** A stream the app's own player can play. */
 data class Playable(
-    /** An HLS playlist with every quality (the player picks one), or one MP4 file. */
+    /**
+     * An HLS playlist with every quality (the player picks one), one MP4
+     * file, or a DASH manifest (see [format]).
+     */
     val hlsUrl: String,
     val title: String?,
     val live: Boolean,
     /** Where a recording starts, from a `?t=` in the link. */
     val startSeconds: Int? = null,
-    /** True for a single MP4 file rather than an HLS playlist. */
-    val mp4: Boolean = false,
-)
+    val format: Format = Format.Hls,
+    /** Sent with requests for the stream's media files (YouTube's recordings need them). */
+    val headers: Map<String, String> = emptyMap(),
+    /**
+     * Which video this is, whatever address it was given this time: a
+     * recording looked up again (its address expired) picks up where it was.
+     */
+    val key: String? = null,
+) {
+    enum class Format { Hls, Mp4, Dash }
+}
 
 /** What looking up an embed found. */
 sealed interface Resolution {
@@ -56,7 +67,7 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
             "twitch" -> twitch(embed.id, vod = false)
             "twitch-vod" -> twitch(embed.id, vod = true, startSeconds = embed.startSeconds)
             "twitch-clip" -> twitchClip(embed.id)
-            "youtube" -> youtube(embed.id)
+            "youtube" -> youtube(embed.id, embed.startSeconds)
             "angelthump" -> angelThump(client, embed.id, io.github.strawwaffle.glorp.chat.ChatSocket.USER_AGENT)
             else -> Resolution.Web
         }
@@ -104,16 +115,31 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
     }
 
     /**
-     * YouTube through FUTO's Grayjay plugin. Live streams come back as HLS,
-     * which the app's player plays; recordings come back as separate video and
-     * audio needing the plugin's request rewriting, so they stay with the web
-     * player for now.
+     * YouTube through FUTO's Grayjay plugin. Live streams come back as HLS.
+     * Recordings come back as separate files for each quality and for the
+     * audio, which become one DASH manifest; their requests are rewritten as
+     * the plugin's request modifier does (see YouTubeRanges on Android).
      */
-    private suspend fun youtube(id: String): Resolution {
+    private suspend fun youtube(id: String, startSeconds: Int?): Resolution {
         val plugin = youtube ?: return Resolution.Web
         if (!Regex("[A-Za-z0-9_-]{11}").matches(id)) return Resolution.Web
-        val hls = plugin.liveHls(id) ?: return Resolution.Web
-        return Resolution.Native(Playable(hls, null, live = true))
+        val details = plugin.details(id) ?: return Resolution.Web
+        val live = details.live?.url
+        if (details.isLive) {
+            return if (live != null) Resolution.Native(Playable(live, details.name, live = true)) else Resolution.Web
+        }
+        val manifest = ytDashManifest(details) ?: return Resolution.Web
+        return Resolution.Native(
+            Playable(
+                dataUri("application/dash+xml", manifest),
+                details.name,
+                live = false,
+                startSeconds = startSeconds,
+                format = Playable.Format.Dash,
+                headers = ytHeaders(details),
+                key = "youtube/$id",
+            ),
+        )
     }
 
     @Serializable
@@ -217,7 +243,7 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
         val pick = qualities.firstOrNull { (it.quality.toIntOrNull() ?: 0) <= MAX_CLIP_HEIGHT } ?: qualities.lastOrNull() ?: return Resolution.Web
         val url = pick.sourceURL + "?sig=" + token.signature.encodeURLParameter() + "&token=" + token.value.encodeURLParameter()
         val title = (o["title"] as? JsonPrimitive)?.contentOrNull
-        return Resolution.Native(Playable(url, title, live = false, mp4 = true))
+        return Resolution.Native(Playable(url, title, live = false, format = Playable.Format.Mp4))
     }
 
     companion object {

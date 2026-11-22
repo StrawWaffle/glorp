@@ -68,6 +68,7 @@ kotlin {
 // The YouTube probe runs only when asked: ./gradlew :grayjay:jvmTest -Pglorp.probe=<url>
 tasks.named<Test>("jvmTest") {
     (findProperty("glorp.probe") as String?)?.let { systemProperty("glorp.probe", it) }
+    (findProperty("glorp.probe.out") as String?)?.let { systemProperty("glorp.probe.out", it) }
     testLogging { showStandardStreams = true }
     outputs.upToDateWhen { false }
 }

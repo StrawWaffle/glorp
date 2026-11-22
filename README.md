@@ -15,7 +15,7 @@ or Destiny.
   their own conversations, polls you can vote in, the pinned message, the
   site's commands, and an input with emote, name and command suggestions.
 - **Bigscreen**: plays what bigscreen shows, or anything chat is watching.
-  Kick, Twitch (live, VODs and clips), YouTube live and AngelThump play in
+  Kick, Twitch (live, VODs and clips), YouTube (live and recordings) and AngelThump play in
   Android's own player, with a quality menu, a live button and picture in picture, and keep
   their sound with the screen off. Other platforms use their web player.
 - **Sideways and full screen**: the video beside chat, or the whole screen.

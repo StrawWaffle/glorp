@@ -370,7 +370,7 @@ private fun EmotePicker(emotes: Emotes, account: Account, state: ChatInputState,
                 add(PickerItem.Header("Recently used"))
                 recent.forEach { add(PickerItem.Item(it, "recent")) }
             }
-            for ((tier, group) in usable.groupBy { it.minimumSubTier }.toSortedMap()) {
+            for ((tier, group) in usable.groupBy { it.minimumSubTier }.toList().sortedBy { it.first }) {
                 add(PickerItem.Header(if (tier == 0) "All users" else "Tier $tier subscribers"))
                 group.forEach { add(PickerItem.Item(it, "$tier")) }
             }

@@ -17,7 +17,8 @@ import kotlin.time.measureTimedValue
 /**
  * Runs FUTO's published YouTube plugin against real YouTube. Not part of the
  * normal test run: it needs the network and takes a while. Run with
- * `-Dglorp.probe=https://www.youtube.com/watch?v=…`.
+ * `-Dglorp.probe=https://www.youtube.com/watch?v=…`, and
+ * `-Dglorp.probe.out=<file>` to keep the whole answer.
  */
 class YoutubePluginProbe {
     @Test
@@ -40,6 +41,7 @@ class YoutubePluginProbe {
             runtime.use {
                 val (details, time) = measureTimedValue { withTimeout(3.minutes) { it.contentDetails(url) } }
                 println("details in $time: ${details.take(1500)}")
+                System.getProperty("glorp.probe.out")?.let { out -> File(out).writeText(details) }
             }
         }
     }

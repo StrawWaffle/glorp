@@ -55,9 +55,14 @@ class PluginRuntime private constructor(
 ) : AutoCloseable {
 
     /**
-     * `source.getContentDetails(url)`, reduced to what a player needs:
-     * a JSON object with `live` (an HLS address, or null) and `sources`
-     * (the video descriptor's sources: type, name, url).
+     * `source.getContentDetails(url)`, reduced to what a player needs: a
+     * JSON object with `name`, `isLive`, `live` (an HLS address, or null),
+     * and `sources` and `audio`, the video descriptor's sources. Each source
+     * has its type, name and url, what the plugin says about its format
+     * (width, height, container, codec, bitrate, duration in seconds, itag,
+     * and the byte ranges of its init and index), whether it's the original
+     * audio, and `headers`: what the source's request modifier adds to a
+     * request for it.
      */
     suspend fun contentDetails(url: String): String {
         // The engine runs the promise to completion but hands back the promise
@@ -67,9 +72,23 @@ class PluginRuntime private constructor(
         globalThis.__details = null;
         (async () => {
             const d = await source.getContentDetails(${JsonPrimitive(url)});
-            const pick = (s) => s ? { type: s.plugin_type || null, name: s.name || null, url: s.url || null } : null;
+            const headersOf = (s) => {
+                try {
+                    const m = s.getRequestModifier && s.getRequestModifier();
+                    return (m && m.modifyRequest && s.url) ? (m.modifyRequest(s.url, {}).headers || {}) : {};
+                } catch (e) { return {}; }
+            };
+            const num = (n) => (typeof n === "number" && isFinite(n)) ? n : null;
+            const pick = (s) => s ? {
+                type: s.plugin_type || null, name: s.name || null, url: s.url || null,
+                width: num(s.width), height: num(s.height), container: s.container || null, codec: s.codec || null,
+                bitrate: num(s.bitrate), duration: num(s.duration), itag: num(s.itagId),
+                initStart: num(s.initStart), initEnd: num(s.initEnd), indexStart: num(s.indexStart), indexEnd: num(s.indexEnd),
+                original: s.original === true, headers: headersOf(s),
+            } : null;
             const v = d && d.video;
             return JSON.stringify({
+                name: (d && d.name) || null,
                 isLive: !!(d && d.isLive),
                 live: pick(d && (d.live || d.hls)),
                 sources: v ? (v.videoSources || []).map(pick) : [],
