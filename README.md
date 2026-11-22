@@ -14,6 +14,8 @@ or Destiny.
 - **Chat**: emotes (animated, combos), flairs, links, mentions, whispers with
   their own conversations, polls you can vote in, the pinned message, the
   site's commands, and an input with emote, name and command suggestions.
+  Timestamps, flair icons and the ignore and highlight lists follow your
+  account's chat settings when you sign in with cookies.
 - **Bigscreen**: plays what bigscreen shows, or anything chat is watching.
   Kick, Twitch (live, VODs and clips), YouTube (live and recordings) and AngelThump play in
   Android's own player, with a quality menu, a live button and picture in picture, and keep

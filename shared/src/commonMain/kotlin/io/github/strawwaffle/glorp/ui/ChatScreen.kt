@@ -72,6 +72,8 @@ import io.github.strawwaffle.glorp.site.Account
 import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.site.Emotes
 import io.github.strawwaffle.glorp.site.Flairs
+import io.github.strawwaffle.glorp.community.localTime
+import androidx.compose.runtime.staticCompositionLocalOf
 import io.github.strawwaffle.glorp.site.LineModel
 
 @Composable
@@ -263,6 +265,11 @@ internal fun continues(previous: ChatLine, line: ChatLine): Boolean =
     previous.kind == ChatLine.Kind.User && line.kind == ChatLine.Kind.User &&
         previous.nick.equals(line.nick, ignoreCase = true)
 
+/** How chat's settings say lines look: the time before each, flair icons or not. */
+data class ChatLook(val showTime: Boolean = false, val timeFormat: String = "HH:mm", val hideFlairIcons: Boolean = false)
+
+val LocalChatLook = staticCompositionLocalOf { ChatLook() }
+
 /** A line laid out once per change of its inputs, with pictures as inline content. */
 private class RenderedLine(val text: AnnotatedString, val inline: Map<String, InlineTextContent>, val mentionsMe: Boolean)
 
@@ -279,8 +286,9 @@ internal fun ChatRow(
     onNick: (String) -> Unit,
 ) {
     val density = LocalDensity.current
-    val rendered = remember(line, continued, flairs, emotes, density, me) {
-        render(line, continued, flairs, emotes, density, me, mention, onEmbed, onNick)
+    val look = LocalChatLook.current
+    val rendered = remember(line, continued, flairs, emotes, density, me, look) {
+        render(line, continued, flairs, emotes, density, me, mention, look, onEmbed, onNick)
     }
     val background = when {
         line.kind == ChatLine.Kind.Whisper -> Palette.Blue.copy(alpha = 0.12f)
@@ -316,6 +324,7 @@ private fun render(
     density: Density,
     me: String?,
     mention: Regex?,
+    look: ChatLook,
     onEmbed: (Embed) -> Unit,
     onNick: (String) -> Unit,
 ): RenderedLine {
@@ -326,6 +335,11 @@ private fun render(
     var mentionsMe = false
 
     val text = buildAnnotatedString {
+        // The time first, as chat-gui puts it, for everything but a combo.
+        if (look.showTime && line.kind != ChatLine.Kind.Combo && line.at > 0) {
+            withStyle(SpanStyle(color = Palette.TextDim, fontSize = 12.sp)) { append(localTime(line.at, look.timeFormat)) }
+            append(' ')
+        }
         when (line.kind) {
             ChatLine.Kind.Broadcast -> {
                 withStyle(SpanStyle(color = Palette.Orange, fontWeight = FontWeight.Bold)) { append(line.text) }
@@ -383,7 +397,7 @@ private fun render(
             // The rest of a run: no badges or name, a dim marker instead.
             withStyle(SpanStyle(color = Palette.TextDim)) { append("> ") }
         } else {
-            for (badge in flairs.badges(line.features)) {
+            for (badge in if (look.hideFlairIcons) emptyList() else flairs.badges(line.features)) {
                 val id = "badge:${badge.name}"
                 inline.getOrPut(id) {
                     InlineTextContent(placeholder(badge.width, badge.height)) {

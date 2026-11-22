@@ -51,7 +51,7 @@ with memory and battery throughout.
    combo's own picture are drawn. `RealStylesheetTest` checks it against a
    saved copy of the site's stylesheet (`-Pglorp.emotes=<dir>`). Still to
    do: hover and pseudo-element effects, filters other than brightness,
-   keyframes that use variables, timestamps, emotes
+   keyframes that use variables, emotes
    overlapping lines the way the site draws them rather than making lines
    taller.
 3. **Logged in** (started): a login key made on the site's developer page in
@@ -76,10 +76,16 @@ with memory and battery throughout.
    chat as chat-gui shows them (bars, a timer, hidden and sub-weighted
    polls, the winner); tapping an option or typing its number votes, and
    `/poll`, `/pollstop`, `/showpoll` work for accounts with the `POLLS`
-   role. The pinned message sits above chat and can be closed per pin. The ignore
-   and highlight lists and the history are kept on the device, not in the
-   account's chat settings (login keys don't open the site's API). Tapping
-   a name offers mention, whisper, highlight and ignore.
+   role. The pinned message sits above chat and can be closed per pin.
+   Chat's settings are chat-gui's (`chat/ChatSettings.kt`): one map, its
+   defaults, and every key kept, known or not. Signed in with cookies they
+   sync with the account (`/api/chat/me/settings`) by chat-gui's own rules
+   (`settingssync.js`, ported with its tests): merged on a device's first
+   sync, the account's copy after that unless this device has unsent
+   changes, uploaded a second after a change. With a login key they stay on
+   the device. Glorp uses the ignore and highlight lists, timestamps
+   (`showtime`, `timestampformat` and `/timestampformat`) and hiding flair
+   icons. Tapping a name offers mention, whisper, highlight and ignore.
    Whispers have their own screen (menu → Whispers, `/open nick`, or the
    "new whispers" tab over chat): conversations newest first with unread
    counts, each with a reply box. A whisper shows as sent only once the
@@ -87,7 +93,8 @@ with memory and battery throughout.
    They're kept in memory only. With the site's cookies the site's
    conversation list and history load too (`/api/messages/...`, which
    refuses login keys).
-   Still to do: chat settings from the account,
+   Still to do: the rest of chat-gui's settings (custom highlight words,
+   tags and notes, notifications, `showremoved`, hiding NSFW links),
    cookies for site pages.
 4. **Embeds** (started): a player above chat. It shows what bigscreen would
    (Destiny on the preferred platform, else the first live one, else what's

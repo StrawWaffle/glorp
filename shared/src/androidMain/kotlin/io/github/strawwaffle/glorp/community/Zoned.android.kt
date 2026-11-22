@@ -20,3 +20,5 @@ internal actual fun localDateTime(epochSeconds: Long): String {
     val moment = Instant.ofEpochSecond(epochSeconds).atZone(ZoneId.systemDefault())
     return moment.format(shortLocal) + moment.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
 }
+
+internal actual fun localOffsetMillis(epochMillis: Long): Long = java.util.TimeZone.getDefault().getOffset(epochMillis).toLong()

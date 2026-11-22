@@ -13,7 +13,14 @@ import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
 
 /** Who is signed in. [roles] carry the powers (`MODERATOR`, `POLLS`…); features are flairs. */
-data class Account(val nick: String, val features: List<String>, val subTier: Int, val roles: List<String> = emptyList()) {
+data class Account(
+    val nick: String,
+    val features: List<String>,
+    val subTier: Int,
+    val roles: List<String> = emptyList(),
+    /** The site's user id; known only from the site's pages (signed in with cookies). */
+    val userId: String? = null,
+) {
     val modPowers: Boolean get() = hasModPowers(features + roles)
 }
 
@@ -29,6 +36,7 @@ sealed interface SessionCheck {
 @Serializable
 private data class Me(
     val nick: String? = null,
+    val userId: kotlinx.serialization.json.JsonPrimitive? = null,
     val features: List<String> = emptyList(),
     val subscription: Sub? = null,
     val roles: List<String> = emptyList(),
@@ -60,7 +68,7 @@ suspend fun checkSession(client: HttpClient, site: Site, session: Session.Cookie
             val nick = me?.nick
             if (nick.isNullOrEmpty()) SessionCheck.Invalid
             else SessionCheck.Valid(
-                Account(nick, me.features, me.subscription?.tier ?: 0, me.roles),
+                Account(nick, me.features, me.subscription?.tier ?: 0, me.roles, me.userId?.content),
                 if (newSid != null) session.withSid(newSid) else session,
             )
         }

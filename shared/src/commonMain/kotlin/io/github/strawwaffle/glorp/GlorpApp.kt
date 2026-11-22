@@ -19,6 +19,8 @@ import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.chat.SocketState
 import io.github.strawwaffle.glorp.ui.Bigscreen
 import io.github.strawwaffle.glorp.ui.ChatScreen
+import io.github.strawwaffle.glorp.ui.ChatLook
+import io.github.strawwaffle.glorp.ui.LocalChatLook
 import io.github.strawwaffle.glorp.ui.Fullscreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
 import io.github.strawwaffle.glorp.ui.LocalFullscreen
@@ -119,7 +121,11 @@ fun GlorpApp(
         OnBack(enabled = fullscreen) { fullscreenWanted = false }
         SystemFullscreen(fullscreen && !pictureInPicture.active)
 
-        CompositionLocalProvider(LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it }) {
+        val settings = chat.settings
+        CompositionLocalProvider(
+            LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it },
+            LocalChatLook provides ChatLook(settings.showTime, settings.timestampFormat, settings.hideFlairIcons),
+        ) {
         ChatScreen(
             lines, flairs, emotes, state, account,
             onSend = chat::send,
@@ -174,6 +180,7 @@ fun GlorpApp(
                                 catchUp = catchUpSpeeds[(catchUpSpeeds.indexOf(catchUp) + 1) % catchUpSpeeds.size]
                                 prefs.put(CATCH_UP, catchUp.toString())
                             },
+                            chatSettings = settings,
                             onCommunity = { communityArg = null; screen = it },
                             unreadWhispers = inbox.unread,
                             onWhispers = { communityArg = null; screen = "whispers" },

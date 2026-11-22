@@ -19,6 +19,9 @@ sealed interface Command {
     /** Null [nick] asks for the list. */
     data class Highlight(val nick: String?, val on: Boolean) : Command
     data object Help : Command
+
+    /** Null [format] asks for the current one. */
+    data class TimestampFormat(val format: String?) : Command
     data object EmoteList : Command
 
     /** Opens [link] in the player, as `/embed` sets bigscreen's hash. */
@@ -73,6 +76,7 @@ val commandList = listOf(
     CommandInfo("reply", listOf("r"), "Reply to the last whisper you received."),
     CommandInfo("showpoll", listOf("showvote"), "Show the last poll again after closing it."),
     CommandInfo("subonly", emptyList(), "Set subscriber-only chat mode <on>, <off>, or to a specific <tier> (1-5).", mod = true),
+    CommandInfo("timestampformat", emptyList(), "Set the time format of the chat."),
     CommandInfo("unban", emptyList(), "Unban <nick>.", mod = true),
     CommandInfo("unhighlight", emptyList(), "Unhighlight <nick>."),
     CommandInfo("unignore", emptyList(), "Remove <nick> from your ignore list."),
@@ -95,7 +99,6 @@ private val notHere = mapOf(
     "untagall" to "tags aren't in Glorp yet",
     "exit" to "conversations close with the back button",
     "maxlines" to "Glorp keeps a fixed number of lines",
-    "timestampformat" to "Glorp doesn't show timestamps yet",
     "hint" to "there are no hints in Glorp",
     "connect" to "Glorp connects by itself",
 )
@@ -188,6 +191,13 @@ fun parseCommand(text: String, mod: Boolean): Command {
             }
         }
         "help" -> Command.Help
+        "timestampformat" -> when {
+            rest.isEmpty() -> Command.TimestampFormat(null)
+            // chat-gui's check, as it is.
+            !Regex("""^[a-z :.,-\\*]+$""", RegexOption.IGNORE_CASE).matches(rest) ->
+                Command.Problem("Invalid format, see: http://momentjs.com/docs/#/displaying/format/")
+            else -> Command.TimestampFormat(rest)
+        }
         "emotes" -> Command.EmoteList
         "embed", "e" -> args.firstOrNull()?.let(Command::Watch)
             ?: Command.Problem("Usage: /embed <link> OR /e <link>")

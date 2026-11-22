@@ -32,3 +32,6 @@ internal actual fun localDateTime(epochSeconds: Long): String {
     }
     return day.stringFromDate(date) + ", " + time.stringFromDate(date)
 }
+
+internal actual fun localOffsetMillis(epochMillis: Long): Long =
+    NSTimeZone.localTimeZone.secondsFromGMTForDate(NSDate.dateWithTimeIntervalSince1970(epochMillis / 1000.0)) * 1000L

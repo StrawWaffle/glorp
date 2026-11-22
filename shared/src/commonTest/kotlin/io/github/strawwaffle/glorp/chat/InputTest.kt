@@ -100,12 +100,12 @@ class InputTest {
     @Test
     fun keepsIgnoredNamesWithoutCase() {
         val prefs = MemoryChatPrefs()
-        val ignored = NickSet(prefs, "ignore")
+        val ignored = NickSet(ChatSettings(prefs), "ignorenicks")
         assertEquals(listOf("bob"), ignored.add(listOf("Bob", "bob")))
         assertTrue("BOB" in ignored)
-        assertTrue(NickSet(prefs, "ignore").contains("bob"))
+        assertTrue(NickSet(ChatSettings(prefs), "ignorenicks").contains("bob"))
         assertEquals(listOf("bob"), ignored.remove(listOf("BoB", "nobody")))
-        assertTrue(NickSet(prefs, "ignore").nicks.isEmpty())
+        assertTrue(NickSet(ChatSettings(prefs), "ignorenicks").nicks.isEmpty())
     }
 
     @Test

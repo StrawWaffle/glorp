@@ -62,13 +62,12 @@ class InputHistory(private val prefs: ChatPrefs, private val max: Int = 20) {
 }
 
 /**
- * A list of nicks kept on the device, compared without case: who is
- * ignored, whose messages are highlighted.
+ * A list of nicks in chat's settings, compared without case: who is
+ * ignored (`ignorenicks`), whose messages are highlighted (`highlightnicks`).
  */
-class NickSet(private val prefs: ChatPrefs, private val key: String) {
+class NickSet(private val settings: ChatSettings, private val key: String) {
     /** Lower case. */
-    var nicks: Set<String> by mutableStateOf(prefs.getList(key).map { it.lowercase() }.toSet())
-        private set
+    val nicks: Set<String> get() = settings.list(key).map { it.lowercase() }.toSet()
 
     operator fun contains(nick: String?): Boolean = nick != null && nick.lowercase() in nicks
 
@@ -88,8 +87,5 @@ class NickSet(private val prefs: ChatPrefs, private val key: String) {
 
     fun clear() = save(emptySet())
 
-    private fun save(new: Set<String>) {
-        nicks = new
-        prefs.putList(key, new.sorted())
-    }
+    private fun save(new: Set<String>) = settings.setList(key, new.sorted())
 }

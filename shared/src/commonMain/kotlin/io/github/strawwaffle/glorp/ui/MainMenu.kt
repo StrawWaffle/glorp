@@ -48,6 +48,8 @@ fun MainMenu(
     /** The catch-up speed; 1 is off. */
     catchUp: Float = 1.5f,
     onToggleCatchUp: () -> Unit = {},
+    /** Chat's settings, saved with the account when signed in with cookies. */
+    chatSettings: io.github.strawwaffle.glorp.chat.ChatSettings? = null,
     /** Opens a community screen: "rustle", "polls" or "dinkdonk". */
     onCommunity: (String) -> Unit = {},
     unreadWhispers: Int = 0,
@@ -86,6 +88,21 @@ fun MainMenu(
         }
         if (account != null) item {
             Item(if (unreadWhispers > 0) "Whispers ($unreadWhispers new)" else "Whispers", null, onWhispers)
+        }
+
+        if (chatSettings != null) {
+            item { Heading("Chat") }
+            item {
+                Item(
+                    "Timestamps: " + if (chatSettings.showTime) "on" else "off",
+                    "The time before each message (/timestampformat changes how it's written)",
+                ) { chatSettings.setBool("showtime", !chatSettings.showTime) }
+            }
+            item {
+                Item("Flair icons: " + if (chatSettings.hideFlairIcons) "hidden" else "shown", null) {
+                    chatSettings.setBool("hideflairicons", !chatSettings.hideFlairIcons)
+                }
+            }
         }
 
         item { Heading("Watch") }

@@ -17,6 +17,7 @@ import io.github.strawwaffle.glorp.net.createPluginHttpClient
 import io.github.strawwaffle.glorp.site.Emotes
 import io.github.strawwaffle.glorp.site.Flairs
 import io.github.strawwaffle.glorp.site.SessionCheck
+import io.github.strawwaffle.glorp.site.SiteSettings
 import io.github.strawwaffle.glorp.site.Site
 import io.github.strawwaffle.glorp.site.checkSession
 import kotlinx.coroutines.CompletableDeferred
@@ -210,6 +211,7 @@ class ChatViewModel(
     private val combo: (ChatLine) -> String? = { soleEmote(it, _emotes.value)?.prefix }
 
     init {
+        settings.onChange = ::settingsChanged
         viewModelScope.launch {
             site = Site.discover(client, origin)
             launch { _flairs.value = Flairs.fetch(client, site) }
@@ -321,6 +323,8 @@ class ChatViewModel(
     }
 
     fun signOut() {
+        settingsLoadedFor = null
+        settingsUpload?.cancel()
         session = null
         store.save(null)
         _account.value = null
@@ -397,6 +401,12 @@ class ChatViewModel(
                 notice("Your ignore list has been cleared.")
             }
             is Command.Highlight -> highlight(command.nick, command.on)
+            is Command.TimestampFormat -> if (command.format == null) {
+                notice("Current format: ${settings.timestampFormat} (the default is 'HH:mm', for more info: http://momentjs.com/docs/#/displaying/format/)")
+            } else {
+                settings.set("timestampformat", kotlinx.serialization.json.JsonPrimitive(command.format))
+                notice("New format: ${command.format}.")
+            }
             Command.Help -> notice(helpText(me.modPowers))
             Command.EmoteList -> notice("Available emotes: ${_emotes.value.all.joinToString(", ") { it.prefix }}.")
             is Command.Watch -> {
@@ -534,6 +544,64 @@ class ChatViewModel(
         session = newSession
         store.save(newSession)
         _account.value = account
+        val userId = account.userId
+        if (newSession is Session.Cookies && userId != null) loadSettings(newSession, userId)
+    }
+
+    /** Chat's settings: the input's, kept with the account when signed in with cookies. */
+    val settings: ChatSettings get() = input.settings
+
+    /** The user whose account copy of the settings has been loaded; uploads wait for it. */
+    private var settingsLoadedFor: String? = null
+    private var settingsUpload: Job? = null
+    private var settingsChange = 0
+
+    /**
+     * The account's copy of the settings, resolved against this device's as
+     * chat-gui does (see [resolveSettings]): on a first sync the two are
+     * merged; after that the account's copy wins unless this device has
+     * changes it hasn't sent yet.
+     */
+    private fun loadSettings(cookies: Session.Cookies, userId: String) {
+        settingsLoadedFor = null
+        viewModelScope.launch {
+            val server = SiteSettings(client, site, cookies).load() ?: return@launch
+            if (_account.value?.userId != userId) return@launch
+            val resolved = resolveSettings(
+                server,
+                settings.values,
+                userId,
+                syncedFor = prefs.get(SETTINGS_SYNCED),
+                pending = prefs.get(SETTINGS_PENDING) == userId,
+            )
+            if (!resolved.upload) prefs.put(SETTINGS_PENDING, null)
+            settings.replace(resolved.settings)
+            prefs.put(SETTINGS_SYNCED, userId)
+            settingsLoadedFor = userId
+            if (resolved.upload) uploadSettings()
+        }
+    }
+
+    /** A setting changed here: mark it unsent for this user, and send it a second after the last change. */
+    private fun settingsChanged() {
+        val userId = _account.value?.userId ?: return
+        if (session !is Session.Cookies) return
+        prefs.put(SETTINGS_PENDING, userId)
+        uploadSettings()
+    }
+
+    private fun uploadSettings() {
+        val cookies = session as? Session.Cookies ?: return
+        val userId = _account.value?.userId ?: return
+        if (settingsLoadedFor != userId) return
+        val change = ++settingsChange
+        settingsUpload?.cancel()
+        settingsUpload = viewModelScope.launch {
+            delay(1.seconds)
+            val sent = SiteSettings(client, site, cookies).save(settings.full())
+            // Unless a newer change is on its way.
+            if (sent && change == settingsChange) prefs.put(SETTINGS_PENDING, null)
+        }
     }
 
     private fun notice(text: String) {
@@ -575,7 +643,9 @@ class ChatViewModel(
                         false
                     }
                     me != null -> {
-                        _account.value = me
+                        // Chat doesn't say the user id; the site's pages did.
+                        val known = _account.value
+                        _account.value = if (known != null && known.nick.equals(me.nick, ignoreCase = true)) me.copy(userId = known.userId) else me
                         loadConversations()
                         false
                     }
@@ -691,5 +761,9 @@ class ChatViewModel(
         /** The errors that answer a whisper, so it was never sent. */
         val whisperErrors = setOf("privmsgbanned", "privmsgaccounttooyoung", "notfound", "throttled", "duplicate", "muted", "needlogin", "nochatting")
         const val POLL_GRACE_MS = 15_000L
+        /** chat-gui's `chat.settings.synced`: the user this device's settings last synced for. */
+        const val SETTINGS_SYNCED = "settings.synced"
+        /** chat-gui's `chat.settings.pending`: the user with changes here the account's copy lacks. */
+        const val SETTINGS_PENDING = "settings.pending"
     }
 }
