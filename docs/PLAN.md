@@ -92,6 +92,11 @@ with memory and battery throughout.
    rewindable live streams get a timeline. Next: Grayjay's plugin engine for
    YouTube, Rumble and the rest; Twitch clips; background audio with the
    screen off.
+   **Rumble** stays on its web player: rumble.com answers anything that
+   isn't a browser with Cloudflare's "Just a moment" check, so a native
+   lookup would break; the embed works in the web view. Twitch clips (MP4)
+   and Kick VODs (HLS from kick.com's video lookup) are native.
+
    **AngelThump (later).** The community userscript "AngelThump Edge
    Picker" (greasyfork.org/en/scripts/597526, MIT) shows how to play it well:
    the same `/hls/...` stream is served by five edge servers
