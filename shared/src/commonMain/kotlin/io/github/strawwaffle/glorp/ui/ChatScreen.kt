@@ -73,8 +73,6 @@ fun ChatScreen(
     emotes: Emotes,
     state: SocketState,
     account: Account?,
-    onSignIn: () -> Unit,
-    onSignOut: () -> Unit,
     onSend: (String) -> Boolean,
     /** The input's draft, suggestions and lists, kept by the view model. */
     input: ChatInputState,
@@ -83,17 +81,25 @@ fun ChatScreen(
     onEmbed: (Embed) -> Unit,
     /** The player, shown above chat; null when hidden. */
     player: (@Composable () -> Unit)?,
-    /** Shows the player again; null when there's nothing to show. */
-    onShowPlayer: (() -> Unit)?,
+    /**
+     * Something shown in chat's place (the menu, signing in), under the same
+     * player, so a stream keeps playing. Null shows chat.
+     */
+    instead: (@Composable () -> Unit)? = null,
 ) {
     // In picture in picture only the player is left. Everything else is
     // skipped rather than moved, so the player keeps its place and isn't
     // recreated.
     val pip = LocalPictureInPicture.current.active
     Column(Modifier.fillMaxSize().background(Palette.Black).then(if (pip) Modifier else Modifier.safeDrawingPadding().imePadding())) {
-        if (!pip) TopBar(state, account, onSignIn, onSignOut, onShowPlayer)
         player?.invoke()
         if (pip) return@Column
+        if (instead != null) {
+            Box(Modifier.fillMaxWidth().weight(1f)) { instead() }
+            return@Column
+        }
+        // No bar: the connection shows only when something is wrong.
+        ConnectionNotice(state)
         // Newest at the bottom, in a reversed list: only the rows on screen are
         // composed, so only their emotes are drawn or animated.
         // A run of messages from one person shows their name once, as chat
@@ -142,37 +148,19 @@ fun ChatScreen(
 }
 
 @Composable
-private fun TopBar(
-    state: SocketState,
-    account: Account?,
-    onSignIn: () -> Unit,
-    onSignOut: () -> Unit,
-    onShowPlayer: (() -> Unit)?,
-) {
-    val (text, color) = when (state) {
-        SocketState.Connected -> "Receiving transmission" to Palette.Glorp
-        SocketState.Connecting -> "Establishing contact…" to Palette.TextDim
-        SocketState.Waiting -> "Signal lost, retrying" to Palette.Orange
-        SocketState.Stopped -> "Transmission ended" to Palette.Orange
+private fun ConnectionNotice(state: SocketState) {
+    val text = when (state) {
+        SocketState.Connected -> return
+        SocketState.Connecting -> "Establishing contact…"
+        SocketState.Waiting -> "Signal lost, retrying"
+        SocketState.Stopped -> "Transmission ended"
     }
-    Row(
-        Modifier.fillMaxWidth().background(Palette.Navy).padding(start = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(text, color = color, fontSize = 12.sp, modifier = Modifier.weight(1f))
-        onShowPlayer?.let { TextButton(onClick = it) { Text("Stream", color = Palette.Blue, fontSize = 13.sp) } }
-        if (account == null) {
-            TextButton(onClick = onSignIn) { Text("Sign in", color = Palette.Blue, fontSize = 13.sp) }
-        } else {
-            var open by remember { mutableStateOf(false) }
-            Box {
-                TextButton(onClick = { open = true }) { Text(account.nick, color = Palette.White, fontSize = 13.sp) }
-                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                    DropdownMenuItem(text = { Text("Sign out") }, onClick = { open = false; onSignOut() })
-                }
-            }
-        }
-    }
+    Text(
+        text,
+        color = if (state == SocketState.Connecting) Palette.TextDim else Palette.Orange,
+        fontSize = 12.sp,
+        modifier = Modifier.fillMaxWidth().background(Palette.Navy).padding(horizontal = 12.dp, vertical = 4.dp),
+    )
 }
 
 private class Shown(val line: ChatLine, val continued: Boolean)

@@ -166,7 +166,7 @@ private fun EmbedList(live: LiveState, onPick: (Embed) -> Unit, onDismiss: () ->
 }
 
 @Composable
-private fun Entry(name: String, detail: String?, watchers: Int?, onClick: () -> Unit) {
+internal fun Entry(name: String, detail: String?, watchers: Int?, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

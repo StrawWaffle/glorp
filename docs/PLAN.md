@@ -80,6 +80,19 @@ with memory and battery throughout.
    rewindable live streams get a timeline. Next: Grayjay's plugin engine for
    YouTube, Rumble and the rest; Twitch clips; background audio with the
    screen off.
+   **AngelThump (later).** The community userscript "AngelThump Edge
+   Picker" (greasyfork.org/en/scripts/597526, MIT) shows how to play it well:
+   the same `/hls/...` stream is served by five edge servers
+   (`nyc1`, `sfo1`, `ams1`, `fra1`, `sgp1` `.angelthump.com`), so any request
+   can be rewritten to another edge. It times each edge's media playlist to
+   pick one automatically (with a manual override), retries a stalled
+   segment on the nearest other edges (up to two backups, nearest first:
+   nyc1 -> sfo1, ams1...; ams1 -> fra1, nyc1...), switches edge after three
+   rebuffers in a minute, and jumps back to live past 15 s of delay. Natively
+   that is an ExoPlayer DataSource that swaps the host, plus a load error
+   policy that retries on a neighbour; the stream address still has to come
+   from AngelThump's own lookup (not in the script). Patreon viewers use a
+   separate path the script leaves alone.
    **Catch-up (wanted, not built yet).** Behind live, play faster until
    caught up, then return to normal speed without a stall. YouTube's version
    shows the trap: it speeds up until it reaches the newest segment with an
@@ -108,6 +121,38 @@ with memory and battery throughout.
 7. **Releases**: signed APKs on GitHub Releases, self-update from there
    (checksum checked, Android's installer), Obtainium-friendly. The signing
    key lives in `%USERPROFILE%\.secrets\glorp\`, never in the repo.
+
+## Community sites (researched 2026-11-22)
+
+None of these publish terms or a versioned API. Ask each maintainer before
+shipping, identify Glorp with its User-Agent, fetch only when a screen is
+open, and fall back to a link to the site when something changes.
+
+- **rustlesearch.dev** (chat log search). `https://api-v2.rustlesearch.dev`,
+  anonymous, CORS open, **200 requests a day per IP**.
+  `/anon/search?channel=Destinygg&username=&text=a|b&start_date=&end_date=&search_after=`
+  returns 100 messages per page, newest first (`{data:{messages:[{channel,text,ts,username,searchAfter}]}}`),
+  paged by the last `searchAfter`; `/anon/surrounds?channel=&username=&datetime=`
+  gives the lines around one; `/anon/channels`. chat-gui uses it for the
+  user menu's recent messages. Its /stalk and /mentions use destiny.gg's own
+  `/api/chat/stalk` and `/api/chat/mentions` instead (signed-in cookies).
+  Plan: a search screen rendered as chat lines, a user sheet from tapping a
+  nick, and mentions from destiny.gg's API so the shared quota isn't spent.
+- **mitchdev.net/dgg** (by Mitchdev). Poll archive and embed history.
+  `https://api.mitchdev.net/dgg/polls?before=&search=&startedBy=&sort=`,
+  `/dgg/poll/<id>`, `/dgg/polls/makers`, `/dgg/polls/yeevpepe`, and
+  `/dgg/embeds/chart?from=&to=` (a compact chart format with outages,
+  hosting, bans and Destiny's stream status); a `wss://api.mitchdev.net/live-ws`
+  pushes embeds every 30 s. Plan: a poll archive screen (paged by cursor) and
+  an embed-history tab; keep destiny.gg's live socket as the live source.
+- **dinkdonk.mov** (by Mitch). Community movie-night votes and ratings, no
+  media of its own. Mostly server-rendered pages; one public JSON endpoint,
+  `/api/page/history/full?offset=&limit=`; a keyed API exists behind login.
+  "Login with DGG" runs through Mitch's OpenID Connect server
+  `https://auth.mitch.my` (scopes `openid profile dgg`, public clients with
+  PKCE allowed), which might also give Glorp a cleaner destiny.gg login if
+  Mitch registers a client for it. Plan: read-only schedule, history and
+  results screens first; voting once there's a client or API key.
 
 ## iOS
 
