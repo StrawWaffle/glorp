@@ -121,6 +121,10 @@ fun PlayerControls(controller: VideoController, modifier: Modifier = Modifier) {
                 }
             }
             Spacer(Modifier.weight(1f))
+            val fullscreen = LocalFullscreen.current
+            TextButton(onClick = { touched++; fullscreen.set(!fullscreen.active) }) {
+                Text(if (fullscreen.active) "Exit full screen" else "Full screen", color = Color.White, fontSize = 12.sp)
+            }
             if (state.qualities.isNotEmpty()) {
                 Box {
                     TextButton(onClick = { touched++; menuOpen = true }) {

@@ -85,9 +85,12 @@ with memory and battery throughout.
    platform's own player runs in a web view, in a page whose origin is the
    site's, as bigscreen embeds it; the page is emptied whenever the app
    leaves the screen. Tested on the emulator: YouTube plays live; Kick plays
-   after a tap and only at 360p ("Visit KICK for HD"). Still to do: landscape
-   and full screen, remembering the chosen platform, the offline card's
-   preview image.
+   after a tap and only at 360p ("Visit KICK for HD"). Sideways, the video sits
+   beside chat; "Full screen" (under the video, or in the native player's
+   controls) gives it the whole screen, hides the system bars and turns the
+   phone sideways, and Back leaves it. The player moves between these
+   layouts without being rebuilt, so the stream doesn't reload. Still to
+   do: remembering the chosen platform, the offline card's preview image.
 5. **Native players** (started): a resolver turns an embed into an HLS
    stream and Media3/ExoPlayer plays it, with the web player as the fallback
    for anything it can't resolve. Kick is done: kick.com's own channel

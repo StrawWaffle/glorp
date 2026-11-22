@@ -19,7 +19,10 @@ import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.chat.SocketState
 import io.github.strawwaffle.glorp.ui.Bigscreen
 import io.github.strawwaffle.glorp.ui.ChatScreen
+import io.github.strawwaffle.glorp.ui.Fullscreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
+import io.github.strawwaffle.glorp.ui.LocalFullscreen
+import io.github.strawwaffle.glorp.ui.SystemFullscreen
 import io.github.strawwaffle.glorp.ui.LocalBackgroundAudio
 import androidx.compose.runtime.remember
 import io.github.strawwaffle.glorp.community.CommunityEnv
@@ -93,7 +96,13 @@ fun GlorpApp(
         LaunchedEffect(canShrink) { pictureInPicture.setAvailable(canShrink) }
         if (screen == "signin" && account != null) screen = "menu"
         OnBack(enabled = screen != "menu") { screen = "menu" }
+        // Full screen while a player shows; Back leaves it first.
+        var fullscreenWanted by rememberSaveable { mutableStateOf(false) }
+        val fullscreen = fullscreenWanted && playerShown && embed != null
+        OnBack(enabled = fullscreen) { fullscreenWanted = false }
+        SystemFullscreen(fullscreen && !pictureInPicture.active)
 
+        CompositionLocalProvider(LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it }) {
         ChatScreen(
             lines, flairs, emotes, state, account,
             onSend = chat::send,
@@ -213,6 +222,7 @@ fun GlorpApp(
                 else -> null
             },
         )
+        }
     } }
 }
 

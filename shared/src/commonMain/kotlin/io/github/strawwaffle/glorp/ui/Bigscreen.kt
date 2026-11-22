@@ -54,10 +54,14 @@ fun Bigscreen(
 ) {
     var listOpen by remember { mutableStateOf(false) }
     val pip = LocalPictureInPicture.current
+    val fullscreen = LocalFullscreen.current
+    val videoOnly = pip.active || fullscreen.active
     Column(Modifier.fillMaxWidth().background(Palette.Black)) {
         Box(
             Modifier.fillMaxWidth()
-                .then(if (pip.active) Modifier.fillMaxSize() else Modifier.aspectRatio(16f / 9f))
+                // 16:9 in what's left after the bar below: the full width
+                // upright, or as wide as fits beside chat when sideways.
+                .then(if (videoOnly) Modifier.fillMaxSize() else Modifier.weight(1f, fill = false).aspectRatio(16f / 9f))
                 .background(Color.Black)
                 .onGloballyPositioned { if (!pip.active) pip.setVideoBounds(it.boundsInWindow()) },
             contentAlignment = Alignment.Center,
@@ -69,7 +73,7 @@ fun Bigscreen(
                 else -> Player(embed, playerUrl, origin, resolve)
             }
         }
-        if (pip.active) return@Column
+        if (videoOnly) return@Column
         Row(
             Modifier.fillMaxWidth().background(Palette.Navy).padding(start = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -84,6 +88,7 @@ fun Bigscreen(
             )
             if (picked) TextButton(onClick = { onPick(null) }) { Text("Destiny", color = Palette.Blue, fontSize = 13.sp) }
             TextButton(onClick = { listOpen = true }) { Text("Embeds", color = Palette.Blue, fontSize = 13.sp) }
+            if (embed != null) TextButton(onClick = { fullscreen.set(true) }) { Text("Full screen", color = Palette.Blue, fontSize = 13.sp) }
             TextButton(onClick = onHide) { Text("Hide", color = Palette.TextDim, fontSize = 13.sp) }
         }
     }

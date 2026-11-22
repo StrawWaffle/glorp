@@ -3,6 +3,10 @@ package io.github.strawwaffle.glorp.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -100,17 +104,63 @@ fun ChatScreen(
     unreadWhispers: Int = 0,
     onWhispers: () -> Unit = {},
 ) {
-    // In picture in picture only the player is left. Everything else is
-    // skipped rather than moved, so the player keeps its place and isn't
-    // recreated.
+    // The player and what's beside it are each one piece of UI that moves
+    // between the layouts (portrait, landscape, full screen, picture in
+    // picture) rather than being rebuilt, so a stream doesn't reload when
+    // the phone turns.
     val pip = LocalPictureInPicture.current.active
-    Column(Modifier.fillMaxSize().background(Palette.Black).then(if (pip) Modifier else Modifier.safeDrawingPadding().imePadding())) {
-        player?.invoke()
-        if (pip) return@Column
-        if (instead != null) {
-            Box(Modifier.fillMaxWidth().weight(1f)) { instead() }
-            return@Column
+    val fullscreen = LocalFullscreen.current.active
+    val currentPlayer by rememberUpdatedState(player)
+    val playerSlot = remember { movableContentOf { currentPlayer?.invoke() } }
+    val currentBody by rememberUpdatedState<@Composable () -> Unit> {
+        if (instead != null) instead()
+        else ChatBody(
+            lines, flairs, emotes, state, account, onSend, input, onIgnore, onHighlight, onEmbed, onSearchUser,
+            poll, onVote, onClosePoll, pinned, onShowPin, unreadWhispers, onWhispers,
+        )
+    }
+    val bodySlot = remember { movableContentOf { currentBody() } }
+    BoxWithConstraints(Modifier.fillMaxSize().background(Palette.Black)) {
+        val wide = maxWidth > maxHeight && player != null
+        val chatWidth = (maxWidth * 0.38f).coerceIn(280.dp, 420.dp)
+        when {
+            // Only the video: the floating window, or the whole screen.
+            pip || (fullscreen && player != null) -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { playerSlot() }
+            // Sideways: the video beside chat.
+            wide -> Row(Modifier.fillMaxSize().safeDrawingPadding()) {
+                Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) { playerSlot() }
+                Box(Modifier.width(chatWidth).fillMaxHeight().imePadding()) { bodySlot() }
+            }
+            else -> Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
+                playerSlot()
+                Box(Modifier.fillMaxWidth().weight(1f)) { bodySlot() }
+            }
         }
+    }
+}
+
+@Composable
+private fun ChatBody(
+    lines: List<ChatLine>,
+    flairs: Flairs,
+    emotes: Emotes,
+    state: SocketState,
+    account: Account?,
+    onSend: (String) -> Boolean,
+    input: ChatInputState,
+    onIgnore: (String) -> Unit,
+    onHighlight: (String, Boolean) -> Unit,
+    onEmbed: (Embed) -> Unit,
+    onSearchUser: (String) -> Unit,
+    poll: Poll?,
+    onVote: (Int) -> Unit,
+    onClosePoll: () -> Unit,
+    pinned: ChatViewModel.Pinned?,
+    onShowPin: (Boolean) -> Unit,
+    unreadWhispers: Int,
+    onWhispers: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
         // No bar: the connection shows only when something is wrong.
         ConnectionNotice(state)
         // Newest at the bottom, in a reversed list: only the rows on screen are
