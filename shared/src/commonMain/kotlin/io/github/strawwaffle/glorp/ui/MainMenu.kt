@@ -145,7 +145,7 @@ private fun UpdateItem(update: UpdateState, onInstall: (Release) -> Unit) {
     val (title, detail, release) = when (update) {
         is UpdateState.Available -> Triple("Update to Glorp ${update.release.version}", "Downloads from GitHub and asks Android to install it", update.release)
         is UpdateState.Downloading -> Triple("Downloading Glorp ${update.release.version}… ${update.percent}%", null, null)
-        is UpdateState.Installing -> Triple("Installing Glorp ${update.release.version}", "Confirm on Android's screen. Glorp restarts when it's done.", update.release)
+        is UpdateState.Installing -> Triple("Installing Glorp ${update.release.version}", "Confirm on Android's screen. Glorp closes to update; open it again after.", update.release)
         is UpdateState.NeedsPermission -> Triple(
             "Allow Glorp to install updates",
             "Turn on \"Allow from this source\" in the settings just opened, then tap here again",

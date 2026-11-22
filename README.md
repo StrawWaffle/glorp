@@ -28,7 +28,10 @@ Still to come is in [docs/PLAN.md](docs/PLAN.md).
 
 Download the APK from [Releases](https://github.com/StrawWaffle/glorp/releases),
 or add this repository to [Obtainium](https://obtainium.imranr.dev/). Glorp
-also checks for new releases itself and offers to install them.
+also checks for new releases itself and offers them at the top of its menu.
+The first time, Android asks you to let Glorp install apps, and Google Play
+Protect may offer to scan it, as it does for any app from outside the Play
+Store.
 
 Android 8 or newer.
 
