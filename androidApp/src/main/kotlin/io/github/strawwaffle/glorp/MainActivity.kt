@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
         val sessions = KeystoreSessionStore(applicationContext)
         if (BuildConfig.DEV_IMPORT) {
             importDevSession(sessions)
+            io.github.strawwaffle.glorp.video.Playback.logLive = true
             // Lets the player's pages be inspected from desktop Chrome.
             android.webkit.WebView.setWebContentsDebuggingEnabled(true)
         }

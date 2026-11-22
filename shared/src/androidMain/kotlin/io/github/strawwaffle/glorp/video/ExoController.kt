@@ -91,10 +91,30 @@ class ExoController(private val player: ExoPlayer) : VideoController {
         // For a live stream this is how far back its playlist reaches; for a
         // recording, its length.
         val duration = player.duration.takeIf { it != C.TIME_UNSET && player.isCurrentMediaItemSeekable } ?: 0
-        _state.update { it.copy(atLiveEdge = atEdge, live = live, positionMs = player.currentPosition, durationMs = duration) }
+        _state.update { it.copy(atLiveEdge = atEdge, live = live, positionMs = player.currentPosition, durationMs = duration, catchingUp = catchingUp(live)) }
     }
 
     private val window = androidx.media3.common.Timeline.Window()
+
+    private var lastOffsetMs = C.TIME_UNSET
+    private var lastOffsetAt = 0L
+
+    /**
+     * Whether the live offset is shrinking faster than time passes: Media3
+     * speeds a live stream up without reporting it as the player's speed,
+     * so it's read off the offset between two refreshes.
+     */
+    private fun catchingUp(live: Boolean): Boolean {
+        val offset = if (live && player.isPlaying) player.currentLiveOffset else C.TIME_UNSET
+        val now = android.os.SystemClock.elapsedRealtime()
+        val previous = lastOffsetMs
+        val since = now - lastOffsetAt
+        lastOffsetMs = offset
+        lastOffsetAt = now
+        if (offset == C.TIME_UNSET || previous == C.TIME_UNSET || since !in 500..3_000) return false
+        // Gaining more than a tenth of a second each second on live.
+        return (previous - offset) * 10 > since
+    }
 
     fun release() {
         player.removeListener(listener)

@@ -45,6 +45,8 @@ fun MainMenu(
     onTogglePlayer: () -> Unit,
     backgroundAudio: Boolean = false,
     onToggleBackgroundAudio: () -> Unit = {},
+    catchUp: Boolean = true,
+    onToggleCatchUp: () -> Unit = {},
     /** Opens a community screen: "rustle", "polls" or "dinkdonk". */
     onCommunity: (String) -> Unit = {},
     unreadWhispers: Int = 0,
@@ -92,6 +94,13 @@ fun MainMenu(
                 if (backgroundAudio) "Sound with the screen off: on" else "Sound with the screen off: off",
                 "Kick, Twitch and YouTube live keep playing their sound when you lock the phone",
                 onToggleBackgroundAudio,
+            )
+        }
+        item {
+            Item(
+                if (catchUp) "Catch up to live: on" else "Catch up to live: off",
+                "A live stream that falls behind plays up to 1.5× until it's back. From the next stream you open",
+                onToggleCatchUp,
             )
         }
         if (picked != null) item { Item("Back to Destiny", "Follow what bigscreen shows", { onWatch(null) }) }

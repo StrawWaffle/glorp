@@ -29,6 +29,8 @@ data class VideoState(
     /** For recordings: where it is and how long it is, in milliseconds. */
     val positionMs: Long = 0,
     val durationMs: Long = 0,
+    /** A live stream that fell behind is playing faster to get back. */
+    val catchingUp: Boolean = false,
 )
 
 /** The controls' view of a player, so one set of controls serves every platform's player. */

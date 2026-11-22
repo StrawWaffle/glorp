@@ -128,7 +128,17 @@ with memory and battery throughout.
    policy that retries on a neighbour; the stream address still has to come
    from AngelThump's own lookup (not in the script). Patreon viewers use a
    separate path the script leaves alone.
-   **Catch-up (wanted, not built yet).** Behind live, play faster until
+   **Catch-up (done, 0.1.2).** Media3's `DefaultLivePlaybackSpeedControl`,
+   tuned in `Playback.catchUpControl()`: up to 1.5x, proportional (0.05 per
+   second behind), normal speed within 1.5 s, +2 s on the target after a
+   stall. It already keeps the target above the smallest offset the buffer
+   safely allows, which is what avoids YouTube's loop. Measured on the
+   emulator (Twitch, `GlorpLive` log in dev builds): 46.8 s behind after a
+   25 s pause, back to the stream's usual 22 s in about 50 s, easing off on
+   the way, buffer never below 17 s, no stall. Media3 doesn't report its
+   speed, so the controls' "Catching up" reads it off the shrinking offset.
+   The notes the design started from:
+   **Catch-up (as first planned).** Behind live, play faster until
    caught up, then return to normal speed without a stall. YouTube's version
    shows the trap: it speeds up until it reaches the newest segment with an
    empty buffer, stalls for seconds to refill, is now behind again, speeds up

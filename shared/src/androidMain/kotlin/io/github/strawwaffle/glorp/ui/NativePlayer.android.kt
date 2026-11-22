@@ -27,6 +27,7 @@ import io.github.strawwaffle.glorp.video.Playback
 internal actual fun NativePlayer(playable: Playable, modifier: Modifier) {
     val context = LocalContext.current
     val background by rememberUpdatedState(LocalBackgroundAudio.current)
+    val catchUp = LocalCatchUp.current
     val view = remember {
         // Only the video surface: the controls are Glorp's own, made for live.
         PlayerView(context).apply {
@@ -46,7 +47,7 @@ internal actual fun NativePlayer(playable: Playable, modifier: Modifier) {
     // picked up without buffering again, or a new one). Off screen: keep only
     // the sound going, if that's on and it was playing; otherwise release.
     LifecycleStartEffect(playable.hlsUrl) {
-        val active = Playback.attach(context, playable, background)
+        val active = Playback.attach(context, playable, background, catchUp)
         view.player = active.player
         view.keepScreenOn = active.player.isPlaying
         val screenOn = object : Player.Listener {

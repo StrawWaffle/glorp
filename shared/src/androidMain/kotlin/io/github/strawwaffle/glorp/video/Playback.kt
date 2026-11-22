@@ -10,6 +10,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -31,8 +32,29 @@ object Playback {
     var active: Active? = null
         private set
 
+    /**
+     * Dev builds: once a second, how far behind live the player is, how much
+     * is buffered and how fast it plays, to logcat under `GlorpLive`, for
+     * watching catch-up on real streams.
+     */
+    var logLive = false
+    private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
+    private val logTick = object : Runnable {
+        override fun run() {
+            val player = active?.player ?: return
+            if (player.isCurrentMediaItemLive) {
+                android.util.Log.d(
+                    "GlorpLive",
+                    "offset=${player.currentLiveOffset}ms buffered=${player.totalBufferedDuration}ms " +
+                        "speed=${player.playbackParameters.speed} state=${player.playbackState} playing=${player.isPlaying}",
+                )
+            }
+            ticker.postDelayed(this, 1_000)
+        }
+    }
+
     /** The player for [playable]: the one already playing it, or a new one. */
-    fun attach(context: Context, playable: Playable, background: Boolean): Active {
+    fun attach(context: Context, playable: Playable, background: Boolean, catchUp: Boolean = true): Active {
         active?.let { if (it.url == playable.hlsUrl) return it.also { start(context, background) } }
         release(context)
         val app = context.applicationContext
@@ -43,6 +65,7 @@ object Playback {
                 true,
             )
             .setHandleAudioBecomingNoisy(true)
+            .setLivePlaybackSpeedControl(catchUpControl())
             // Keeps the network up while the screen is off, but only while playing.
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
@@ -62,7 +85,14 @@ object Playback {
             }
         })
         val item = MediaItem.Builder().setUri(playable.hlsUrl)
-            .setMimeType(if (playable.mp4) MimeTypes.VIDEO_MP4 else MimeTypes.APPLICATION_M3U8).build()
+            .setMimeType(if (playable.mp4) MimeTypes.VIDEO_MP4 else MimeTypes.APPLICATION_M3U8)
+            .setLiveConfiguration(
+                MediaItem.LiveConfiguration.Builder()
+                    .setMaxPlaybackSpeed(if (catchUp) MAX_CATCH_UP_SPEED else 1f)
+                    .setMinPlaybackSpeed(if (catchUp) 0.97f else 1f)
+                    .build(),
+            )
+            .build()
         val start = playable.startSeconds
         if (start != null && !playable.live) player.setMediaItem(item, start * 1000L) else player.setMediaItem(item)
         player.playWhenReady = true
@@ -70,6 +100,7 @@ object Playback {
         // The session gives the picture-in-picture window, headset buttons and
         // the notification play and pause.
         val session = MediaSession.Builder(app, player).setId("glorp").build()
+        if (logLive) { ticker.removeCallbacks(logTick); ticker.postDelayed(logTick, 1_000) }
         return Active(playable.hlsUrl, player, ExoController(player), session).also {
             active = it
             start(context, background)
@@ -86,6 +117,27 @@ object Playback {
         if (keepPlaying && current.player.isPlaying) return
         release(context)
     }
+
+    /**
+     * Catching up with a live stream that's fallen behind (after a pause or a
+     * stall): Media3's own control, tuned. Speed follows how far behind the
+     * target it is (1.5x at 10 s, 1.2x at 4 s), so it eases off as the gap
+     * closes instead of hitting the edge at full speed. Within 1.5 s it plays
+     * at normal speed, so small wobbles don't switch it on and off. The
+     * target never comes closer to live than what's buffered safely allows,
+     * so it doesn't run the buffer dry chasing the newest segment, and each
+     * stall moves the target 2 s further back rather than racing to the
+     * same spot to stall again. A seek back on purpose sets a new target,
+     * so a rewind isn't undone.
+     */
+    private fun catchUpControl() = DefaultLivePlaybackSpeedControl.Builder()
+        .setFallbackMaxPlaybackSpeed(MAX_CATCH_UP_SPEED)
+        .setProportionalControlFactor(0.05f)
+        .setMaxLiveOffsetErrorMsForUnitSpeed(1_500)
+        .setTargetLiveOffsetIncrementOnRebufferMs(2_000)
+        .build()
+
+    private const val MAX_CATCH_UP_SPEED = 1.5f
 
     fun release(context: Context) {
         val current = active ?: return

@@ -119,6 +119,10 @@ fun PlayerControls(controller: VideoController, modifier: Modifier = Modifier) {
                         fontSize = 12.sp,
                     )
                 }
+                // Catching up: how much faster than normal it's playing.
+                if (state.catchingUp && !atEdge) {
+                    Text("Catching up", color = Palette.Glorp, fontSize = 12.sp)
+                }
             }
             Spacer(Modifier.weight(1f))
             val fullscreen = LocalFullscreen.current
@@ -132,6 +136,8 @@ fun PlayerControls(controller: VideoController, modifier: Modifier = Modifier) {
                             state.chosen?.label ?: ("Auto" + (state.current?.let { " (${it.label})" } ?: "")),
                             color = Color.White,
                             fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
                                 .padding(horizontal = 6.dp, vertical = 2.dp),
                         )

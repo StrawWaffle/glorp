@@ -24,6 +24,7 @@ import io.github.strawwaffle.glorp.ui.GlorpTheme
 import io.github.strawwaffle.glorp.ui.LocalFullscreen
 import io.github.strawwaffle.glorp.ui.SystemFullscreen
 import io.github.strawwaffle.glorp.ui.LocalBackgroundAudio
+import io.github.strawwaffle.glorp.ui.LocalCatchUp
 import androidx.compose.runtime.remember
 import io.github.strawwaffle.glorp.community.CommunityEnv
 import io.github.strawwaffle.glorp.community.DinkDonkScreen
@@ -56,9 +57,11 @@ fun GlorpApp(
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
     // Keep a stream's sound going with the screen off: on unless turned off in the menu.
     var backgroundAudio by remember { mutableStateOf(prefs.get(BACKGROUND_AUDIO) != "false") }
+    var catchUp by remember { mutableStateOf(prefs.get(CATCH_UP) != "false") }
     CompositionLocalProvider(
         LocalPictureInPicture provides pictureInPicture,
         LocalBackgroundAudio provides backgroundAudio,
+        LocalCatchUp provides catchUp,
     ) { GlorpTheme {
         val chat = viewModel { ChatViewModel(origin, sessions, prefs).also { vm ->
             initialEmbed?.let(Embed::parse)?.let(vm::watch)
@@ -156,6 +159,11 @@ fun GlorpApp(
                                 backgroundAudio = !backgroundAudio
                                 prefs.put(BACKGROUND_AUDIO, backgroundAudio.toString())
                             },
+                            catchUp = catchUp,
+                            onToggleCatchUp = {
+                                catchUp = !catchUp
+                                prefs.put(CATCH_UP, catchUp.toString())
+                            },
                             onCommunity = { communityArg = null; screen = it },
                             unreadWhispers = inbox.unread,
                             onWhispers = { communityArg = null; screen = "whispers" },
@@ -235,3 +243,4 @@ fun GlorpApp(
 }
 
 private const val BACKGROUND_AUDIO = "background-audio"
+private const val CATCH_UP = "catch-up"
