@@ -52,8 +52,20 @@ with memory and battery throughout.
    Android Keystore key. Sending messages, `/me`, whispers out
    (`/w nick text`) and in, the server's error codes in chat-gui's words,
    mentions highlighted, a stop after `banned` or `toomanyconnections`.
-   Still to do: a whisper inbox, ignore list, chat settings from the account,
-   the rest of chat-gui's commands, cookies for site pages.
+   The input completes emotes (only those the user's tier allows), names
+   (recent speakers, then the `NAMES` roster, read only when signed in) and
+   commands in a strip above the keyboard, offers the last twenty messages
+   sent, counts down near 512 characters and keeps its draft in the view
+   model. A face button swaps the keyboard for an emote grid. chat-gui's
+   commands are read as it reads them: `/r`, `/ignore`, `/highlight`,
+   `/help`, `/emotes`, `/embed` are handled in the app, moderator commands
+   go to the server as the same events, and the ones that need the site's
+   login or features Glorp lacks (`/stalk`, polls, tags) say so. The ignore
+   and highlight lists and the history are kept on the device, not in the
+   account's chat settings (login keys don't open the site's API). Tapping
+   a name offers mention, whisper, highlight and ignore.
+   Still to do: a whisper inbox, chat settings from the account, polls,
+   cookies for site pages.
 4. **Embeds** (started): a player above chat. It shows what bigscreen would
    (Destiny on the preferred platform, else the first live one, else what's
    hosted), or an embed picked from the list of what chat is watching, or
