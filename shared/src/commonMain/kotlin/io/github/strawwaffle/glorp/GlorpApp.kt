@@ -79,6 +79,7 @@ fun GlorpApp(
             onIgnore = { chat.ignore(listOf(it)) },
             onHighlight = chat::highlight,
             onEmbed = { chat.watch(it); playerShown = true },
+            onSearchUser = { communityArg = it; screen = "rustle" },
             player = if (!playerShown) null else {
                 {
                     Bigscreen(

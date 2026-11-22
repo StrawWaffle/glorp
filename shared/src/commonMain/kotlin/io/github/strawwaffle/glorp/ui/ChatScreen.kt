@@ -79,6 +79,8 @@ fun ChatScreen(
     onIgnore: (String) -> Unit,
     onHighlight: (String, Boolean) -> Unit,
     onEmbed: (Embed) -> Unit,
+    /** Opens the chat log search for a name. */
+    onSearchUser: (String) -> Unit,
     /** The player, shown above chat; null when hidden. */
     player: (@Composable () -> Unit)?,
     /**
@@ -144,7 +146,7 @@ fun ChatScreen(
             }
         }
         if (account != null) {
-            ChatInput(input, emotes, account, connected = state == SocketState.Connected, onSend, onIgnore, onHighlight)
+            ChatInput(input, emotes, account, connected = state == SocketState.Connected, onSend, onIgnore, onHighlight, onSearchUser)
         }
     }
 }
@@ -176,7 +178,7 @@ internal fun continues(previous: ChatLine, line: ChatLine): Boolean =
 private class RenderedLine(val text: AnnotatedString, val inline: Map<String, InlineTextContent>, val mentionsMe: Boolean)
 
 @Composable
-private fun ChatRow(
+internal fun ChatRow(
     line: ChatLine,
     continued: Boolean,
     flairs: Flairs,
