@@ -72,6 +72,11 @@ class ExoController(private val player: ExoPlayer) : VideoController {
         _state.update { it.copy(chosen = quality) }
     }
 
+    override fun seekTo(positionMs: Long) {
+        player.seekTo(positionMs)
+        refresh()
+    }
+
     override fun refresh() {
         // How far the playhead is behind where the player joins a live stream,
         // measured in the stream's own time. (`currentLiveOffset` compares the
@@ -83,7 +88,10 @@ class ExoController(private val player: ExoPlayer) : VideoController {
             player.currentTimeline.getWindow(player.currentMediaItemIndex, window)
             atEdge = player.currentPosition >= window.defaultPositionMs - LIVE_EDGE_MS
         }
-        _state.update { it.copy(atLiveEdge = atEdge, live = live) }
+        // For a live stream this is how far back its playlist reaches; for a
+        // recording, its length.
+        val duration = player.duration.takeIf { it != C.TIME_UNSET && player.isCurrentMediaItemSeekable } ?: 0
+        _state.update { it.copy(atLiveEdge = atEdge, live = live, positionMs = player.currentPosition, durationMs = duration) }
     }
 
     private val window = androidx.media3.common.Timeline.Window()

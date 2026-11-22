@@ -26,6 +26,9 @@ data class VideoState(
     val chosen: Quality? = null,
     /** What is playing right now. */
     val current: Quality? = null,
+    /** For recordings: where it is and how long it is, in milliseconds. */
+    val positionMs: Long = 0,
+    val durationMs: Long = 0,
 )
 
 /** The controls' view of a player, so one set of controls serves every platform's player. */
@@ -36,6 +39,8 @@ interface VideoController {
     fun goLive()
     /** Null goes back to choosing automatically. */
     fun choose(quality: Quality?)
-    /** Reads how far behind live the player is. Called only while the controls are on screen. */
+    /** Recordings only: jump to a point. */
+    fun seekTo(positionMs: Long)
+    /** Reads the position and how far behind live the player is. Called only while the controls are on screen. */
     fun refresh()
 }

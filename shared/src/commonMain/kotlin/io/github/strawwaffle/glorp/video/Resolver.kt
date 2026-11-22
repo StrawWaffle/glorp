@@ -4,6 +4,16 @@ import io.github.strawwaffle.glorp.chat.chatJson
 import io.github.strawwaffle.glorp.site.Embed
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
+import io.ktor.http.encodeURLParameter
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlin.random.Random
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
@@ -17,6 +27,8 @@ data class Playable(
     val hlsUrl: String,
     val title: String?,
     val live: Boolean,
+    /** Where a recording starts, from a `?t=` in the link. */
+    val startSeconds: Int? = null,
 )
 
 /** What looking up an embed found. */
@@ -37,6 +49,8 @@ class Resolver(private val client: HttpClient) {
     suspend fun resolve(embed: Embed): Resolution = try {
         when (embed.platform) {
             "kick" -> kick(embed.id)
+            "twitch" -> twitch(embed.id, vod = false)
+            "twitch-vod" -> twitch(embed.id, vod = true, startSeconds = embed.startSeconds)
             else -> Resolution.Web
         }
     } catch (e: kotlinx.coroutines.CancellationException) {
@@ -81,7 +95,58 @@ class Resolver(private val client: HttpClient) {
         }
     }
 
+    @Serializable
+    private data class TwitchToken(val value: String, val signature: String)
+
+    /**
+     * What twitch.tv's own player does: ask its web GraphQL API for a
+     * playback token (with the public web client id), then ask usher, Twitch's
+     * playlist server, for the HLS playlist that token opens. The playlist has
+     * every quality, source included; audio-only is left out by the controls.
+     * Ads Twitch puts in the stream play as they do on the site.
+     */
+    private suspend fun twitch(id: String, vod: Boolean, startSeconds: Int? = null): Resolution {
+        val variables = if (vod) {
+            JsonObject(mapOf("isLive" to JsonPrimitive(false), "login" to JsonPrimitive(""), "isVod" to JsonPrimitive(true), "vodID" to JsonPrimitive(id), "playerType" to JsonPrimitive("embed")))
+        } else {
+            JsonObject(mapOf("isLive" to JsonPrimitive(true), "login" to JsonPrimitive(id.lowercase()), "isVod" to JsonPrimitive(false), "vodID" to JsonPrimitive(""), "playerType" to JsonPrimitive("embed")))
+        }
+        val body = JsonObject(mapOf("operationName" to JsonPrimitive("PlaybackAccessToken_Template"), "query" to JsonPrimitive(TWITCH_TOKEN_QUERY), "variables" to variables))
+        val response = client.post("https://gql.twitch.tv/gql") {
+            header("Client-ID", TWITCH_WEB_CLIENT_ID)
+            header(HttpHeaders.UserAgent, BROWSER_USER_AGENT)
+            contentType(ContentType.Text.Plain)
+            setBody(body.toString())
+        }
+        if (!response.status.isSuccess()) return Resolution.Web
+        val data = chatJson.parseToJsonElement(response.bodyAsText()).jsonObject["data"]?.jsonObject ?: return Resolution.Web
+        val tokenJson = data[if (vod) "videoPlaybackAccessToken" else "streamPlaybackAccessToken"]
+        if (tokenJson == null || tokenJson is JsonNull) return if (vod) Resolution.Web else Resolution.Offline(id)
+        val token = chatJson.decodeFromJsonElement(TwitchToken.serializer(), tokenJson)
+        val query = listOf(
+            "sig" to token.signature, "token" to token.value, "allow_source" to "true", "allow_audio_only" to "true",
+            "playlist_include_framerate" to "true", "player" to "twitchweb", "p" to Random.nextInt(0, 9_999_999).toString(),
+        ).joinToString("&") { (k, v) -> "$k=${v.encodeURLParameter()}" }
+        val url = if (vod) "https://usher.ttvnw.net/vod/${id.encodeURLPathPart()}.m3u8?$query"
+        else "https://usher.ttvnw.net/api/channel/hls/${id.lowercase().encodeURLPathPart()}.m3u8?$query"
+        // Usher answers 404 for a channel that isn't live. Asking it costs one
+        // small request and saves the player from failing on it.
+        val check = client.get(url) { header(HttpHeaders.UserAgent, BROWSER_USER_AGENT) }
+        return when {
+            check.status.value == 404 && !vod -> Resolution.Offline(id)
+            !check.status.isSuccess() -> Resolution.Web
+            else -> Resolution.Native(Playable(url, null, live = !vod, startSeconds = startSeconds))
+        }
+    }
+
     companion object {
+        // The id twitch.tv's own web player uses; it's public in every page.
+        private const val TWITCH_WEB_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
+        private const val TWITCH_TOKEN_QUERY =
+            "query PlaybackAccessToken_Template(\$login: String!, \$isLive: Boolean!, \$vodID: ID!, \$isVod: Boolean!, \$playerType: String!) " +
+                "{ streamPlaybackAccessToken(channelName: \$login, params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \$playerType}) @include(if: \$isLive) { value signature __typename } " +
+                "videoPlaybackAccessToken(id: \$vodID, params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \$playerType}) @include(if: \$isVod) { value signature __typename } }"
+
         const val BROWSER_USER_AGENT =
             "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36"
     }

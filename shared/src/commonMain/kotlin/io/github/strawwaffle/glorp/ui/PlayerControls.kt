@@ -15,6 +15,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -74,6 +77,24 @@ fun PlayerControls(controller: VideoController, modifier: Modifier = Modifier) {
         }
         // The floating window has the system's own play and pause.
         if (!shown || LocalPictureInPicture.current.active) return@Box
+        val timeline = state.durationMs > 0 && (!state.live || state.durationMs >= REWINDABLE_MS)
+        if (timeline) {
+            // Recordings get a timeline, and so do live streams that can be
+            // rewound a long way (a VOD still being recorded); a live stream
+            // with only the last few seconds has nothing to scrub.
+            var dragging by remember { mutableStateOf<Float?>(null) }
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 40.dp, start = 12.dp, end = 12.dp)) {
+                Slider(
+                    value = dragging ?: (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f),
+                    onValueChange = { touched++; dragging = it },
+                    onValueChangeFinished = {
+                        dragging?.let { controller.seekTo((it * state.durationMs).toLong()) }
+                        dragging = null
+                    },
+                    colors = SliderDefaults.colors(thumbColor = Palette.Glorp, activeTrackColor = Palette.Glorp),
+                )
+            }
+        }
         Row(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
@@ -82,6 +103,9 @@ fun PlayerControls(controller: VideoController, modifier: Modifier = Modifier) {
         ) {
             TextButton(onClick = { touched++; if (state.playing) controller.pause() else controller.play() }) {
                 Text(if (state.playing) "❚❚" else "▶", color = Color.White, fontSize = 16.sp)
+            }
+            if (timeline && !state.live) {
+                Text("${clock(state.positionMs)} / ${clock(state.durationMs)}", color = Color.White, fontSize = 12.sp)
             }
             if (state.live) {
                 val atEdge = state.atLiveEdge && state.playing
@@ -127,3 +151,14 @@ fun PlayerControls(controller: VideoController, modifier: Modifier = Modifier) {
 }
 
 private const val HIDE_AFTER_SECONDS = 4
+private const val REWINDABLE_MS = 10 * 60 * 1000L
+
+/** 1:02:03 or 2:03. */
+internal fun clock(ms: Long): String {
+    val total = ms / 1000
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val s = total % 60
+    val ss = s.toString().padStart(2, '0')
+    return if (h > 0) "$h:${m.toString().padStart(2, '0')}:$ss" else "$m:$ss"
+}
