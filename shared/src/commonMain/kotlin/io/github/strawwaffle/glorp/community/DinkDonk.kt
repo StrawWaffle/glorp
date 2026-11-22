@@ -591,7 +591,8 @@ private fun LoadWhenNearEnd(listState: LazyListState, list: Paged<*, *>) {
 }
 
 private fun LazyListScope.pagedFooter(list: Paged<*, *>, empty: String) {
-    item(key = "footer") {
+    // No key: a keyed footer would hold the list's place as rows arrive above it and scroll past them.
+    item {
         when {
             list.loading -> Spinner()
             list.failed -> Problem("Couldn't reach dinkdonk.mov.", list::retry, "$DINKDONK/")
