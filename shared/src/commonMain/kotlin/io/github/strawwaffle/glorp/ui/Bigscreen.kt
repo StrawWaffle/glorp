@@ -22,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,8 +53,15 @@ fun Bigscreen(
     resolve: suspend (Embed) -> Resolution,
 ) {
     var listOpen by remember { mutableStateOf(false) }
+    val pip = LocalPictureInPicture.current
     Column(Modifier.fillMaxWidth().background(Palette.Black)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.fillMaxWidth()
+                .then(if (pip.active) Modifier.fillMaxSize() else Modifier.aspectRatio(16f / 9f))
+                .background(Color.Black)
+                .onGloballyPositioned { if (!pip.active) pip.setVideoBounds(it.boundsInWindow()) },
+            contentAlignment = Alignment.Center,
+        ) {
             when {
                 embed == null -> Offline(live)
                 embed.let(live::isBanned) -> Note("This embed is banned on the site.")
@@ -60,6 +69,7 @@ fun Bigscreen(
                 else -> Player(embed, playerUrl, origin, resolve)
             }
         }
+        if (pip.active) return@Column
         Row(
             Modifier.fillMaxWidth().background(Palette.Navy).padding(start = 12.dp),
             verticalAlignment = Alignment.CenterVertically,

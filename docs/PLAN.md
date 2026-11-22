@@ -71,9 +71,12 @@ with memory and battery throughout.
    lookup gives `playback_url`, an IVS playlist up to 1080p60 (the embedded
    Kick player is held to 360p). Quality is capped at the screen's size, the
    screen stays on only while playing, and the player is released when the
-   app leaves the screen. Next: Twitch, then Grayjay's plugin engine for
-   YouTube, Rumble and the rest; picture in picture and background audio,
-   with chat kept connected while playing.
+   app leaves the screen. Live controls (LIVE / GO LIVE, quality menu).
+   Picture in picture: leaving the app while a player shows shrinks it to
+   the video (auto-enter on Android 12+, on leaving before that), chat stays
+   connected, and a media session gives the window play and pause. Next:
+   Twitch, then Grayjay's plugin engine for YouTube, Rumble and the rest;
+   background audio with the screen off.
    **Catch-up (wanted, not built yet).** Behind live, play faster until
    caught up, then return to normal speed without a stall. YouTube's version
    shows the trap: it speeds up until it reaches the newest segment with an

@@ -72,7 +72,8 @@ fun PlayerControls(controller: VideoController, modifier: Modifier = Modifier) {
         if (state.buffering) {
             CircularProgressIndicator(color = Palette.Glorp, modifier = Modifier.align(Alignment.Center).size(40.dp))
         }
-        if (!shown) return@Box
+        // The floating window has the system's own play and pause.
+        if (!shown || LocalPictureInPicture.current.active) return@Box
         Row(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))

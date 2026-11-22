@@ -1,6 +1,8 @@
 package io.github.strawwaffle.glorp
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -15,6 +17,8 @@ import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.ui.Bigscreen
 import io.github.strawwaffle.glorp.ui.ChatScreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
+import io.github.strawwaffle.glorp.ui.LocalPictureInPicture
+import io.github.strawwaffle.glorp.ui.PictureInPicture
 import io.github.strawwaffle.glorp.ui.SignInScreen
 import io.github.strawwaffle.glorp.ui.glorpImageLoader
 
@@ -23,9 +27,14 @@ import io.github.strawwaffle.glorp.ui.glorpImageLoader
  * site in dev builds. [sessions] keeps the login between launches.
  */
 @Composable
-fun GlorpApp(origin: String, sessions: SessionStore, initialEmbed: String? = null) {
+fun GlorpApp(
+    origin: String,
+    sessions: SessionStore,
+    initialEmbed: String? = null,
+    pictureInPicture: PictureInPicture = PictureInPicture(),
+) {
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
-    GlorpTheme {
+    CompositionLocalProvider(LocalPictureInPicture provides pictureInPicture) { GlorpTheme {
         val chat = viewModel { ChatViewModel(origin, sessions).also { vm -> initialEmbed?.let(Embed::parse)?.let(vm::watch) } }
         // The socket is held only while the app is on screen. Leaving the app
         // closes it; coming back reconnects, and the backlog chat sends on
@@ -45,6 +54,9 @@ fun GlorpApp(origin: String, sessions: SessionStore, initialEmbed: String? = nul
         val picked by chat.picked.collectAsStateWithLifecycle()
         var playerShown by rememberSaveable { mutableStateOf(true) }
         val embed = picked ?: live.defaultEmbed()
+        // Leaving the app shrinks it to the video only while there is one.
+        val canShrink = playerShown && embed != null && !(signInOpen && account == null)
+        LaunchedEffect(canShrink) { pictureInPicture.setAvailable(canShrink) }
 
         if (signInOpen && account == null) {
             SignInScreen(
@@ -83,5 +95,5 @@ fun GlorpApp(origin: String, sessions: SessionStore, initialEmbed: String? = nul
                 onShowPlayer = if (playerShown) null else { { playerShown = true } },
             )
         }
-    }
+    } }
 }

@@ -81,9 +81,14 @@ fun ChatScreen(
     /** Shows the player again; null when there's nothing to show. */
     onShowPlayer: (() -> Unit)?,
 ) {
-    Column(Modifier.fillMaxSize().background(Palette.Black).safeDrawingPadding().imePadding()) {
-        TopBar(state, account, onSignIn, onSignOut, onShowPlayer)
+    // In picture in picture only the player is left. Everything else is
+    // skipped rather than moved, so the player keeps its place and isn't
+    // recreated.
+    val pip = LocalPictureInPicture.current.active
+    Column(Modifier.fillMaxSize().background(Palette.Black).then(if (pip) Modifier else Modifier.safeDrawingPadding().imePadding())) {
+        if (!pip) TopBar(state, account, onSignIn, onSignOut, onShowPlayer)
         player?.invoke()
+        if (pip) return@Column
         // Newest at the bottom, in a reversed list: only the rows on screen are
         // composed, so only their emotes are drawn or animated.
         // A run of messages from one person shows their name once, as chat

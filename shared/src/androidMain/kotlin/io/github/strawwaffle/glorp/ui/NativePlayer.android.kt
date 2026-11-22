@@ -21,6 +21,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
 import io.github.strawwaffle.glorp.video.ExoController
 import io.github.strawwaffle.glorp.video.Playable
@@ -81,10 +82,14 @@ internal actual fun NativePlayer(playable: Playable, modifier: Modifier) {
         view.player = player
         val exo = ExoController(player)
         controller = exo
+        // A media session gives the picture-in-picture window (and headset
+        // buttons) play and pause. Unique id: the old one may not be gone yet.
+        val session = MediaSession.Builder(context, player).setId("glorp-${System.nanoTime()}").build()
         onStopOrDispose {
             controller = null
             view.player = null
             view.keepScreenOn = false
+            session.release()
             exo.release()
         }
     }
