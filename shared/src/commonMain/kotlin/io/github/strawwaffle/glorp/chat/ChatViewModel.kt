@@ -12,6 +12,8 @@ import io.github.strawwaffle.glorp.site.LiveState
 import io.github.strawwaffle.glorp.site.with
 import io.github.strawwaffle.glorp.video.Resolution
 import io.github.strawwaffle.glorp.video.Resolver
+import io.github.strawwaffle.glorp.video.YouTubePlugin
+import io.github.strawwaffle.glorp.net.createPluginHttpClient
 import io.github.strawwaffle.glorp.site.Emotes
 import io.github.strawwaffle.glorp.site.Flairs
 import io.github.strawwaffle.glorp.site.SessionCheck
@@ -26,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -74,7 +77,8 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
         _picked.value = embed
     }
 
-    private val resolver = Resolver(client)
+    private val youtube = YouTubePlugin(client, ::createPluginHttpClient, viewModelScope)
+    private val resolver = Resolver(client, youtube)
 
     /** Looks up a stream the app's own player can play, or says to use the web player. */
     suspend fun resolve(embed: Embed): Resolution = resolver.resolve(embed)
@@ -93,12 +97,14 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
     private var connection: Job? = null
     private var wanted = false
     private val ready = CompletableDeferred<Unit>()
+    private val emotesLoaded = CompletableDeferred<Unit>()
+    private val combo: (ChatLine) -> String? = { soleEmote(it, _emotes.value)?.prefix }
 
     init {
         viewModelScope.launch {
             site = Site.discover(client, origin)
             launch { _flairs.value = Flairs.fetch(client, site) }
-            launch { _emotes.value = Emotes.fetch(client, site) }
+            launch { _emotes.value = Emotes.fetch(client, site); emotesLoaded.complete(Unit) }
             // Like chat-gui on page load: ask who the cookies belong to first,
             // which also renews `sid` from `rememberme` when it has run out.
             // A login key can only be checked by chat itself, on connect.
@@ -113,6 +119,8 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
         if (connection?.isActive == true) return
         connection = viewModelScope.launch {
             ready.await()
+            // The backlog needs the emote list to group combos; don't wait long for it.
+            withTimeoutOrNull(5.seconds) { emotesLoaded.await() }
             val chat = ChatSocket(client, site.chatSocketUrl, session?.cookieHeader)
             socket = chat
             launch { chat.state.collect { _socketState.value = it } }
@@ -275,8 +283,8 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
     private suspend fun apply(item: Any, now: () -> Long): Boolean {
         if (item is ChatLine) return log.add(item)
         return when (val event = parseFrame(item as String, now)) {
-            is ChatEvent.Message -> log.add(event.line)
-            is ChatEvent.History -> event.lines.fold(false) { changed, line -> log.add(line) or changed }
+            is ChatEvent.Message -> log.add(event.line, combo)
+            is ChatEvent.History -> event.lines.fold(false) { changed, line -> log.add(line, combo) or changed }
             is ChatEvent.Removal -> log.removeNick(event.nick)
             is ChatEvent.Notice -> log.add(ChatLine.info(event.text, now()))
             is ChatEvent.Me -> {
@@ -311,6 +319,7 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
     }
 
     override fun onCleared() {
+        youtube.close()
         client.close()
     }
 

@@ -35,6 +35,8 @@ kotlin {
             implementation(libs.ktor.client.websockets)
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor)
+            implementation(libs.okio)
+            implementation(project(":grayjay"))
         }
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)

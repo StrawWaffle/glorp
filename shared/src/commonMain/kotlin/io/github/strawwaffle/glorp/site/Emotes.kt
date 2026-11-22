@@ -15,9 +15,10 @@ import kotlinx.serialization.Serializable
 /**
  * One emote. Sizes are CSS pixels, drawn as dp.
  *
- * [width] is what chat shows, which for a sprite strip is one frame, not the
- * picture: the strip is the frames side by side and the stylesheet steps
- * through them.
+ * [width] by [height] is what chat shows. The picture behind it is drawn at
+ * [sheetWidth] by [sheetHeight] and shifted left by [offsetX], the way the
+ * stylesheet's `background-size` and `background-position` place it: many
+ * pictures are strips of frames or variants side by side, of which one shows.
  */
 data class Emote(
     val prefix: String,
@@ -26,7 +27,13 @@ data class Emote(
     val height: Int,
     val minimumSubTier: Int,
     val sprite: Sprite? = null,
-)
+    val sheetWidth: Int = width,
+    val sheetHeight: Int = height,
+    val offsetX: Int = 0,
+) {
+    /** Whether the picture is drawn whole, scaled to the emote's size. */
+    val isWholePicture: Boolean get() = sprite == null && offsetX == 0 && sheetWidth == width && sheetHeight == height
+}
 
 /** A sprite strip animation, as the stylesheet runs it. */
 data class Sprite(
@@ -77,10 +84,21 @@ class Emotes private constructor(private val byPrefix: Map<String, Emote>) {
                 // Twitch-only emotes are never drawn in destiny.gg chat.
                 if (entry.prefix.isEmpty() || entry.twitch) continue
                 val decls = rules[entry.prefix].orEmpty()
-                val width = decls.lastPx("width") ?: image.width
-                val height = decls.lastPx("height") ?: image.height
-                val sprite = decls["animation"]?.let { spriteOf(it, image.width, width, keyframes) }
-                map[entry.prefix] = Emote(entry.prefix, url, width, height, entry.minimumSubTier, sprite)
+                var width = decls.px("width") ?: image.width.toDouble()
+                var height = decls.px("height") ?: image.height.toDouble()
+                val size = decls.backgroundSize()
+                var sheetWidth = size?.first ?: image.width.toDouble()
+                var sheetHeight = size?.second ?: if (size != null && image.width > 0) size.first * image.height / image.width else image.height.toDouble()
+                var offset = decls.backgroundX()
+                // No emote may be bigger than a line can take: a stylesheet
+                // this parser misreads must not draw a picture over chat.
+                val shrink = minOf(1.0, MAX_HEIGHT / height, MAX_WIDTH / width)
+                width *= shrink; height *= shrink; sheetWidth *= shrink; sheetHeight *= shrink; offset *= shrink
+                val sprite = decls["animation"]?.let { spriteOf(it, sheetWidth.toInt(), width.toInt(), keyframes) }
+                map[entry.prefix] = Emote(
+                    entry.prefix, url, width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1), entry.minimumSubTier, sprite,
+                    sheetWidth = sheetWidth.toInt().coerceAtLeast(1), sheetHeight = sheetHeight.toInt().coerceAtLeast(1), offsetX = offset.toInt(),
+                )
             }
             return Emotes(map)
         }
@@ -110,19 +128,48 @@ class Emotes private constructor(private val byPrefix: Map<String, Emote>) {
 
 private typealias Decls = Map<String, List<String>>
 
-private fun Decls.lastPx(name: String): Int? =
-    this[name]?.lastOrNull()?.let { Regex("""^(-?\d+(?:\.\d+)?)px$""").find(it.trim())?.groupValues?.get(1)?.toDouble()?.toInt() }
+private const val MAX_HEIGHT = 64.0
+private const val MAX_WIDTH = 256.0
+
+private val varRegex = Regex("""var\(\s*(--[\w-]+)\s*(?:,\s*([^)]*))?\)""")
+private val pxRegex = Regex("""^(-?\d+(?:\.\d+)?)px$""")
+
+/** The last value of [name], with `var(--x)` replaced by the rules' own `--x`. */
+private fun Decls.value(name: String): String? {
+    var v = this[name]?.lastOrNull() ?: return null
+    repeat(3) {
+        v = varRegex.replace(v) { m -> this[m.groupValues[1]]?.lastOrNull() ?: m.groupValues[2] }
+    }
+    return v.replace("!important", "").trim()
+}
+
+private fun Decls.px(name: String): Double? = value(name)?.let { pxRegex.find(it)?.groupValues?.get(1)?.toDouble() }
+
+/** `background-size: Wpx Hpx` (or one length for both), or null for the picture's own size. */
+private fun Decls.backgroundSize(): Pair<Double, Double?>? {
+    val parts = value("background-size")?.split(Regex("""\s+""")) ?: return null
+    val w = parts.getOrNull(0)?.let { pxRegex.find(it)?.groupValues?.get(1)?.toDouble() } ?: return null
+    val h = parts.getOrNull(1)?.let { pxRegex.find(it)?.groupValues?.get(1)?.toDouble() }
+    return w to (h ?: w.takeIf { parts.size == 1 })
+}
+
+/** How far left `background-position` shifts the picture, in px (0 for keywords like `center`). */
+private fun Decls.backgroundX(): Double {
+    val first = value("background-position")?.split(Regex("""\s+"""))?.firstOrNull() ?: return 0.0
+    return pxRegex.find(first)?.groupValues?.get(1)?.toDouble()?.let { -it }?.coerceAtLeast(0.0) ?: 0.0
+}
 
 /**
- * Declarations of the rules whose whole selector is `.emote.NAME`, in file
- * order, so the last value of a property is the one that applies.
+ * Declarations of the rules whose whole selector is `.emote.NAME` or
+ * `.text > .emote.NAME` (an emote in a message), in file order, so the last
+ * value of a property is the one that applies.
  */
 private fun baseRules(css: String): Map<String, Decls> {
     val clean = css.replace(Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL), "")
     val out = HashMap<String, HashMap<String, MutableList<String>>>()
     // The `}` before a rule is looked at, not taken, or a rule straight after
     // another would be missed.
-    for (match in Regex("""(?:^|(?<=\}))\s*\.emote\.([A-Za-z0-9_]+)\s*\{([^{}]*)\}""").findAll(clean)) {
+    for (match in Regex("""(?:^|(?<=\}))\s*(?:\.text\s*>\s*)?\.emote\.([A-Za-z0-9_]+)\s*\{([^{}]*)\}""").findAll(clean)) {
         val decls = out.getOrPut(match.groupValues[1]) { HashMap() }
         for (decl in match.groupValues[2].split(';')) {
             val colon = decl.indexOf(':')

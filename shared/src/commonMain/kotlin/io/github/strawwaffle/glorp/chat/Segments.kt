@@ -62,6 +62,17 @@ fun segments(line: ChatLine, emotes: Emotes): List<Segment> {
     return out
 }
 
+/**
+ * The emote a message consists of, if it is only one emote its sender may
+ * use (ignoring a leading `/command`), as chat-gui decides what can combo.
+ */
+fun soleEmote(line: ChatLine, emotes: Emotes): Emote? {
+    val word = line.text.replace(Regex("""^/[a-z0-9]+\s?""", RegexOption.IGNORE_CASE), "").trim()
+    val emote = emotes[word] ?: return null
+    val mayUseAll = line.features.any { it in privileged }
+    return if (mayUseAll || emote.minimumSubTier <= line.subTier) emote else null
+}
+
 private val schemeLink = Regex("""^https?://\S+$""", RegexOption.IGNORE_CASE)
 private val bareLink = Regex(
     """^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|gg|tv|io|dev|me|co|be|ly|app|uk|us|ca|de|fr|es|it|nl|ru|jp|xyz|info|news|live)(?:[/?#]\S*)?$""",

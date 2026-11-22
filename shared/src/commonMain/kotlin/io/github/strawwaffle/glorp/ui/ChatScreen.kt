@@ -269,6 +269,36 @@ private fun render(
                 withStyle(SpanStyle(color = Palette.TextDim, fontStyle = FontStyle.Italic)) { append(line.text) }
                 return@buildAnnotatedString
             }
+            ChatLine.Kind.Combo -> {
+                // As chat-gui writes it: the emote, then "N X Hits C-C-C-COMBO",
+                // the count growing with the combo (its x5/x10/x20/x30/x50 steps).
+                val emote = emotes[line.text]
+                if (emote != null) {
+                    val id = "emote:${emote.prefix}"
+                    inline.getOrPut(id) {
+                        InlineTextContent(placeholder(emote.width, emote.height)) { EmoteImage(emote, sentAt = line.at) }
+                    }
+                    appendInlineContent(id, emote.prefix)
+                } else {
+                    append(line.text)
+                }
+                append("  ")
+                val n = line.comboCount
+                val size = when {
+                    n >= 50 -> 24.sp
+                    n >= 30 -> 22.sp
+                    n >= 20 -> 20.sp
+                    n >= 10 -> 18.sp
+                    n >= 5 -> 16.sp
+                    else -> 14.sp
+                }
+                withStyle(SpanStyle(color = Palette.White, fontWeight = FontWeight.Bold, fontSize = size)) { append("$n") }
+                withStyle(SpanStyle(color = Palette.TextDim, fontSize = 12.sp, fontStyle = FontStyle.Italic)) {
+                    append(" X Hits ")
+                }
+                withStyle(SpanStyle(color = Palette.Orange, fontWeight = FontWeight.Bold, fontSize = 12.sp)) { append("C-C-C-COMBO") }
+                return@buildAnnotatedString
+            }
             ChatLine.Kind.Whisper -> {
                 withStyle(SpanStyle(color = Palette.Blue)) { append("Whisper from ") }
                 withStyle(SpanStyle(color = Palette.White, fontWeight = FontWeight.Bold)) { append(line.nick) }

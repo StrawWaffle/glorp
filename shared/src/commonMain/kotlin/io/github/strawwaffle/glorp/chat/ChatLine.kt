@@ -23,6 +23,8 @@ data class ChatLine(
     val green: Boolean,
     /** The sender's subscription tier, which decides the emotes they may use. */
     val subTier: Int = 0,
+    /** For [Kind.Combo]: how many messages it stands for. */
+    val comboCount: Int = 0,
 ) {
     enum class Kind {
         /** A chat message. */
@@ -36,6 +38,9 @@ data class ChatLine(
 
         /** A private message to you. */
         Whisper,
+
+        /** Several people in a row sending the same single emote: [text] is the emote. */
+        Combo,
     }
 
     companion object {
@@ -75,6 +80,19 @@ data class ChatLine(
             at = at,
             action = false,
             green = false,
+        )
+
+        /** A combo that began with [first]; its id stays the first message's, so it keeps its place. */
+        fun combo(emote: String, first: ChatLine, count: Int) = ChatLine(
+            id = "combo:${first.id}",
+            kind = Kind.Combo,
+            nick = null,
+            features = emptyList(),
+            text = emote,
+            at = first.at,
+            action = false,
+            green = false,
+            comboCount = count,
         )
 
         /** Each notice is its own line, even when the same one repeats. */

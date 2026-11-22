@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
@@ -29,49 +30,59 @@ import kotlin.time.Clock
  */
 @Composable
 fun EmoteImage(emote: Emote, sentAt: Long, modifier: Modifier = Modifier) {
-    val sprite = emote.sprite
-    if (sprite == null) {
+    if (emote.isWholePicture) {
         AsyncImage(
             model = emote.url,
             contentDescription = emote.prefix,
-            modifier = modifier.size(emote.width.dp, emote.height.dp),
+            modifier = modifier.size(emote.width.dp, emote.height.dp).clipToBounds(),
         )
         return
     }
-    SpriteImage(emote, sprite, sentAt, modifier)
+    SheetImage(emote, emote.sprite, sentAt, modifier)
 }
 
+/**
+ * A window onto a bigger picture: one frame or variant of a strip, placed by
+ * the stylesheet's background size and position, stepped through when it
+ * animates.
+ */
 @Composable
-private fun SpriteImage(emote: Emote, sprite: Sprite, sentAt: Long, modifier: Modifier) {
+private fun SheetImage(emote: Emote, sprite: Sprite?, sentAt: Long, modifier: Modifier) {
     val context = LocalPlatformContext.current
     val request = remember(emote.url) {
         ImageRequest.Builder(context).data(emote.url).size(CoilSize.ORIGINAL).build()
     }
     val painter = rememberAsyncImagePainter(request)
-    val finalFrame = if (sprite.holdLast) minOf(sprite.frames, sprite.sheetWidth / emote.width - 1) else 0
+    val finalFrame = when {
+        sprite == null -> 0
+        sprite.holdLast -> minOf(sprite.frames, sprite.sheetWidth / emote.width - 1)
+        else -> 0
+    }
     val frame = remember(emote, sentAt) { mutableIntStateOf(finalFrame) }
 
-    LaunchedEffect(emote, sentAt) {
-        val startedAt = Clock.System.now().toEpochMilliseconds()
-        val elapsedAtStart = startedAt - sentAt
-        if (elapsedAtStart >= sprite.totalMs) return@LaunchedEffect
-        val firstFrame = withFrameMillis { it }
-        while (true) {
-            val elapsed = withFrameMillis { it } - firstFrame + elapsedAtStart
-            if (elapsed >= sprite.totalMs) break
-            frame.intValue = ((elapsed % sprite.durationMs) * sprite.frames / sprite.durationMs).toInt()
+    if (sprite != null) {
+        LaunchedEffect(emote, sentAt) {
+            val startedAt = Clock.System.now().toEpochMilliseconds()
+            val elapsedAtStart = startedAt - sentAt
+            if (elapsedAtStart >= sprite.totalMs) return@LaunchedEffect
+            val firstFrame = withFrameMillis { it }
+            while (true) {
+                val elapsed = withFrameMillis { it } - firstFrame + elapsedAtStart
+                if (elapsed >= sprite.totalMs) break
+                frame.intValue = ((elapsed % sprite.durationMs) * sprite.frames / sprite.durationMs).toInt()
+            }
+            frame.intValue = finalFrame
         }
-        frame.intValue = finalFrame
     }
 
     // The frame is read only while drawing, so a new frame redraws this canvas
     // without recomposing the line around it.
-    Canvas(modifier.size(emote.width.dp, emote.height.dp)) {
+    Canvas(modifier.size(emote.width.dp, emote.height.dp).clipToBounds()) {
         val scale = size.height / emote.height
-        val offset = frame.intValue * emote.width * scale
+        val offset = (emote.offsetX + frame.intValue * emote.width) * scale
         clipRect {
             translate(left = -offset) {
-                with(painter) { draw(Size(sprite.sheetWidth * scale, size.height)) }
+                with(painter) { draw(Size(emote.sheetWidth * scale, emote.sheetHeight * scale)) }
             }
         }
     }

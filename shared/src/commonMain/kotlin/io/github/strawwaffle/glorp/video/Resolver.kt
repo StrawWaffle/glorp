@@ -45,17 +45,19 @@ sealed interface Resolution {
  * lookup is the one its own site does; none of them is a published API, so a
  * failure falls back to the platform's web player rather than to nothing.
  */
-class Resolver(private val client: HttpClient) {
+class Resolver(private val client: HttpClient, private val youtube: YouTubePlugin? = null) {
     suspend fun resolve(embed: Embed): Resolution = try {
         when (embed.platform) {
             "kick" -> kick(embed.id)
             "twitch" -> twitch(embed.id, vod = false)
             "twitch-vod" -> twitch(embed.id, vod = true, startSeconds = embed.startSeconds)
+            "youtube" -> youtube(embed.id)
             else -> Resolution.Web
         }
     } catch (e: kotlinx.coroutines.CancellationException) {
         throw e
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        println("Glorp: couldn't look up ${embed.key}, using the web player: $e")
         Resolution.Web
     }
 
@@ -93,6 +95,19 @@ class Resolver(private val client: HttpClient) {
             url.isNullOrEmpty() -> Resolution.Web
             else -> Resolution.Native(Playable(url, live.session_title, live = true))
         }
+    }
+
+    /**
+     * YouTube through FUTO's Grayjay plugin. Live streams come back as HLS,
+     * which the app's player plays; recordings come back as separate video and
+     * audio needing the plugin's request rewriting, so they stay with the web
+     * player for now.
+     */
+    private suspend fun youtube(id: String): Resolution {
+        val plugin = youtube ?: return Resolution.Web
+        if (!Regex("[A-Za-z0-9_-]{11}").matches(id)) return Resolution.Web
+        val hls = plugin.liveHls(id) ?: return Resolution.Web
+        return Resolution.Native(Playable(hls, null, live = true))
     }
 
     @Serializable

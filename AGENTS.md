@@ -39,7 +39,8 @@
   `https://www.omniliberal.dev`; release builds to `https://www.destiny.gg`.
   Try anything that writes (sending messages, settings) on the test site first.
 - Release builds are signed with the key in the owner's secrets folder,
-  `%USERPROFILE%\.secrets\glorpelease.jks`, described by `release.properties`
+  `%USERPROFILE%\.secrets\glorp
+elease.jks`, described by `release.properties`
   there. Every release must use it, or installed copies can't update; it is
   not in the repo and must never be. Losing it means a new package name.
 - Put **dev** builds on phones (`./gradlew :androidApp:assembleDev`): optimised
@@ -93,6 +94,11 @@ licence; check it before using one.
 - `shared/src/{android,ios}Main`: the HTTP client per platform, the iOS entry.
 - `androidApp/`: the Android shell (activity, manifest, build types).
 - `docs/PLAN.md`: the architecture and the layers still to come.
+- `grayjay/`: runs FUTO's Grayjay source plugins (YouTube so far) on QuickJS.
+  Under FUTO's licence (`grayjay/LICENSE.md`, `grayjay/NOTICE.md`), kept apart
+  from the rest. Plugins are downloaded from plugins.grayjay.app at run time
+  and must match their signatures; never bundle one. Try the YouTube plugin
+  on this PC with `./gradlew :grayjay:jvmTest -Pglorp.probe=<youtube watch url>`.
 - `art/`: the icon art. `glorp-icon.png` is the original; `glorp-icon-plain.png`
   is the alien cut out onto plain navy, which the launcher icon is made from
   (`androidApp/src/main/res/mipmap-*`, an adaptive icon with a monochrome layer

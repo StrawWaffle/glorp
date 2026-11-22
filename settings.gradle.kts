@@ -15,4 +15,4 @@ dependencyResolutionManagement {
     }
 }
 
-include(":shared", ":androidApp")
+include(":shared", ":androidApp", ":grayjay")

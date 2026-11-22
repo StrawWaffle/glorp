@@ -16,3 +16,8 @@ actual fun createHttpClient(): HttpClient = HttpClient(OkHttp) {
     }
     install(WebSockets)
 }
+
+actual fun createPluginHttpClient(): HttpClient = HttpClient(OkHttp) {
+    install(io.ktor.client.plugins.cookies.HttpCookies)
+    install(io.ktor.client.plugins.HttpTimeout) { requestTimeoutMillis = 30_000 }
+}
