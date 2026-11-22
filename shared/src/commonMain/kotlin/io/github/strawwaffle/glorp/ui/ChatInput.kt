@@ -117,6 +117,10 @@ fun ChatInput(
     // The picker stands in for the keyboard: it goes when the keyboard comes back.
     val imeVisible = WindowInsets.isImeVisible
     LaunchedEffect(imeVisible) { if (imeVisible) picker = false }
+    // Back closes the picker or a name's actions before it leaves chat.
+    OnBack(enabled = picker || state.tappedNick != null) {
+        if (state.tappedNick != null) state.tappedNick = null else picker = false
+    }
 
     fun take(suggestion: Suggestion) {
         val w = word ?: return

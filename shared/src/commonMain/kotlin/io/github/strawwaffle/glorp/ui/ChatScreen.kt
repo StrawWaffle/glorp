@@ -112,7 +112,9 @@ fun ChatScreen(
         val embedHandler = rememberUpdatedState(onEmbed)
         val openEmbed: (Embed) -> Unit = remember { { embedHandler.value(it) } }
         // Tapping a name offers to mention, whisper, highlight or ignore them.
-        val tapNick: (String) -> Unit = remember(input) { { input.tappedNick = it } }
+        // Signed out there is no input to act from.
+        val signedIn = account != null
+        val tapNick: (String) -> Unit = remember(input, signedIn) { { if (signedIn) input.tappedNick = it } }
         val highlighted = input.highlighted.nicks
         val list = rememberLazyListState()
         // A lazy list keeps the row you're looking at in place when rows are
