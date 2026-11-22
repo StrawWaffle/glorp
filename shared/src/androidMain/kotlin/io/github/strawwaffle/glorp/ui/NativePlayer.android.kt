@@ -2,8 +2,13 @@ package io.github.strawwaffle.glorp.ui
 
 import android.graphics.Color
 import androidx.annotation.OptIn
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -17,6 +22,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import io.github.strawwaffle.glorp.video.ExoController
 import io.github.strawwaffle.glorp.video.Playable
 
 @OptIn(UnstableApi::class)
@@ -24,13 +30,19 @@ import io.github.strawwaffle.glorp.video.Playable
 internal actual fun NativePlayer(playable: Playable, modifier: Modifier) {
     val context = LocalContext.current
     val view = remember {
+        // Only the video surface: the controls are Glorp's own, made for live.
         PlayerView(context).apply {
             setBackgroundColor(Color.BLACK)
-            setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-            controllerAutoShow = false
+            useController = false
+            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
         }
     }
-    AndroidView(factory = { view }, modifier = modifier)
+    var controller by remember { mutableStateOf<ExoController?>(null) }
+
+    Box(modifier) {
+        AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
+        controller?.let { PlayerControls(it, Modifier.fillMaxSize()) }
+    }
 
     // A player exists only while the app is on screen: decoders and the
     // network are let go of as soon as it leaves. (Picture in picture will
@@ -44,8 +56,9 @@ internal actual fun NativePlayer(playable: Playable, modifier: Modifier) {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
-        // No quality above what the screen can show: a 1080p60 stream on a
-        // small view costs decode work and data for nothing.
+        // Auto picks nothing above what the screen can show: a 1080p60 stream
+        // on a small view costs decode work and data for nothing. A quality
+        // picked by hand overrides this.
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setViewportSizeToPhysicalDisplaySize(context, true)
             .build()
@@ -66,10 +79,13 @@ internal actual fun NativePlayer(playable: Playable, modifier: Modifier) {
         player.playWhenReady = true
         player.prepare()
         view.player = player
+        val exo = ExoController(player)
+        controller = exo
         onStopOrDispose {
+            controller = null
             view.player = null
             view.keepScreenOn = false
-            player.release()
+            exo.release()
         }
     }
 }
