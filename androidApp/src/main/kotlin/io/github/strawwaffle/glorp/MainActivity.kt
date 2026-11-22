@@ -17,6 +17,8 @@ import io.github.strawwaffle.glorp.auth.KeystoreSessionStore
 import io.github.strawwaffle.glorp.auth.Session
 import io.github.strawwaffle.glorp.chat.SharedChatPrefs
 import io.github.strawwaffle.glorp.ui.PictureInPicture
+import io.github.strawwaffle.glorp.update.androidUpdates
+import androidx.lifecycle.lifecycleScope
 
 class MainActivity : ComponentActivity() {
     private var inPip by mutableStateOf(false)
@@ -38,6 +40,9 @@ class MainActivity : ComponentActivity() {
         // trying players without posting links in chat.
         val embed = if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("embed") else null
         val frames = if (BuildConfig.DEV_IMPORT) devFrames() else emptyList()
+        // Releases check GitHub for a newer one; dev builds come over adb.
+        val updates = if (!BuildConfig.SELF_UPDATE) null
+        else androidUpdates(this, SharedChatPrefs(applicationContext), BuildConfig.VERSION_NAME, lifecycleScope)
         addOnPictureInPictureModeChangedListener(pipListener)
         inPip = isInPictureInPictureMode
         setContent {
@@ -47,6 +52,7 @@ class MainActivity : ComponentActivity() {
                 prefs = SharedChatPrefs(applicationContext),
                 initialEmbed = embed,
                 devFrames = frames,
+                updates = updates,
                 pictureInPicture = PictureInPicture(
                     active = inPip,
                     setAvailable = { showing -> videoShowing = showing; updatePipParams() },

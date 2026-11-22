@@ -14,8 +14,10 @@ android {
         applicationId = "io.github.strawwaffle.glorp"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        // Set in gradle.properties (`glorp.version`); scripts/release.sh tags it.
+        // 1.2.3 becomes version code 10203, so every release counts up.
+        versionName = providers.gradleProperty("glorp.version").get()
+        versionCode = versionName!!.split('.').map { it.toInt() }.let { (major, minor, patch) -> major * 10_000 + minor * 100 + patch }
     }
 
     // The release key lives outside the repo (see AGENTS.md). Every release
@@ -40,6 +42,7 @@ android {
             applicationIdSuffix = ".dev"
             buildConfigField("String", "SITE_ORIGIN", "\"https://www.omniliberal.dev\"")
             buildConfigField("boolean", "DEV_IMPORT", "true")
+            buildConfigField("boolean", "SELF_UPDATE", "false")
         }
         release {
             isMinifyEnabled = true
@@ -47,6 +50,8 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("String", "SITE_ORIGIN", "\"https://www.destiny.gg\"")
             buildConfigField("boolean", "DEV_IMPORT", "false")
+            // Only releases update themselves; dev builds come over adb.
+            buildConfigField("boolean", "SELF_UPDATE", "true")
             signingConfigs.findByName("release")?.let { signingConfig = it }
         }
         // What goes on a phone for trying things: optimised like a release,
@@ -59,6 +64,7 @@ android {
             matchingFallbacks += listOf("release")
             buildConfigField("String", "SITE_ORIGIN", "\"https://www.omniliberal.dev\"")
             buildConfigField("boolean", "DEV_IMPORT", "true")
+            buildConfigField("boolean", "SELF_UPDATE", "false")
         }
     }
 

@@ -149,9 +149,12 @@ with memory and battery throughout.
    a phone over long real streams on Kick and Twitch.
 6. **The rest of the site**: profile, subscriptions (opened in the browser),
    notifications, schedule, and whatever else a logged-in user can reach.
-7. **Releases**: signed APKs on GitHub Releases, self-update from there
-   (checksum checked, Android's installer), Obtainium-friendly. The signing
-   key lives in `%USERPROFILE%\.secrets\glorp\`, never in the repo.
+7. **Releases** (done): signed APKs on GitHub Releases
+   (github.com/StrawWaffle/glorp), published by `scripts/release.sh`.
+   Release builds check for a newer one once a day and offer it at the top
+   of the menu; the download is checked against its SHA-256 and handed to
+   Android's installer, which refuses another key's signature. Obtainium
+   reads the same releases. Still to do: an APK per processor type.
 
 ## Community sites (researched 2026-11-22)
 

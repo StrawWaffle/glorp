@@ -39,10 +39,15 @@
   `https://www.omniliberal.dev`; release builds to `https://www.destiny.gg`.
   Try anything that writes (sending messages, settings) on the test site first.
 - Release builds are signed with the key in the owner's secrets folder,
-  `%USERPROFILE%\.secrets\glorp
-elease.jks`, described by `release.properties`
+  `%USERPROFILE%\.secrets\glorp\release.jks`, described by `release.properties`
   there. Every release must use it, or installed copies can't update; it is
   not in the repo and must never be. Losing it means a new package name.
+- Releasing: set `glorp.version` in `gradle.properties`, commit, then
+  `scripts/release.sh notes.md`. It builds the release APK, checks it is
+  signed with the release key, writes its SHA-256, tags `v<version>`, pushes,
+  and publishes `glorp-<version>.apk` and its `.sha256` on GitHub. Release
+  builds look for a newer release once a day and offer it in the menu; the
+  download must match the checksum before Android's installer gets it.
 - Put **dev** builds on phones (`./gradlew :androidApp:assembleDev`): optimised
   like a release, signed with the debug key, named "Glorp (dev)", talking to the
   test site. Debug builds are for the debugger only: Compose runs several times

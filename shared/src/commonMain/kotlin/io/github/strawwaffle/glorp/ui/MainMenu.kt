@@ -20,6 +20,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.strawwaffle.glorp.chat.SocketState
+import io.github.strawwaffle.glorp.update.Release
+import io.github.strawwaffle.glorp.update.UpdateState
 import io.github.strawwaffle.glorp.site.Account
 import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.site.LiveState
@@ -47,6 +49,11 @@ fun MainMenu(
     onCommunity: (String) -> Unit = {},
     unreadWhispers: Int = 0,
     onWhispers: () -> Unit = {},
+    /** This build's version, when it updates itself from GitHub; null otherwise. */
+    version: String? = null,
+    update: UpdateState? = null,
+    onCheckUpdate: () -> Unit = {},
+    onInstallUpdate: (Release) -> Unit = {},
 ) {
     val streams = live.liveStreams
     val embeds = live.embeds.filter { !live.isBanned(it.embed) }
@@ -62,6 +69,10 @@ fun MainMenu(
                 }
                 Text(status, color = Palette.TextDim, fontSize = 13.sp)
             }
+        }
+        // A new version is offered at the top, where it's seen.
+        if (update != null && update !is UpdateState.Idle && update !is UpdateState.UpToDate && update !is UpdateState.Checking) {
+            item { UpdateItem(update, onInstallUpdate) }
         }
         item { Item("Back to chat", null, onChat) }
 
@@ -103,6 +114,17 @@ fun MainMenu(
         item { Item("Movie nights", "dinkdonk.mov", { onCommunity("dinkdonk") }) }
 
         item { Heading("About") }
+        if (version != null) item {
+            Item(
+                "Glorp $version",
+                when (update) {
+                    UpdateState.Checking -> "Checking for updates…"
+                    UpdateState.UpToDate -> "Up to date"
+                    else -> "Check for updates"
+                },
+                onCheckUpdate,
+            )
+        }
         item {
             Text(
                 "Glorp is an unofficial community app. It is not made by or affiliated with destiny.gg or Destiny. " +
@@ -115,6 +137,30 @@ fun MainMenu(
             )
             Spacer(Modifier.height(24.dp))
         }
+    }
+}
+
+@Composable
+private fun UpdateItem(update: UpdateState, onInstall: (Release) -> Unit) {
+    val (title, detail, release) = when (update) {
+        is UpdateState.Available -> Triple("Update to Glorp ${update.release.version}", "Downloads from GitHub and asks Android to install it", update.release)
+        is UpdateState.Downloading -> Triple("Downloading Glorp ${update.release.version}… ${update.percent}%", null, null)
+        is UpdateState.Installing -> Triple("Installing Glorp ${update.release.version}", "Confirm on Android's screen. Glorp restarts when it's done.", update.release)
+        is UpdateState.NeedsPermission -> Triple(
+            "Allow Glorp to install updates",
+            "Turn on \"Allow from this source\" in the settings just opened, then tap here again",
+            update.release,
+        )
+        is UpdateState.Failed -> Triple("Update failed", update.why, update.release)
+        else -> return
+    }
+    Column(
+        Modifier.fillMaxWidth().background(Palette.Navy)
+            .clickable(enabled = release != null) { release?.let(onInstall) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(title, color = Palette.Glorp, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        detail?.let { Text(it, color = Palette.TextDim, fontSize = 12.sp) }
     }
 }
 

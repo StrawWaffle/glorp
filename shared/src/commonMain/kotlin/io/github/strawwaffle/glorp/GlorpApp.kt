@@ -49,6 +49,8 @@ fun GlorpApp(
     initialEmbed: String? = null,
     /** Dev builds: frames played into chat once it connects (see `MainActivity.devFrames`). */
     devFrames: List<String> = emptyList(),
+    /** Glorp's own updates; null in builds that don't update themselves. */
+    updates: io.github.strawwaffle.glorp.update.Updates? = null,
     pictureInPicture: PictureInPicture = PictureInPicture(),
 ) {
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
@@ -84,6 +86,8 @@ fun GlorpApp(
         val poll by chat.poll.collectAsStateWithLifecycle()
         val pinned by chat.pinned.collectAsStateWithLifecycle()
         val inbox by chat.inbox.collectAsStateWithLifecycle()
+        val update = updates?.state?.collectAsStateWithLifecycle()?.value
+        LaunchedEffect(updates) { updates?.check() }
         val opening by chat.opening.collectAsStateWithLifecycle()
         // `/open nick` shows that conversation.
         LaunchedEffect(opening) {
@@ -155,6 +159,10 @@ fun GlorpApp(
                             onCommunity = { communityArg = null; screen = it },
                             unreadWhispers = inbox.unread,
                             onWhispers = { communityArg = null; screen = "whispers" },
+                            version = updates?.currentVersion,
+                            update = update,
+                            onCheckUpdate = { updates?.check(force = true) },
+                            onInstallUpdate = { updates?.install(it) },
                         )
                     }
                 }
