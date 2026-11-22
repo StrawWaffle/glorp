@@ -15,6 +15,7 @@ import androidx.core.app.PictureInPictureModeChangedInfo
 import androidx.core.util.Consumer
 import io.github.strawwaffle.glorp.auth.KeystoreSessionStore
 import io.github.strawwaffle.glorp.auth.Session
+import io.github.strawwaffle.glorp.chat.SharedChatPrefs
 import io.github.strawwaffle.glorp.ui.PictureInPicture
 
 class MainActivity : ComponentActivity() {
@@ -42,6 +43,7 @@ class MainActivity : ComponentActivity() {
             GlorpApp(
                 origin = BuildConfig.SITE_ORIGIN,
                 sessions = sessions,
+                prefs = SharedChatPrefs(applicationContext),
                 initialEmbed = embed,
                 pictureInPicture = PictureInPicture(
                     active = inPip,

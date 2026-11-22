@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import io.github.strawwaffle.glorp.chat.ChatInputState
 import io.github.strawwaffle.glorp.chat.ChatLine
 import io.github.strawwaffle.glorp.chat.Segment
 import io.github.strawwaffle.glorp.chat.SocketState
@@ -73,6 +74,10 @@ fun ChatScreen(
     state: SocketState,
     account: Account?,
     onSend: (String) -> Boolean,
+    /** The input's draft, suggestions and lists, kept by the view model. */
+    input: ChatInputState,
+    onIgnore: (String) -> Unit,
+    onHighlight: (String, Boolean) -> Unit,
     onEmbed: (Embed) -> Unit,
     /** The player, shown above chat; null when hidden. */
     player: (@Composable () -> Unit)?,
@@ -106,6 +111,11 @@ fun ChatScreen(
         val mention = remember(me) { me?.let(::mentionPattern) }
         val embedHandler = rememberUpdatedState(onEmbed)
         val openEmbed: (Embed) -> Unit = remember { { embedHandler.value(it) } }
+        // Tapping a name offers to mention, whisper, highlight or ignore them.
+        // Signed out there is no input to act from.
+        val signedIn = account != null
+        val tapNick: (String) -> Unit = remember(input, signedIn) { { if (signedIn) input.tappedNick = it } }
+        val highlighted = input.highlighted.nicks
         val list = rememberLazyListState()
         // A lazy list keeps the row you're looking at in place when rows are
         // added, which hides new lines below the bottom. So: follow while
@@ -120,7 +130,8 @@ fun ChatScreen(
         Box(Modifier.fillMaxWidth().weight(1f)) {
             LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true) {
                 items(reversed, key = { it.line.id }, contentType = { it.line.kind }) { shown ->
-                    ChatRow(shown.line, shown.continued, flairs, emotes, me, mention, openEmbed)
+                    val marked = shown.line.kind == ChatLine.Kind.User && shown.line.nick?.lowercase() in highlighted
+                    ChatRow(shown.line, shown.continued, flairs, emotes, me, mention, marked, openEmbed, tapNick)
                 }
             }
             if (!following) {
@@ -132,7 +143,9 @@ fun ChatScreen(
                 ) { Text("Newest messages", color = Palette.White, fontSize = 13.sp) }
             }
         }
-        if (account != null) MessageBox(enabled = state == SocketState.Connected, onSend = onSend)
+        if (account != null) {
+            ChatInput(input, emotes, account, connected = state == SocketState.Connected, onSend, onIgnore, onHighlight)
+        }
     }
 }
 
@@ -152,38 +165,6 @@ private fun ConnectionNotice(state: SocketState) {
     )
 }
 
-@Composable
-private fun MessageBox(enabled: Boolean, onSend: (String) -> Boolean) {
-    var text by remember { mutableStateOf("") }
-    val send = { if (onSend(text)) text = "" }
-    Row(
-        Modifier.fillMaxWidth().background(Palette.Navy).padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        BasicTextField(
-            value = text,
-            onValueChange = { if (it.length <= MAX_MESSAGE) text = it },
-            textStyle = TextStyle(color = Palette.White, fontSize = 15.sp),
-            cursorBrush = SolidColor(Palette.Blue),
-            maxLines = 4,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { send() }),
-            modifier = Modifier.weight(1f)
-                .background(Palette.Black, RoundedCornerShape(6.dp))
-                .padding(horizontal = 10.dp, vertical = 9.dp),
-            decorationBox = { field ->
-                if (text.isEmpty()) Text("Write something", color = Palette.TextDim, fontSize = 15.sp)
-                field()
-            },
-        )
-        TextButton(onClick = send, enabled = enabled && text.isNotBlank()) {
-            Text("Send", color = if (enabled && text.isNotBlank()) Palette.Blue else Palette.TextDim)
-        }
-    }
-}
-
-private const val MAX_MESSAGE = 512
-
 private class Shown(val line: ChatLine, val continued: Boolean)
 
 /** Whether [line] carries on a run started by [previous]: two chat messages from the same person. */
@@ -202,15 +183,17 @@ private fun ChatRow(
     emotes: Emotes,
     me: String?,
     mention: Regex?,
+    highlighted: Boolean,
     onEmbed: (Embed) -> Unit,
+    onNick: (String) -> Unit,
 ) {
     val density = LocalDensity.current
     val rendered = remember(line, continued, flairs, emotes, density, me) {
-        render(line, continued, flairs, emotes, density, me, mention, onEmbed)
+        render(line, continued, flairs, emotes, density, me, mention, onEmbed, onNick)
     }
     val background = when {
         line.kind == ChatLine.Kind.Whisper -> Palette.Blue.copy(alpha = 0.12f)
-        rendered.mentionsMe -> Palette.Orange.copy(alpha = 0.14f)
+        rendered.mentionsMe || highlighted -> Palette.Orange.copy(alpha = 0.14f)
         else -> Color.Transparent
     }
     Text(
@@ -224,6 +207,9 @@ private fun ChatRow(
 }
 
 private val linkStyle = TextLinkStyles(SpanStyle(color = Palette.Blue, textDecoration = TextDecoration.Underline))
+
+// A name is tappable but looks like a name, not a link.
+private val nickStyle = TextLinkStyles(SpanStyle(textDecoration = TextDecoration.None))
 
 /** Matches [nick] as a word, the way chat highlights mentions. Built once per name. */
 internal fun mentionPattern(nick: String) =
@@ -240,6 +226,7 @@ private fun render(
     me: String?,
     mention: Regex?,
     onEmbed: (Embed) -> Unit,
+    onNick: (String) -> Unit,
 ): RenderedLine {
     val inline = HashMap<String, InlineTextContent>()
     fun placeholder(widthDp: Int, heightDp: Int) = with(density) {
@@ -289,7 +276,9 @@ private fun render(
             }
             ChatLine.Kind.Whisper -> {
                 withStyle(SpanStyle(color = Palette.Blue)) { append("Whisper from ") }
-                withStyle(SpanStyle(color = Palette.White, fontWeight = FontWeight.Bold)) { append(line.nick) }
+                withLink(LinkAnnotation.Clickable("nick", nickStyle) { onNick(line.nick!!) }) {
+                    withStyle(SpanStyle(color = Palette.White, fontWeight = FontWeight.Bold)) { append(line.nick) }
+                }
                 append(": ")
                 append(line.text)
                 return@buildAnnotatedString
@@ -312,7 +301,9 @@ private fun render(
                 appendInlineContent(id, badge.label)
                 append(' ')
             }
-            withStyle(SpanStyle(color = nameColor, fontWeight = FontWeight.Bold)) { append(line.nick) }
+            withLink(LinkAnnotation.Clickable("nick", nickStyle) { onNick(line.nick!!) }) {
+                withStyle(SpanStyle(color = nameColor, fontWeight = FontWeight.Bold)) { append(line.nick) }
+            }
             append(if (line.action) " " else ": ")
         }
 

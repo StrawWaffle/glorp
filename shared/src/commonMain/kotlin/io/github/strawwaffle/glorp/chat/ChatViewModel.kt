@@ -27,6 +27,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Clock
@@ -37,12 +38,19 @@ import kotlin.time.Duration.Companion.seconds
  * Chat for the screens: survives rotation, holds the socket only while
  * [start] has been called without a matching [stop].
  */
-class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel() {
+class ChatViewModel(
+    origin: String,
+    private val store: SessionStore,
+    prefs: ChatPrefs = MemoryChatPrefs(),
+) : ViewModel() {
     private val client = createHttpClient()
     private var site = Site.guess(origin)
     private val log = ChatLog()
     private var session: Session? = store.load()
     private var socket: ChatSocket? = null
+
+    /** The input's draft, history, suggestions and the ignore and highlight lists. */
+    val input = ChatInputState(prefs)
 
     private val _lines = MutableStateFlow<List<ChatLine>>(emptyList())
     val lines: StateFlow<List<ChatLine>> = _lines.asStateFlow()
@@ -112,6 +120,15 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
             ready.complete(Unit)
         }
         viewModelScope.launch { applyEvents() }
+        // What autocomplete offers depends on who is signed in: the emotes
+        // their tier allows, the commands their powers allow.
+        viewModelScope.launch {
+            combine(_emotes, _account) { e, a -> e to a }.collect { (emotes, account) ->
+                val features = account?.features.orEmpty()
+                input.completer.setEmotes(emotes.all.filter { mayUse(it, features, account?.subTier ?: 0) }.map { it.prefix })
+                input.completer.setCommands(commandWords(hasModPowers(features)))
+            }
+        }
     }
 
     fun start() {
@@ -211,38 +228,112 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
     }
 
     /**
-     * Sends what was typed. Handles the commands chat-gui handles for
-     * everyone (`/me`, `/w`); others aren't supported yet and say so rather
-     * than going to chat as text. Returns whether the input can be cleared.
+     * Sends what was typed, or does what the command asks, as chat-gui does:
+     * the commands it handles itself are handled here, the ones it sends to
+     * the server go the same way, and the input is cleared (or, for `/r`,
+     * refilled) once it's done. A message that can't go now stays in the
+     * input. Returns whether it was taken.
      */
-    fun send(input: String): Boolean {
-        val text = input.trim()
+    fun send(typed: String): Boolean {
+        val text = typed.trim()
         if (text.isEmpty()) return false
-        val chat = socket
-        if (_account.value == null) {
+        val me = _account.value
+        if (me == null) {
             notice("Sign in to chat.")
             return false
         }
-        if (chat == null || _socketState.value != SocketState.Connected) {
+        val command = parseCommand(text, hasModPowers(me.features))
+        val needsChat = command is Command.Say || command is Command.Whisper || command is Command.Send || command is Command.PostEmbed
+        val chat = socket
+        if (needsChat && (chat == null || _socketState.value != SocketState.Connected)) {
             notice("Not connected. Wait for the transmission to come back.")
             return false
         }
-        val whisper = Regex("""^/(?:w|whisper|msg|tell|t|notify)\s+(\S+)\s+(.+)$""", RegexOption.DOT_MATCHES_ALL).find(text)
-        viewModelScope.launch {
-            val sent = when {
-                whisper != null -> chat.sendWhisper(whisper.groupValues[1], whisper.groupValues[2]).also {
-                    if (it) notice("Whisper to ${whisper.groupValues[1]}: ${whisper.groupValues[2]}")
+        input.history.add(text)
+        input.setDraft("")
+        when (command) {
+            is Command.Say -> transmit { chat!!.sendMessage(command.text) }
+            is Command.Whisper -> {
+                if (command.nick.equals(me.nick, ignoreCase = true)) {
+                    notice("Cannot send a message to yourself")
+                } else {
+                    input.replyTo = command.nick
+                    transmit {
+                        chat!!.sendWhisper(command.nick, command.text).also {
+                            if (it) notice("Whisper to ${command.nick}: ${command.text}")
+                        }
+                    }
                 }
-                text.startsWith("/") && !text.startsWith("/me ") -> {
-                    notice("${text.substringBefore(' ')} isn't supported in Glorp yet.")
-                    true
-                }
-                else -> chat.sendMessage(text)
             }
-            if (!sent) notice("Couldn't send: the connection dropped.")
+            is Command.Send -> transmit { chat!!.sendEvent(command.event, command.payload) }
+            is Command.PostEmbed -> {
+                val first = command.args.firstOrNull()?.let(Embed::parse)
+                val embed = first ?: _picked.value ?: _live.value.defaultEmbed()
+                val words = if (first != null) command.args.drop(1) else command.args
+                if (embed == null) notice("Nothing embedded")
+                else transmit { chat!!.sendMessage(("#${embed.key} " + words.joinToString(" ")).trim()) }
+            }
+            Command.Reply -> {
+                val to = input.replyTo
+                if (to == null) notice("No one to reply to. :(") else input.setDraft("/w $to ")
+            }
+            is Command.Ignore -> ignore(command.nicks, me.nick)
+            is Command.Unignore -> {
+                input.ignored.remove(command.nicks)
+                notice("${command.nicks.joinToString(", ")} ${if (command.nicks.size == 1) "has" else "have"} been removed from your ignore list")
+            }
+            Command.UnignoreAll -> {
+                input.ignored.clear()
+                notice("Your ignore list has been cleared.")
+            }
+            is Command.Highlight -> highlight(command.nick, command.on)
+            Command.Help -> notice(helpText(hasModPowers(me.features)))
+            Command.EmoteList -> notice("Available emotes: ${_emotes.value.all.joinToString(", ") { it.prefix }}.")
+            is Command.Watch -> {
+                val embed = Embed.parse(command.link)
+                if (embed == null) notice("Usage: /embed <link> OR /e <link> (bigscreen links and #platform/id)")
+                else watch(embed)
+            }
+            is Command.Problem -> notice(command.text)
         }
         return true
     }
+
+    /** Tapping a name and choosing Ignore, or `/ignore`. Empty [nicks] lists who is ignored. */
+    fun ignore(nicks: List<String>, self: String? = _account.value?.nick) {
+        if (nicks.isEmpty()) {
+            val list = input.ignored.nicks
+            notice(if (list.isEmpty()) "Your ignore list is empty." else "Ignoring the following people: ${list.sorted().joinToString(", ")}.")
+            return
+        }
+        if (nicks.any { it.equals(self, ignoreCase = true) }) {
+            notice("You can't add yourself to your ignore list.")
+            return
+        }
+        input.ignored.add(nicks)
+        // Their lines go now; new ones are dropped as they come (see apply).
+        events.trySend(Forget(nicks))
+        notice(if (nicks.size == 1) "Ignoring ${nicks[0]}" else "Added the following people to your ignore list: ${nicks.joinToString(", ")}")
+    }
+
+    /** `/highlight nick`, `/unhighlight nick`, or the list for a null [nick]. */
+    fun highlight(nick: String?, on: Boolean) {
+        if (nick == null) {
+            val list = input.highlighted.nicks
+            notice(if (list.isEmpty()) "No highlighted users." else "Currently highlighted users: ${list.sorted().joinToString(",")}.")
+            return
+        }
+        val lower = nick.lowercase()
+        if (on) input.highlighted.add(listOf(lower)) else input.highlighted.remove(listOf(lower))
+        notice(if (on) "Highlighting $lower." else "No longer highlighting $lower.")
+    }
+
+    private fun transmit(action: suspend () -> Boolean) {
+        viewModelScope.launch { if (!action()) notice("Couldn't send: the connection dropped.") }
+    }
+
+    /** Asks the event loop to take an ignored user's lines out. */
+    private class Forget(val nicks: List<String>)
 
     private suspend fun refresh(current: Session.Cookies) {
         when (val result = checkSession(client, site, current)) {
@@ -282,9 +373,15 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
 
     private suspend fun apply(item: Any, now: () -> Long): Boolean {
         if (item is ChatLine) return log.add(item)
+        if (item is Forget) return item.nicks.fold(false) { changed, nick -> log.removeNick(nick) or changed }
         return when (val event = parseFrame(item as String, now)) {
-            is ChatEvent.Message -> log.add(event.line, combo)
-            is ChatEvent.History -> event.lines.fold(false) { changed, line -> log.add(line, combo) or changed }
+            is ChatEvent.Message -> received(event.line)
+            is ChatEvent.History -> event.lines.fold(false) { changed, line -> received(line) or changed }
+            is ChatEvent.Names -> {
+                // Only someone who can type needs names to complete.
+                if (_account.value != null) input.completer.setRoster(rosterNicks(event.payload))
+                false
+            }
             is ChatEvent.Removal -> log.removeNick(event.nick)
             is ChatEvent.Notice -> log.add(ChatLine.info(event.text, now()))
             is ChatEvent.Me -> {
@@ -316,6 +413,17 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
             }
             null -> false
         }
+    }
+
+    /** A message or whisper: dropped if its sender is ignored, else remembered for autocomplete and logged. */
+    private fun received(line: ChatLine): Boolean {
+        val nick = line.nick
+        if (nick != null) {
+            if (nick in input.ignored) return false
+            input.completer.heard(nick, line.at)
+            if (line.kind == ChatLine.Kind.Whisper) input.replyTo = nick
+        }
+        return log.add(line, combo)
     }
 
     override fun onCleared() {

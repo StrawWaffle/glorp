@@ -12,7 +12,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.setSingletonImageLoaderFactory
 import io.github.strawwaffle.glorp.auth.SessionStore
+import io.github.strawwaffle.glorp.chat.ChatPrefs
 import io.github.strawwaffle.glorp.chat.ChatViewModel
+import io.github.strawwaffle.glorp.chat.MemoryChatPrefs
 import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.ui.Bigscreen
 import io.github.strawwaffle.glorp.ui.ChatScreen
@@ -32,12 +34,13 @@ import io.github.strawwaffle.glorp.ui.glorpImageLoader
 fun GlorpApp(
     origin: String,
     sessions: SessionStore,
+    prefs: ChatPrefs = MemoryChatPrefs(),
     initialEmbed: String? = null,
     pictureInPicture: PictureInPicture = PictureInPicture(),
 ) {
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
     CompositionLocalProvider(LocalPictureInPicture provides pictureInPicture) { GlorpTheme {
-        val chat = viewModel { ChatViewModel(origin, sessions).also { vm -> initialEmbed?.let(Embed::parse)?.let(vm::watch) } }
+        val chat = viewModel { ChatViewModel(origin, sessions, prefs).also { vm -> initialEmbed?.let(Embed::parse)?.let(vm::watch) } }
         // The socket is held only while the app is on screen. Leaving the app
         // closes it; coming back reconnects, and the backlog chat sends on
         // connect fills the gap.
@@ -67,6 +70,9 @@ fun GlorpApp(
         ChatScreen(
             lines, flairs, emotes, state, account,
             onSend = chat::send,
+            input = chat.input,
+            onIgnore = { chat.ignore(listOf(it)) },
+            onHighlight = chat::highlight,
             onEmbed = { chat.watch(it); playerShown = true },
             player = if (!playerShown) null else {
                 {
