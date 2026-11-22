@@ -10,6 +10,8 @@ import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.site.LiveSocket
 import io.github.strawwaffle.glorp.site.LiveState
 import io.github.strawwaffle.glorp.site.with
+import io.github.strawwaffle.glorp.video.Resolution
+import io.github.strawwaffle.glorp.video.Resolver
 import io.github.strawwaffle.glorp.site.Emotes
 import io.github.strawwaffle.glorp.site.Flairs
 import io.github.strawwaffle.glorp.site.SessionCheck
@@ -71,6 +73,11 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
     fun watch(embed: Embed?) {
         _picked.value = embed
     }
+
+    private val resolver = Resolver(client)
+
+    /** Looks up a stream the app's own player can play, or says to use the web player. */
+    suspend fun resolve(embed: Embed): Resolution = resolver.resolve(embed)
 
     /** The platform player's address for [embed], or null for a platform the site doesn't embed. */
     fun playerUrl(embed: Embed): String? = embed.playerUrl(site)

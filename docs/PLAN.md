@@ -65,10 +65,15 @@ with memory and battery throughout.
    after a tap and only at 360p ("Visit KICK for HD"). Still to do: landscape
    and full screen, remembering the chosen platform, the offline card's
    preview image.
-5. **Native players**: Grayjay's plugin engine resolves an embed to its HLS or
-   DASH stream, ExoPlayer plays it. Kick and Twitch first, then YouTube and
-   Rumble. Picture in picture and background audio, with chat kept connected
-   while playing.
+5. **Native players** (started): a resolver turns an embed into an HLS
+   stream and Media3/ExoPlayer plays it, with the web player as the fallback
+   for anything it can't resolve. Kick is done: kick.com's own channel
+   lookup gives `playback_url`, an IVS playlist up to 1080p60 (the embedded
+   Kick player is held to 360p). Quality is capped at the screen's size, the
+   screen stays on only while playing, and the player is released when the
+   app leaves the screen. Next: Twitch, then Grayjay's plugin engine for
+   YouTube, Rumble and the rest; picture in picture and background audio,
+   with chat kept connected while playing.
 6. **The rest of the site**: profile, subscriptions (opened in the browser),
    notifications, schedule, and whatever else a logged-in user can reach.
 7. **Releases**: signed APKs on GitHub Releases, self-update from there

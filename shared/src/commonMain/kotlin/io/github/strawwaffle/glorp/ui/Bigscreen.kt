@@ -30,6 +30,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.site.LiveState
+import io.github.strawwaffle.glorp.video.Playable
+import io.github.strawwaffle.glorp.video.Resolution
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.produceState
 
 /**
  * The player above chat: what was picked, or what bigscreen would show, with
@@ -44,6 +48,7 @@ fun Bigscreen(
     picked: Boolean,
     onPick: (Embed?) -> Unit,
     onHide: () -> Unit,
+    resolve: suspend (Embed) -> Resolution,
 ) {
     var listOpen by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().background(Palette.Black)) {
@@ -52,7 +57,7 @@ fun Bigscreen(
                 embed == null -> Offline(live)
                 embed.let(live::isBanned) -> Note("This embed is banned on the site.")
                 playerUrl == null -> Note("${embed.platform} can't be embedded.")
-                else -> EmbedPlayer(playerUrl, origin, Modifier.fillMaxSize())
+                else -> Player(embed, playerUrl, origin, resolve)
             }
         }
         Row(
@@ -87,6 +92,21 @@ private fun Offline(live: LiveState) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+/**
+ * The app's own player where the embed can be resolved to a stream, the
+ * platform's web player where it can't.
+ */
+@Composable
+private fun Player(embed: Embed, playerUrl: String, origin: String, resolve: suspend (Embed) -> Resolution) {
+    val resolution by produceState<Resolution?>(null, embed) { value = resolve(embed) }
+    when (val found = resolution) {
+        null -> CircularProgressIndicator(color = Palette.Glorp)
+        is Resolution.Native -> NativePlayer(found.playable, Modifier.fillMaxSize())
+        is Resolution.Offline -> Note("${found.name} is offline.")
+        Resolution.Web -> EmbedPlayer(playerUrl, origin, Modifier.fillMaxSize())
     }
 }
 
@@ -156,3 +176,7 @@ private fun Entry(name: String, detail: String?, watchers: Int?, onClick: () -> 
  */
 @Composable
 internal expect fun EmbedPlayer(url: String, origin: String, modifier: Modifier)
+
+/** Plays [playable] in the platform's own video player, only while the app is on screen. */
+@Composable
+internal expect fun NativePlayer(playable: Playable, modifier: Modifier)

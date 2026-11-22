@@ -76,6 +76,7 @@ fun GlorpApp(origin: String, sessions: SessionStore, initialEmbed: String? = nul
                             picked = picked != null,
                             onPick = chat::watch,
                             onHide = { playerShown = false },
+                            resolve = chat::resolve,
                         )
                     }
                 },
