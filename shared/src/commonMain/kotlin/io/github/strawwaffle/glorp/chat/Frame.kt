@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.chat
 
+import io.github.strawwaffle.glorp.site.Account
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -17,7 +18,7 @@ sealed interface ChatEvent {
     data class Removal(val nick: String) : ChatEvent
 
     /** Who the server thinks you are, sent first on every connect; null when signed out. */
-    data class Me(val nick: String?) : ChatEvent
+    data class Me(val account: Account?) : ChatEvent
 
     /** The server refused something, by chat-gui's error code (`throttled`, `muted`…). */
     data class Error(val code: String) : ChatEvent
@@ -78,7 +79,10 @@ fun parseFrame(raw: String, now: () -> Long): ChatEvent? {
                 val target = chatJson.decodeFromString<WireText>(payload).data
                 if (target.isEmpty()) null else ChatEvent.Removal(target)
             }
-            "ME" -> ChatEvent.Me(chatJson.decodeFromString<WireUser?>(payload)?.nick?.takeIf { it.isNotEmpty() })
+            "ME" -> ChatEvent.Me(
+                chatJson.decodeFromString<WireUser?>(payload)?.takeIf { it.nick.isNotEmpty() }
+                    ?.let { Account(it.nick, it.features, it.subscription?.tier ?: 0) },
+            )
             "ERR" -> ChatEvent.Error(chatJson.decodeFromString<WireError>(payload).description)
             "PRIVMSG" -> {
                 val whisper = chatJson.decodeFromString<WirePrivate>(payload)

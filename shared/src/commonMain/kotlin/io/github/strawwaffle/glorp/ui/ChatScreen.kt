@@ -80,6 +80,7 @@ fun ChatScreen(
         // composed, so only their emotes are drawn or animated.
         val reversed = remember(lines) { lines.asReversed() }
         val me = account?.nick
+        val mention = remember(me) { me?.let(::mentionPattern) }
         val list = rememberLazyListState()
         // A lazy list keeps the row you're looking at in place when rows are
         // added, which hides new lines below the bottom. So: follow while
@@ -94,7 +95,7 @@ fun ChatScreen(
         Box(Modifier.fillMaxWidth().weight(1f)) {
             LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true) {
                 items(reversed, key = { it.id }, contentType = { it.kind }) { line ->
-                    ChatRow(line, flairs, emotes, me)
+                    ChatRow(line, flairs, emotes, me, mention)
                 }
             }
             if (!following) {
@@ -173,9 +174,9 @@ private const val MAX_MESSAGE = 512
 private class RenderedLine(val text: AnnotatedString, val inline: Map<String, InlineTextContent>, val mentionsMe: Boolean)
 
 @Composable
-private fun ChatRow(line: ChatLine, flairs: Flairs, emotes: Emotes, me: String?) {
+private fun ChatRow(line: ChatLine, flairs: Flairs, emotes: Emotes, me: String?, mention: Regex?) {
     val density = LocalDensity.current
-    val rendered = remember(line, flairs, emotes, density, me) { render(line, flairs, emotes, density, me) }
+    val rendered = remember(line, flairs, emotes, density, me) { render(line, flairs, emotes, density, me, mention) }
     val background = when {
         line.kind == ChatLine.Kind.Whisper -> Palette.Blue.copy(alpha = 0.12f)
         rendered.mentionsMe -> Palette.Orange.copy(alpha = 0.14f)
@@ -193,11 +194,13 @@ private fun ChatRow(line: ChatLine, flairs: Flairs, emotes: Emotes, me: String?)
 
 private val linkStyle = TextLinkStyles(SpanStyle(color = Palette.Blue, textDecoration = TextDecoration.Underline))
 
-/** Whether [text] names [nick] as a word, the way chat highlights mentions. */
-internal fun mentions(text: String, nick: String): Boolean =
-    Regex("""(^|[^\w])${Regex.escape(nick)}($|[^\w])""", RegexOption.IGNORE_CASE).containsMatchIn(text)
+/** Matches [nick] as a word, the way chat highlights mentions. Built once per name. */
+internal fun mentionPattern(nick: String) =
+    Regex("""(^|[^\w])${Regex.escape(nick)}($|[^\w])""", RegexOption.IGNORE_CASE)
 
-private fun render(line: ChatLine, flairs: Flairs, emotes: Emotes, density: Density, me: String?): RenderedLine {
+internal fun mentions(text: String, nick: String): Boolean = mentionPattern(nick).containsMatchIn(text)
+
+private fun render(line: ChatLine, flairs: Flairs, emotes: Emotes, density: Density, me: String?, mention: Regex?): RenderedLine {
     val inline = HashMap<String, InlineTextContent>()
     fun placeholder(widthDp: Int, heightDp: Int) = with(density) {
         Placeholder(widthDp.dp.toSp(), heightDp.dp.toSp(), PlaceholderVerticalAlign.Center)
@@ -223,7 +226,7 @@ private fun render(line: ChatLine, flairs: Flairs, emotes: Emotes, density: Dens
             }
             ChatLine.Kind.User -> Unit
         }
-        mentionsMe = me != null && !line.nick.equals(me, ignoreCase = true) && mentions(line.text, me)
+        mentionsMe = mention != null && !line.nick.equals(me, ignoreCase = true) && mention.containsMatchIn(line.text)
         for (badge in flairs.badges(line.features)) {
             val id = "badge:${badge.name}"
             inline.getOrPut(id) {

@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Chat for the screens: survives rotation, holds the socket only while
@@ -71,7 +72,8 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
             launch { _emotes.value = Emotes.fetch(client, site) }
             // Like chat-gui on page load: ask who the cookies belong to first,
             // which also renews `sid` from `rememberme` when it has run out.
-            session?.let { refresh(it) }
+            // A login key can only be checked by chat itself, on connect.
+            (session as? Session.Cookies)?.let { refresh(it) }
             ready.complete(Unit)
         }
         viewModelScope.launch { applyEvents() }
@@ -103,23 +105,62 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
         start()
     }
 
-    /** Checks pasted or captured cookies with the site and, if they work, signs in. */
+    /** A login key being tried: chat's ME answer decides, then [onResult] hears. */
+    private class Pending(val key: Session.LoginKey, val previous: Session?, val onResult: (String?) -> Unit)
+    private var pending: Pending? = null
+    private var pendingTimeout: Job? = null
+
+    /**
+     * Signs in. Cookies are checked with the site first; a login key can only
+     * be checked by connecting to chat with it and reading who chat says we
+     * are, so the connection is swapped over and swapped back if it fails.
+     */
     fun signIn(candidate: Session, onResult: (String?) -> Unit) {
         viewModelScope.launch {
             ready.await()
-            _signingIn.value = true
-            val result = checkSession(client, site, candidate)
-            _signingIn.value = false
-            when (result) {
-                is SessionCheck.Valid -> {
-                    adopt(result)
-                    notice("Signed in as ${result.account.nick}.")
-                    reconnect()
-                    onResult(null)
+            when (candidate) {
+                is Session.Cookies -> {
+                    _signingIn.value = true
+                    val result = checkSession(client, site, candidate)
+                    _signingIn.value = false
+                    when (result) {
+                        is SessionCheck.Valid -> {
+                            adopt(result.session, result.account)
+                            notice("Signed in as ${result.account.nick}.")
+                            reconnect()
+                            onResult(null)
+                        }
+                        SessionCheck.Invalid -> onResult("$host doesn't recognise those cookies. They may have expired.")
+                        SessionCheck.Unreachable -> onResult("Couldn't reach $host. Check the connection and try again.")
+                    }
                 }
-                SessionCheck.Invalid -> onResult("$host doesn't recognise that login. It may have expired: sign in again.")
-                SessionCheck.Unreachable -> onResult("Couldn't reach $host. Check the connection and try again.")
+                is Session.LoginKey -> {
+                    _signingIn.value = true
+                    pending = Pending(candidate, session, onResult)
+                    session = candidate
+                    reconnect()
+                    pendingTimeout = launch {
+                        delay(20.seconds)
+                        finishPending(null, "Chat didn't answer. Check the connection and try again.")
+                    }
+                }
             }
+        }
+    }
+
+    private fun finishPending(account: Account?, error: String?) {
+        val attempt = pending ?: return
+        pending = null
+        pendingTimeout?.cancel()
+        _signingIn.value = false
+        if (account != null) {
+            adopt(attempt.key, account)
+            notice("Signed in as ${account.nick}.")
+            attempt.onResult(null)
+        } else {
+            session = attempt.previous
+            reconnect()
+            attempt.onResult(error)
         }
     }
 
@@ -165,9 +206,9 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
         return true
     }
 
-    private suspend fun refresh(current: Session) {
+    private suspend fun refresh(current: Session.Cookies) {
         when (val result = checkSession(client, site, current)) {
-            is SessionCheck.Valid -> adopt(result)
+            is SessionCheck.Valid -> adopt(result.session, result.account)
             SessionCheck.Invalid -> {
                 session = null
                 store.save(null)
@@ -178,10 +219,10 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
         }
     }
 
-    private fun adopt(result: SessionCheck.Valid) {
-        session = result.session
-        store.save(result.session)
-        _account.value = result.account
+    private fun adopt(newSession: Session, account: Account) {
+        session = newSession
+        store.save(newSession)
+        _account.value = account
     }
 
     private fun notice(text: String) {
@@ -209,12 +250,27 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
             is ChatEvent.Removal -> log.removeNick(event.nick)
             is ChatEvent.Notice -> log.add(ChatLine.info(event.text, now()))
             is ChatEvent.Me -> {
-                // The socket didn't take the login although the site did a
-                // moment ago: say so rather than appearing signed in.
-                if (event.nick == null && session != null && _account.value != null) {
-                    _account.value = null
-                    log.add(ChatLine.info("Chat didn't accept your login. Sign in again.", now()))
-                } else false
+                val me = event.account
+                when {
+                    pending != null -> {
+                        if (me != null) finishPending(me, null)
+                        else finishPending(null, "Chat didn't accept that key. Copy it again from the developer page.")
+                        false
+                    }
+                    me != null -> {
+                        _account.value = me
+                        false
+                    }
+                    session != null -> {
+                        // Chat doesn't know the stored login any more: a key
+                        // removed on the site, or cookies that ran out.
+                        session = null
+                        store.save(null)
+                        _account.value = null
+                        log.add(ChatLine.info("Your login on $host no longer works. Sign in again to chat.", now()))
+                    }
+                    else -> false
+                }
             }
             is ChatEvent.Error -> {
                 if (isFatal(event.code)) socket?.halt()

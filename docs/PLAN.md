@@ -42,16 +42,18 @@ with memory and battery throughout.
    and highlights, timestamps, combos, polls, the pinned message, emotes
    overlapping lines the way the site draws them rather than making lines
    taller.
-3. **Logged in** (started): the site's own login page in a web view, its
-   `sid`/`rememberme` cookies taken and the web view's copy deleted; pasting
-   the cookies as the fallback (Google refuses in-app sign-in). The login is
-   kept encrypted with an Android Keystore key and checked on launch with
-   `/api/chat/me`, which also renews `sid` from `rememberme`. Sending
-   messages, `/me`, whispers out (`/w nick text`) and in, the server's error
-   codes in chat-gui's words, mentions highlighted, a stop after `banned` or
-   `toomanyconnections` as chat-gui does. Still to do: a whisper inbox,
-   ignore list, chat settings from the account, the rest of chat-gui's
-   commands, signing in with a provider checked end to end on a phone.
+3. **Logged in** (started): a login key made on the site's developer page in
+   the phone's browser and pasted into the app; chat takes it as the
+   `authtoken` cookie. (The site's own login page can't run in a web view:
+   Twitch's and Kick's bot protection blank it and Google refuses in-app
+   sign-in.) Pasting the browser's `sid`/`rememberme` cookies is the other
+   way, needed later for site pages a key doesn't open; those are checked with
+   `/api/chat/me`, which renews `sid`. Logins are kept encrypted with an
+   Android Keystore key. Sending messages, `/me`, whispers out
+   (`/w nick text`) and in, the server's error codes in chat-gui's words,
+   mentions highlighted, a stop after `banned` or `toomanyconnections`.
+   Still to do: a whisper inbox, ignore list, chat settings from the account,
+   the rest of chat-gui's commands, cookies for site pages.
 4. **Embeds**: the bigscreen list and what chat is watching. First every embed
    in a WebView with the platform's own player, so all of them work.
 5. **Native players**: Grayjay's plugin engine resolves an embed to its HLS or

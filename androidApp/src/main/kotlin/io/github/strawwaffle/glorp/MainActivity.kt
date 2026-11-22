@@ -6,28 +6,28 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import io.github.strawwaffle.glorp.auth.KeystoreSessionStore
 import io.github.strawwaffle.glorp.auth.Session
-import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val sessions = KeystoreSessionStore(applicationContext)
-        if (BuildConfig.DEBUG) importDevSession(sessions)
+        if (BuildConfig.DEV_IMPORT) importDevSession(sessions)
         setContent { GlorpApp(origin = BuildConfig.SITE_ORIGIN, sessions = sessions) }
     }
 
     /**
-     * Dev builds only: a test-site login placed in the app's private files
-     * (`sid` on the first line, `rememberme` on the second, written there with
-     * `adb shell run-as`) is moved into the encrypted store and the file is
-     * deleted. Release builds never look for it.
+     * Dev and debug builds only: a test-site login in the app's external files
+     * folder (`Android/data/<package>/files/dev-session`, which adb can write)
+     * is moved into the encrypted store and the file deleted. The file holds
+     * `k` and a login key, or `c`, `sid` and `rememberme`, one per line.
+     * Release builds never look for it.
      */
     private fun importDevSession(sessions: KeystoreSessionStore) {
-        val file = File(filesDir, "dev-session")
+        val file = getExternalFilesDir(null)?.resolve("dev-session") ?: return
         if (!file.exists()) return
-        val lines = file.readLines().map { it.trim() }
+        val text = file.readText()
         file.delete()
-        Session.fromPasted(lines.getOrElse(0) { "" }, lines.getOrElse(1) { "" })?.let(sessions::save)
+        Session.decode(text.trim().replace("\r", ""))?.let(sessions::save)
     }
 }

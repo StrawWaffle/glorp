@@ -25,10 +25,7 @@ class KeystoreSessionStore(context: Context) : SessionStore {
             val bytes = Base64.decode(blob, Base64.NO_WRAP)
             val cipher = Cipher.getInstance(TRANSFORM)
             cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes, 0, IV_SIZE))
-            val text = cipher.doFinal(bytes, IV_SIZE, bytes.size - IV_SIZE).decodeToString()
-            val sid = text.substringBefore('\n')
-            val rememberMe = text.substringAfter('\n', "").ifEmpty { null }
-            if (sid.isEmpty()) null else Session(sid, rememberMe)
+            Session.decode(cipher.doFinal(bytes, IV_SIZE, bytes.size - IV_SIZE).decodeToString())
         } catch (_: Exception) {
             prefs.edit().remove(KEY).apply()
             null
@@ -42,7 +39,7 @@ class KeystoreSessionStore(context: Context) : SessionStore {
         }
         val cipher = Cipher.getInstance(TRANSFORM)
         cipher.init(Cipher.ENCRYPT_MODE, key())
-        val sealed = cipher.iv + cipher.doFinal("${session.sid}\n${session.rememberMe.orEmpty()}".encodeToByteArray())
+        val sealed = cipher.iv + cipher.doFinal(Session.encode(session).encodeToByteArray())
         prefs.edit().putString(KEY, Base64.encodeToString(sealed, Base64.NO_WRAP)).apply()
     }
 
@@ -62,7 +59,7 @@ class KeystoreSessionStore(context: Context) : SessionStore {
 
     private companion object {
         const val ALIAS = "glorp-session"
-        const val KEY = "login"
+        const val KEY = "login-v2"
         const val TRANSFORM = "AES/GCM/NoPadding"
         const val IV_SIZE = 12
     }

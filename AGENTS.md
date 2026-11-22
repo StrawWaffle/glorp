@@ -38,11 +38,21 @@
 - Dev builds (`debug`, package `…glorp.dev`) talk to destiny.gg's test site
   `https://www.omniliberal.dev`; release builds to `https://www.destiny.gg`.
   Try anything that writes (sending messages, settings) on the test site first.
-- A test-site login for dev builds: put `sid` and `rememberme` on two lines in
-  the app's private `files/dev-session` (`adb shell run-as <package> sh -c
-  'cat > files/dev-session'`, fed from the owner's secrets folder); the next
-  launch moves it into the encrypted store and deletes the file. Never put
-  the values in the repo, a command line, or the clipboard.
+- Put **dev** builds on phones (`./gradlew :androidApp:assembleDev`): optimised
+  like a release, signed with the debug key, named "Glorp (dev)", talking to the
+  test site. Debug builds are for the debugger only: Compose runs several times
+  slower in them, so they say nothing about performance.
+- A test-site login for dev and debug builds: write it to the app's external
+  files folder, `/sdcard/Android/data/io.github.strawwaffle.glorp.dev/files/dev-session`
+  (adb can write there), as `k` and a login key, or `c`, `sid` and
+  `rememberme`, one per line, piped from the owner's secrets folder. The next
+  launch moves it into the encrypted store and deletes the file. Never put the
+  values in the repo or on the host's command line.
+- Signing in: login keys (the site's developer page, Create Login Key) are what
+  chat accepts as the `authtoken` cookie; the site's pages don't accept them.
+  The site's login page can't run in a web view (Twitch's and Kick's bot
+  protection blank it, Google refuses), so the app sends people to their
+  browser to make a key.
 
 ## Licence
 

@@ -1,40 +1,73 @@
 package io.github.strawwaffle.glorp.auth
 
 /**
- * A login on the site: the two cookies chat-gui itself runs on. `sid` is the
- * session; `rememberme` (present when "remember me" was ticked) lets the site
- * issue a new `sid` when the old one runs out.
+ * A login on the site, in one of the two forms chat accepts.
+ *
+ * Values are never printed: [toString] hides them, so a log line or a crash
+ * report can't carry one.
  */
-class Session(val sid: String, val rememberMe: String?) {
+sealed interface Session {
+    /** What goes in the `Cookie` header of the chat handshake. */
     val cookieHeader: String
-        get() = if (rememberMe.isNullOrEmpty()) "sid=$sid" else "sid=$sid; rememberme=$rememberMe"
 
-    fun withSid(newSid: String) = Session(newSid, rememberMe)
+    /**
+     * A login key from the site's developer page (Connections → Create Login
+     * Key). Chat takes it as the `authtoken` cookie. It lasts until removed on
+     * that page, but the rest of the site doesn't accept it.
+     */
+    class LoginKey(val key: String) : Session {
+        override val cookieHeader get() = "authtoken=$key"
+        override fun toString() = "LoginKey(…)"
+        override fun equals(other: Any?) = other is LoginKey && other.key == key
+        override fun hashCode() = key.hashCode()
+    }
 
-    // Never print the values, not even in a log line or a crash report.
-    override fun toString() = "Session(sid=…, rememberme=${if (rememberMe == null) "none" else "…"})"
+    /**
+     * The browser's own login cookies: `sid` is the session; `rememberme`
+     * (there when "Remember Me" was ticked) lets the site issue a new `sid`
+     * when the old one runs out.
+     */
+    class Cookies(val sid: String, val rememberMe: String?) : Session {
+        override val cookieHeader
+            get() = if (rememberMe.isNullOrEmpty()) "sid=$sid" else "sid=$sid; rememberme=$rememberMe"
 
-    override fun equals(other: Any?) = other is Session && other.sid == sid && other.rememberMe == rememberMe
-    override fun hashCode() = sid.hashCode() * 31 + (rememberMe?.hashCode() ?: 0)
+        fun withSid(newSid: String) = Cookies(newSid, rememberMe)
+        override fun toString() = "Cookies(sid=…, rememberme=${if (rememberMe == null) "none" else "…"})"
+        override fun equals(other: Any?) = other is Cookies && other.sid == sid && other.rememberMe == rememberMe
+        override fun hashCode() = sid.hashCode() * 31 + (rememberMe?.hashCode() ?: 0)
+    }
 
     companion object {
-        /** Reads `sid` and `rememberme` out of a `Cookie` header. */
-        fun fromCookieHeader(header: String): Session? {
-            val cookies = header.split(';').mapNotNull {
-                val eq = it.indexOf('=')
-                if (eq <= 0) null else it.substring(0, eq).trim() to it.substring(eq + 1).trim()
-            }.toMap()
-            val sid = cookies["sid"]?.takeIf { it.isNotEmpty() } ?: return null
-            return Session(sid, cookies["rememberme"]?.takeIf { it.isNotEmpty() })
+        private val keyShape = Regex("""^[A-Za-z0-9]{32,128}$""")
+
+        /** A login key as copied from the developer page, or null if it doesn't look like one. */
+        fun loginKey(text: String): LoginKey? {
+            val key = text.trim().removePrefix("authtoken=").trim()
+            return if (keyShape.matches(key)) LoginKey(key) else null
         }
 
-        /** Builds one from values pasted by hand, forgiving `sid=` prefixes and stray spaces. */
-        fun fromPasted(sid: String, rememberMe: String): Session? {
+        /** Cookies pasted by hand, forgiving `sid=` prefixes and stray spaces. */
+        fun cookies(sid: String, rememberMe: String): Cookies? {
             val s = sid.trim().removePrefix("sid=").trim()
             val r = rememberMe.trim().removePrefix("rememberme=").trim()
             if (s.isEmpty() || s.any { it.isWhitespace() || it == ';' }) return null
             if (r.any { it.isWhitespace() || it == ';' }) return null
-            return Session(s, r.ifEmpty { null })
+            return Cookies(s, r.ifEmpty { null })
+        }
+
+        /** The stored form: a kind letter, then the values on their own lines. */
+        fun encode(session: Session): String = when (session) {
+            is LoginKey -> "k\n${session.key}"
+            is Cookies -> "c\n${session.sid}\n${session.rememberMe.orEmpty()}"
+        }
+
+        fun decode(text: String): Session? {
+            val parts = text.split('\n')
+            return when (parts.firstOrNull()) {
+                "k" -> parts.getOrNull(1)?.let(::loginKey)
+                "c" -> cookies(parts.getOrElse(1) { "" }, parts.getOrElse(2) { "" })
+                else -> null
+            }
         }
     }
 }

@@ -16,7 +16,7 @@ data class Account(val nick: String, val features: List<String>, val subTier: In
 
 sealed interface SessionCheck {
     /** Signed in. [session] may carry a fresh `sid` the site just issued. */
-    data class Valid(val account: Account, val session: Session) : SessionCheck
+    data class Valid(val account: Account, val session: Session.Cookies) : SessionCheck
     /** The site doesn't know these cookies (signed out, or they ran out). */
     data object Invalid : SessionCheck
     /** Couldn't ask: no network, or the site is down. Keep the login and try later. */
@@ -35,10 +35,12 @@ private data class Me(
 
 /**
  * Asks the site who these cookies belong to, the way chat-gui does on load.
+ * (Login keys can't be checked here: the site's pages don't accept them, only
+ * chat does.)
  * When `sid` has run out and `rememberme` is good, the site answers with a new
  * `sid`, which comes back in [SessionCheck.Valid.session].
  */
-suspend fun checkSession(client: HttpClient, site: Site, session: Session): SessionCheck = try {
+suspend fun checkSession(client: HttpClient, site: Site, session: Session.Cookies): SessionCheck = try {
     val response = client.get("${site.origin}/api/chat/me") {
         header(HttpHeaders.UserAgent, ChatSocket.USER_AGENT)
         header(HttpHeaders.Cookie, session.cookieHeader)

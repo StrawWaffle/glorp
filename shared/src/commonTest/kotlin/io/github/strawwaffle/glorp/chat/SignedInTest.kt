@@ -14,8 +14,10 @@ class SignedInTest {
 
     @Test
     fun readsWhoTheServerThinksWeAre() {
-        assertEquals("glorp", assertIs<ChatEvent.Me>(parseFrame("""ME {"nick":"glorp","features":[]}""", now)).nick)
-        assertNull(assertIs<ChatEvent.Me>(parseFrame("ME null", now)).nick)
+        val me = assertIs<ChatEvent.Me>(parseFrame("""ME {"nick":"glorp","features":["flair3"],"subscription":{"tier":2}}""", now)).account
+        assertEquals("glorp", me?.nick)
+        assertEquals(2, me?.subTier)
+        assertNull(assertIs<ChatEvent.Me>(parseFrame("ME null", now)).account)
     }
 
     @Test
@@ -38,16 +40,20 @@ class SignedInTest {
     }
 
     @Test
-    fun readsSessionsFromCookies() {
-        val session = Session.fromCookieHeader("_ga=x; sid=abc; rememberme=def; other=1")
-        assertEquals("abc", session?.sid)
-        assertEquals("def", session?.rememberMe)
-        assertEquals("sid=abc; rememberme=def", session?.cookieHeader)
-        assertNull(Session.fromCookieHeader("rememberme=def"))
-        assertEquals("abc", Session.fromPasted(" sid=abc ", "")?.sid)
-        assertNull(Session.fromPasted("ab c", ""))
+    fun readsLoginKeysAndCookies() {
+        val key = "a".repeat(64)
+        assertEquals("authtoken=$key", Session.loginKey(" $key\n")?.cookieHeader)
+        assertNull(Session.loginKey("not a key"))
+        val cookies = Session.cookies(" sid=abc ", "def")
+        assertEquals("sid=abc; rememberme=def", cookies?.cookieHeader)
+        assertNull(Session.cookies("ab c", ""))
+        // Stored and read back the same.
+        assertEquals(Session.LoginKey(key), Session.decode(Session.encode(Session.LoginKey(key))))
+        assertEquals(cookies, Session.decode(Session.encode(cookies!!)))
+        assertEquals(Session.Cookies("abc", null), Session.decode("c\nabc\n"))
         // Printing a session never shows the values.
-        assertFalse("abc" in Session("abc", "def").toString())
+        assertFalse("abc" in cookies.toString())
+        assertFalse(key in Session.LoginKey(key).toString())
     }
 
     @Test
