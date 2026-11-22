@@ -155,7 +155,9 @@ private fun ConversationView(
 ) {
     // Drawn as chat lines, so emotes and links look as they do in chat.
     val lines = remember(conversation.messages) {
-        conversation.messages.map { ChatLine.user(it.from, emptyList(), it.text, it.at, subTier = Int.MAX_VALUE) }.asReversed()
+        val all = conversation.messages.map { ChatLine.user(it.from, emptyList(), it.text, it.at, subTier = Int.MAX_VALUE) }
+        // A run from one person shows their name once, as in chat.
+        all.mapIndexed { i, line -> line to (i > 0 && continues(all[i - 1], line)) }.asReversed()
     }
     val list = rememberLazyListState()
     LaunchedEffect(lines.size) { list.scrollToItem(0) }
@@ -177,8 +179,8 @@ private fun ConversationView(
                 Text("No messages yet.", color = Palette.TextDim, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             }
             LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true) {
-                items(lines, key = { it.id }) { line ->
-                    ChatRow(line, false, flairs, emotes, me, null, false, onEmbed) {}
+                items(lines, key = { it.first.id }) { (line, continued) ->
+                    ChatRow(line, continued, flairs, emotes, me, null, false, onEmbed) {}
                 }
             }
         }
