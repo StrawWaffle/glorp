@@ -37,9 +37,13 @@ with memory and battery throughout.
    sender's tier allows, sprite-strip animations read from `emotes.css`
    (played once from when the message was sent, then resting on a frame),
    GIFs, flair badges, links. Images go through one Coil loader with a
-   capped memory cache and a disk cache. Still to do: the hand-written CSS
-   effects on about 40 emotes (bounces, glows, neighbour effects), mentions
-   and highlights, timestamps, emotes
+   capped memory cache and a disk cache. The stylesheet's hand-made
+   movements are read generically from each emote's own rule and keyframes
+   (transform, opacity, brightness; timing, delays, repeats, easing,
+   `steps()`, `transform-origin`) and drawn in a graphics layer, so they
+   don't re-lay out the line. Still to do: the effects that depend on a
+   neighbouring emote (`:has()`, `+`), on a combo's size, or on pseudo-
+   elements, filters other than brightness, timestamps, emotes
    overlapping lines the way the site draws them rather than making lines
    taller.
 3. **Logged in** (started): a login key made on the site's developer page in

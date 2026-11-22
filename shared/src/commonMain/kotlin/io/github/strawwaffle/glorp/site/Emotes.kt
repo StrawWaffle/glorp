@@ -30,9 +30,18 @@ data class Emote(
     val sheetWidth: Int = width,
     val sheetHeight: Int = height,
     val offsetX: Int = 0,
+    /** The stylesheet's hand-made movements: shakes, turns, bounces, fades, glows. */
+    val motions: List<Motion> = emptyList(),
+    /** `transform-origin`, as fractions of the emote's size. */
+    val originX: Float = 0.5f,
+    val originY: Float = 0.5f,
 ) {
-    /** Whether the picture is drawn whole, scaled to the emote's size. */
-    val isWholePicture: Boolean get() = sprite == null && offsetX == 0 && sheetWidth == width && sheetHeight == height
+    /** Whether the picture is drawn whole, scaled to the emote's size, and still. */
+    val isWholePicture: Boolean get() = sprite == null && motions.isEmpty() && offsetX == 0 && sheetWidth == width && sheetHeight == height
+
+    /** When the last finite movement or sprite run ends, after the message; [Long.MAX_VALUE] if one never does. */
+    val settlesAfterMs: Long
+        get() = maxOf(sprite?.totalMs ?: 0, motions.maxOfOrNull { it.endMs } ?: 0)
 }
 
 /** A sprite strip animation, as the stylesheet runs it. */
@@ -73,13 +82,15 @@ class Emotes private constructor(private val byPrefix: Map<String, Emote>) {
 
         /**
          * Reads `emotes.json`, and from `emotes.css` the size chat draws each
-         * emote at and its sprite animation. Other CSS effects (bounces, glows,
-         * effects that depend on neighbouring emotes) are not read: those
-         * emotes show still.
+         * emote at, its sprite animation and its hand-made movements
+         * (transform, opacity and brightness keyframes). Effects that depend
+         * on neighbouring emotes, on combos or on hovering, and other filters,
+         * are not read.
          */
         fun parse(json: String, css: String): Emotes {
             val rules = baseRules(css)
             val keyframes = keyframeOffsets(css)
+            val moving = motionKeyframes(css.replace(Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL), ""))
             val map = LinkedHashMap<String, Emote>()
             for (entry in chatJson.decodeFromString<List<Entry>>(json)) {
                 val image = entry.image.firstOrNull() ?: continue
@@ -98,9 +109,12 @@ class Emotes private constructor(private val byPrefix: Map<String, Emote>) {
                 val shrink = minOf(1.0, MAX_HEIGHT / height, MAX_WIDTH / width)
                 width *= shrink; height *= shrink; sheetWidth *= shrink; sheetHeight *= shrink; offset *= shrink
                 val sprite = decls["animation"]?.let { spriteOf(it, sheetWidth.toInt(), width.toInt(), keyframes) }
+                val motions = decls["animation"]?.let { motionsOf(topLevelParts(it.last()), moving) }.orEmpty()
+                val (originX, originY) = readOrigin(decls["transform-origin"]?.last())
                 map[entry.prefix] = Emote(
                     entry.prefix, url, width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1), entry.minimumSubTier, sprite,
                     sheetWidth = sheetWidth.toInt().coerceAtLeast(1), sheetHeight = sheetHeight.toInt().coerceAtLeast(1), offsetX = offset.toInt(),
+                    motions = motions, originX = originX, originY = originY,
                 )
             }
             return Emotes(map)
