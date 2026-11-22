@@ -425,12 +425,14 @@ private fun LogRow(
     onTap: (() -> Unit)?,
 ) {
     Row(
-        Modifier.fillMaxWidth().then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier),
+        Modifier.fillMaxWidth()
+            .then(if (marked) Modifier.background(Palette.Orange.copy(alpha = 0.14f)) else Modifier)
+            .then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier),
         verticalAlignment = Alignment.Top,
     ) {
         Text(time, color = Palette.TextDim, fontSize = 11.sp, modifier = Modifier.padding(start = 10.dp, top = 4.dp).width(36.dp))
         Box(Modifier.weight(1f)) {
-            ChatRow(line, continued, env.flairs, env.emotes, me, mention, marked, env.onWatch, onNick)
+            ChatRow(line, continued, env.flairs, env.emotes, me, mention, false, env.onWatch, onNick)
         }
     }
 }

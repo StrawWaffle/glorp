@@ -303,9 +303,9 @@ private fun NickActions(
         item { Text(nick, color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(end = 4.dp)) }
         item { Action("Mention", onMention) }
         item { Action("Whisper", onWhisper) }
+        item { Action("Recent messages", onRecent) }
         item { Action(if (highlighted) "Unhighlight" else "Highlight", onHighlight) }
         item { Action("Ignore", onIgnore) }
-        item { Action("Recent messages", onRecent) }
         item { Action("Close", onClose, Palette.TextDim) }
     }
 }
