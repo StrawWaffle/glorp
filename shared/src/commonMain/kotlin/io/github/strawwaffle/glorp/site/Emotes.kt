@@ -54,6 +54,9 @@ class Emotes private constructor(private val byPrefix: Map<String, Emote>) {
     operator fun get(word: String): Emote? = byPrefix[word]
     val size: Int get() = byPrefix.size
 
+    /** Every emote, in the order the site lists them. */
+    val all: Collection<Emote> get() = byPrefix.values
+
     companion object {
         val None = Emotes(emptyMap())
 
@@ -77,7 +80,7 @@ class Emotes private constructor(private val byPrefix: Map<String, Emote>) {
         fun parse(json: String, css: String): Emotes {
             val rules = baseRules(css)
             val keyframes = keyframeOffsets(css)
-            val map = HashMap<String, Emote>()
+            val map = LinkedHashMap<String, Emote>()
             for (entry in chatJson.decodeFromString<List<Entry>>(json)) {
                 val image = entry.image.firstOrNull() ?: continue
                 val url = image.url ?: continue

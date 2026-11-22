@@ -39,7 +39,7 @@ class ChatTest {
 
     @Test
     fun skipsWhatItDoesNotUse() {
-        assertNull(parseFrame("""NAMES {"connectioncount":1,"users":[]}""", now))
+        assertNull(parseFrame("""JOIN {"nick":"someone"}""", now))
         assertNull(parseFrame("MSG not json", now))
         assertNull(parseFrame("", now))
     }

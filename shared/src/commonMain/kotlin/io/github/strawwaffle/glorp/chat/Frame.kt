@@ -8,9 +8,10 @@ import kotlinx.serialization.json.Json
  * One line of the chat server's `EVENT {json}` format, read only as far as the
  * app needs it.
  *
- * The roster (`NAMES`) runs to a few hundred kilobytes at busy times and the
- * app doesn't use it yet, so events are matched on their name before any JSON
- * is decoded, and unknown ones cost nothing but the string.
+ * Events are matched on their name before any JSON is decoded, and unknown
+ * ones cost nothing but the string. The roster (`NAMES`, a few hundred
+ * kilobytes at busy times) is passed on undecoded: only someone signed in,
+ * who can type, needs its names, and then only those.
  */
 sealed interface ChatEvent {
     data class Message(val line: ChatLine) : ChatEvent
@@ -24,6 +25,9 @@ sealed interface ChatEvent {
     data class Error(val code: String) : ChatEvent
 
     data class Notice(val text: String) : ChatEvent
+
+    /** The roster sent on connect, still as the server's JSON (see [rosterNicks]). */
+    class Names(val payload: String) : ChatEvent
 }
 
 internal val chatJson = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -102,6 +106,7 @@ fun parseFrame(raw: String, now: () -> Long): ChatEvent? {
                     ChatLine.whisper(whisper.nick, whisper.data, whisper.timestamp ?: now(), whisper.messageid?.toString()),
                 )
             }
+            "NAMES" -> ChatEvent.Names(payload)
             "SUBONLY" -> ChatEvent.Notice(subOnlyText(chatJson.decodeFromString<WireSubOnly>(payload)))
             else -> null
         }

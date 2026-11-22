@@ -122,6 +122,9 @@ class ChatSocket(
     suspend fun sendWhisper(nick: String, text: String): Boolean =
         send("PRIVMSG", JsonObject(mapOf("nick" to JsonPrimitive(nick), "data" to JsonPrimitive(text))))
 
+    /** Sends any other event, such as a moderator's `MUTE` or `BAN`. False when not connected. */
+    suspend fun sendEvent(event: String, payload: JsonObject): Boolean = send(event, payload)
+
     private suspend fun send(event: String, payload: JsonObject): Boolean {
         val session = current ?: return false
         return try {
