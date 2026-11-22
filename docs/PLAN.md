@@ -68,7 +68,14 @@ with memory and battery throughout.
    and highlight lists and the history are kept on the device, not in the
    account's chat settings (login keys don't open the site's API). Tapping
    a name offers mention, whisper, highlight and ignore.
-   Still to do: a whisper inbox, chat settings from the account,
+   Whispers have their own screen (menu → Whispers, `/open nick`, or the
+   "new whispers" tab over chat): conversations newest first with unread
+   counts, each with a reply box. A whisper shows as sent only once the
+   server takes it (`PRIVMSGSENT`); a refusal shows in the conversation.
+   They're kept in memory only. With the site's cookies the site's
+   conversation list and history load too (`/api/messages/...`, which
+   refuses login keys).
+   Still to do: chat settings from the account,
    cookies for site pages.
 4. **Embeds** (started): a player above chat. It shows what bigscreen would
    (Destiny on the preferred platform, else the first live one, else what's

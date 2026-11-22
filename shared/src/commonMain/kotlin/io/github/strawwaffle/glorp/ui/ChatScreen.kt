@@ -97,6 +97,8 @@ fun ChatScreen(
     onClosePoll: () -> Unit = {},
     pinned: ChatViewModel.Pinned? = null,
     onShowPin: (Boolean) -> Unit = {},
+    unreadWhispers: Int = 0,
+    onWhispers: () -> Unit = {},
 ) {
     // In picture in picture only the player is left. Everything else is
     // skipped rather than moved, so the player keeps its place and isn't
@@ -147,16 +149,9 @@ fun ChatScreen(
                     ChatRow(shown.line, shown.continued, flairs, emotes, me, mention, marked, openEmbed, tapNick)
                 }
             }
-            if (pinned != null && pinned.dismissed) {
-                Text(
-                    "Pinned message",
-                    color = Palette.White,
-                    fontSize = 12.sp,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
-                        .background(Palette.NavyLight, RoundedCornerShape(12.dp))
-                        .clickable(onClickLabel = "Show the pinned message") { onShowPin(true) }
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                )
+            Column(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalAlignment = Alignment.End) {
+                if (unreadWhispers > 0) Tab(if (unreadWhispers == 1) "1 new whisper" else "$unreadWhispers new whispers", Palette.Orange, onWhispers)
+                if (pinned != null && pinned.dismissed) Tab("Pinned message", Palette.NavyLight) { onShowPin(true) }
             }
             if (!following) {
                 val scope = rememberCoroutineScope()
@@ -171,6 +166,18 @@ fun ChatScreen(
             ChatInput(input, emotes, account, connected = state == SocketState.Connected, onSend, onIgnore, onHighlight, onSearchUser)
         }
     }
+}
+
+/** A small button over the top of chat, for what's waiting: whispers, a closed pin. */
+@Composable
+private fun Tab(text: String, color: Color, onClick: () -> Unit) {
+    Text(
+        text,
+        color = if (color == Palette.Orange) Palette.Black else Palette.White,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(bottom = 4.dp).background(color, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 4.dp),
+    )
 }
 
 @Composable

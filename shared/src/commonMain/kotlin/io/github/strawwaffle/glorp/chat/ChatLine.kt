@@ -25,6 +25,8 @@ data class ChatLine(
     val subTier: Int = 0,
     /** For [Kind.Combo]: how many messages it stands for. */
     val comboCount: Int = 0,
+    /** For [Kind.Whisper]: the site's id for it, to mark it read. */
+    val messageId: String? = null,
 ) {
     enum class Kind {
         /** A chat message. */
@@ -80,6 +82,10 @@ data class ChatLine(
             at = at,
             action = false,
             green = false,
+            // A whisper doesn't say the sender's tier; draw every emote
+            // rather than none.
+            subTier = Int.MAX_VALUE,
+            messageId = messageId,
         )
 
         /** A combo that began with [first]; its id stays the first message's, so it keeps its place. */

@@ -102,6 +102,73 @@ class ChatViewModel(
 
     private var pollTimer: Job? = null
 
+    private val _inbox = MutableStateFlow(Inbox())
+    /** Whisper conversations: this session's, and the site's with a cookie login. */
+    val inbox: StateFlow<Inbox> = _inbox.asStateFlow()
+
+    private val _opening = MutableStateFlow<String?>(null)
+    /** A conversation `/open` asked for, for the screens to show; taken with [conversationShown]. */
+    val opening: StateFlow<String?> = _opening.asStateFlow()
+
+    /** Whether the site's whisper history can be read: only with its cookies, not a login key. */
+    val whisperHistory: Boolean get() = session is Session.Cookies
+
+    /** Whispers sent and not yet confirmed by the server, oldest first. */
+    private val unconfirmed = ArrayDeque<Pair<String, String>>()
+    private var conversationsLoaded = false
+
+    private fun messages(): io.github.strawwaffle.glorp.site.Messages? =
+        (session as? Session.Cookies)?.let { io.github.strawwaffle.glorp.site.Messages(client, site, it) }
+
+    /** Opens a conversation: its unread count clears and, with a cookie login, the site's history loads. */
+    fun openConversation(nick: String) {
+        _opening.value = null
+        _inbox.value = _inbox.value.opened(nick)
+        val me = _account.value?.nick ?: return
+        if (_inbox.value[nick]?.loaded == true) return
+        val api = messages() ?: return
+        viewModelScope.launch {
+            val history = api.inbox(nick, me) ?: return@launch
+            _inbox.value = _inbox.value.history(nick, history)
+        }
+    }
+
+    /** Whispers from a conversation, leaving chat's own draft alone. */
+    fun whisper(nick: String, text: String): Boolean {
+        val chat = socket
+        when {
+            _account.value == null -> notice("Sign in to whisper.")
+            chat == null || _socketState.value != SocketState.Connected -> notice("Not connected. Wait for the transmission to come back.")
+            else -> {
+                input.replyTo = nick
+                unconfirmed.addLast(nick to text)
+                transmit { chat.sendWhisper(nick, text).also { if (!it) unconfirmed.removeLastOrNull() } }
+                return true
+            }
+        }
+        return false
+    }
+
+    fun closeConversation() {
+        _inbox.value = _inbox.value.closed()
+    }
+
+    /** The site's conversation list, with a cookie login; at most once a minute. */
+    fun loadConversations(force: Boolean = false) {
+        if (conversationsLoaded && !force) return
+        val api = messages() ?: return
+        conversationsLoaded = true
+        viewModelScope.launch {
+            api.conversations()?.let { _inbox.value = _inbox.value.listed(it) }
+            delay(60.seconds)
+            conversationsLoaded = false
+        }
+    }
+
+    fun conversationShown() {
+        _opening.value = null
+    }
+
     fun watch(embed: Embed?) {
         _picked.value = embed
     }
@@ -287,10 +354,11 @@ class ChatViewModel(
                     notice("Cannot send a message to yourself")
                 } else {
                     input.replyTo = command.nick
+                    // Shown once the server takes it (PRIVMSGSENT): it can
+                    // refuse, for an account too new or a name that's wrong.
+                    unconfirmed.addLast(command.nick to command.text)
                     transmit {
-                        chat!!.sendWhisper(command.nick, command.text).also {
-                            if (it) notice("Whisper to ${command.nick}: ${command.text}")
-                        }
+                        chat!!.sendWhisper(command.nick, command.text).also { if (!it) unconfirmed.removeLastOrNull() }
                     }
                 }
             }
@@ -343,6 +411,10 @@ class ChatViewModel(
             Command.ShowPoll -> {
                 val last = _poll.value
                 if (last == null) notice("There hasn't been a poll yet.") else _poll.value = last.copy(dismissed = false)
+            }
+            is Command.Open -> {
+                if (command.nick.equals(me.nick, ignoreCase = true)) notice("Cannot send a message to yourself")
+                else _opening.value = command.nick
             }
             is Command.Problem -> notice(command.text)
         }
@@ -491,6 +563,7 @@ class ChatViewModel(
                     }
                     me != null -> {
                         _account.value = me
+                        loadConversations()
                         false
                     }
                     session != null -> {
@@ -536,7 +609,18 @@ class ChatViewModel(
                 else Pinned(event.uuid, line, dismissed = event.uuid in prefs.getList(PINS_CLOSED))
                 false
             }
+            ChatEvent.WhisperSent -> {
+                val (nick, text) = unconfirmed.removeFirstOrNull() ?: return false
+                val me = _account.value?.nick.orEmpty()
+                _inbox.value = _inbox.value.sent(nick, me, text, now())
+                // In chat too, unless the conversation is on screen.
+                if (_inbox.value.open == nick.lowercase()) false
+                else log.add(ChatLine.info("Whisper to $nick: $text", now()))
+            }
             is ChatEvent.Error -> {
+                if (event.code in whisperErrors) {
+                    unconfirmed.removeFirstOrNull()?.let { (nick, _) -> _inbox.value = _inbox.value.refused(nick, errorText(event.code)) }
+                }
                 if (isFatal(event.code)) socket?.halt()
                 log.add(ChatLine.info(errorText(event.code), now()))
             }
@@ -550,7 +634,14 @@ class ChatViewModel(
         if (nick != null) {
             if (nick in input.ignored) return false
             input.completer.heard(nick, line.at)
-            if (line.kind == ChatLine.Kind.Whisper) input.replyTo = nick
+            if (line.kind == ChatLine.Kind.Whisper) {
+                input.replyTo = nick
+                _inbox.value = _inbox.value.received(nick, line.text, line.at, line.messageId)
+                val id = line.messageId
+                if (_inbox.value.open == nick.lowercase() && id != null) {
+                    messages()?.let { api -> viewModelScope.launch { api.markRead(id) } }
+                }
+            }
         }
         return log.add(line, combo)
     }
@@ -584,6 +675,8 @@ class ChatViewModel(
     private companion object {
         val publishInterval = 150.milliseconds
         const val PINS_CLOSED = "pins-closed"
+        /** The errors that answer a whisper, so it was never sent. */
+        val whisperErrors = setOf("privmsgbanned", "privmsgaccounttooyoung", "notfound", "throttled", "duplicate", "muted", "needlogin", "nochatting")
         const val POLL_GRACE_MS = 15_000L
     }
 }

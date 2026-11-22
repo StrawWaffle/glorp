@@ -45,6 +45,8 @@ fun MainMenu(
     onToggleBackgroundAudio: () -> Unit = {},
     /** Opens a community screen: "rustle", "polls" or "dinkdonk". */
     onCommunity: (String) -> Unit = {},
+    unreadWhispers: Int = 0,
+    onWhispers: () -> Unit = {},
 ) {
     val streams = live.liveStreams
     val embeds = live.embeds.filter { !live.isBanned(it.embed) }
@@ -67,6 +69,9 @@ fun MainMenu(
         item {
             if (account == null) Item("Sign in", "To chat, whisper and be mentioned", onSignIn)
             else Item("Sign out", "Signed in as ${account.nick}", onSignOut)
+        }
+        if (account != null) item {
+            Item(if (unreadWhispers > 0) "Whispers ($unreadWhispers new)" else "Whispers", null, onWhispers)
         }
 
         item { Heading("Watch") }

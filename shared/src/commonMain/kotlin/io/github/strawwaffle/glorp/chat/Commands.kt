@@ -35,6 +35,9 @@ sealed interface Command {
     data object StopPoll : Command
     data object ShowPoll : Command
 
+    /** `/open nick`: the whisper conversation with them. */
+    data class Open(val nick: String) : Command
+
     /** Nothing to send: tell the user [text] (usage, a bad nick). */
     data class Problem(val text: String) : Command
 }
@@ -56,6 +59,7 @@ val commandList = listOf(
     CommandInfo("me", emptyList(), "Send an action message in italics."),
     CommandInfo("message", listOf("msg", "whisper", "w", "tell", "t", "notify"), "Send a whisper to <nick>."),
     CommandInfo("mute", emptyList(), "Stop <nick> from sending messages.", mod = true),
+    CommandInfo("open", listOf("o"), "Open a whisper conversation with <nick>."),
     CommandInfo("pin", listOf("motd"), "Pin a message to chat.", mod = true),
     CommandInfo("poll", listOf("vote", "v"), "Start a poll: <question>? <option 1> or <option 2> [<time>]."),
     CommandInfo("pollstop", listOf("votestop", "vs"), "Stop the poll that is running."),
@@ -89,9 +93,7 @@ private val notHere = mapOf(
     "tag" to "tags aren't in Glorp yet",
     "untag" to "tags aren't in Glorp yet",
     "untagall" to "tags aren't in Glorp yet",
-    "open" to "whisper conversations aren't in Glorp yet",
-    "o" to "whisper conversations aren't in Glorp yet",
-    "exit" to "whisper conversations aren't in Glorp yet",
+    "exit" to "conversations close with the back button",
     "maxlines" to "Glorp keeps a fixed number of lines",
     "timestampformat" to "Glorp doesn't show timestamps yet",
     "hint" to "there are no hints in Glorp",
@@ -193,6 +195,11 @@ fun parseCommand(text: String, mod: Boolean): Command {
         "poll", "vote", "v" -> Command.StartPoll(parsePoll(args), name)
         "pollstop", "votestop", "vs" -> Command.StopPoll
         "showpoll", "showvote" -> Command.ShowPoll
+        "open", "o" -> when {
+            args.isEmpty() -> Command.Problem("Usage: /$name <nick>")
+            !isNick(args[0]) -> Command.Problem("Invalid nick - /$name <nick>")
+            else -> Command.Open(args[0])
+        }
         "die", "suicide", "bitly" -> Command.Send("DIE", json("data" to ""))
         "mute" -> when {
             args.isEmpty() -> Command.Problem("Usage: /mute <nick> [<time>].")

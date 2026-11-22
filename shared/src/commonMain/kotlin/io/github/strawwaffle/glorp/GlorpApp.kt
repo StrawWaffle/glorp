@@ -30,6 +30,7 @@ import io.github.strawwaffle.glorp.ui.OnBack
 import io.github.strawwaffle.glorp.ui.LocalPictureInPicture
 import io.github.strawwaffle.glorp.ui.PictureInPicture
 import io.github.strawwaffle.glorp.ui.SignInScreen
+import io.github.strawwaffle.glorp.ui.WhispersScreen
 import io.github.strawwaffle.glorp.ui.glorpImageLoader
 
 /**
@@ -78,6 +79,12 @@ fun GlorpApp(
         val picked by chat.picked.collectAsStateWithLifecycle()
         val poll by chat.poll.collectAsStateWithLifecycle()
         val pinned by chat.pinned.collectAsStateWithLifecycle()
+        val inbox by chat.inbox.collectAsStateWithLifecycle()
+        val opening by chat.opening.collectAsStateWithLifecycle()
+        // `/open nick` shows that conversation.
+        LaunchedEffect(opening) {
+            opening?.let { communityArg = it; screen = "whispers"; chat.conversationShown() }
+        }
         var playerShown by rememberSaveable { mutableStateOf(true) }
         val embed = picked ?: live.defaultEmbed()
         // Leaving the app shrinks it to the video only while there is one.
@@ -99,6 +106,8 @@ fun GlorpApp(
             onClosePoll = chat::dismissPoll,
             pinned = pinned,
             onShowPin = chat::showPin,
+            unreadWhispers = inbox.unread,
+            onWhispers = { communityArg = inbox.sorted.firstOrNull { it.unread > 0 }?.nick; screen = "whispers" },
             player = if (!playerShown) null else {
                 {
                     Bigscreen(
@@ -134,6 +143,8 @@ fun GlorpApp(
                                 prefs.put(BACKGROUND_AUDIO, backgroundAudio.toString())
                             },
                             onCommunity = { communityArg = null; screen = it },
+                            unreadWhispers = inbox.unread,
+                            onWhispers = { communityArg = null; screen = "whispers" },
                         )
                     }
                 }
@@ -150,6 +161,24 @@ fun GlorpApp(
                                 }
                             },
                             onClose = { screen = "menu" },
+                        )
+                    }
+                }
+                "whispers" -> {
+                    {
+                        WhispersScreen(
+                            inbox = inbox,
+                            start = communityArg,
+                            history = chat.whisperHistory,
+                            me = account?.nick.orEmpty(),
+                            flairs = flairs,
+                            emotes = emotes,
+                            onOpen = chat::openConversation,
+                            onClose = chat::closeConversation,
+                            onRefresh = { chat.loadConversations() },
+                            onSend = chat::whisper,
+                            onEmbed = { chat.watch(it); playerShown = true },
+                            onBack = { chat.closeConversation(); screen = "menu" },
                         )
                     }
                 }

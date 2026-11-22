@@ -45,6 +45,9 @@ sealed interface ChatEvent {
     /** This account's vote went in. */
     data class VoteCounted(val option: Int) : ChatEvent
 
+    /** The server took the last whisper sent. */
+    data object WhisperSent : ChatEvent
+
     /** The pinned message, or none when [line] is null (unpinned). */
     data class Pin(val uuid: String, val line: ChatLine?) : ChatEvent
 }
@@ -116,13 +119,20 @@ internal data class WirePollStop(val totals: List<Long>? = null, val totalvotes:
 @Serializable
 internal data class WireVote(val vote: JsonElement? = null, val quantity: Long = 1)
 
-/** A time the server sends either as milliseconds or as an ISO date. */
-private fun millis(value: JsonElement?): Long? {
+/**
+ * A time the site sends either as milliseconds or as an ISO date, including
+ * its `2026-11-22T02:52:46+0000` form, whose offset has no colon.
+ */
+internal fun siteMillis(value: JsonElement?): Long? {
     val primitive = value as? JsonPrimitive ?: return null
     if (!primitive.isString) return primitive.longOrNull
-    return primitive.content.toLongOrNull()
-        ?: runCatching { Instant.parse(primitive.content).toEpochMilliseconds() }.getOrNull()
+    val text = primitive.content.trim()
+    text.toLongOrNull()?.let { return it }
+    val iso = offsetWithoutColon.replace(text) { "${it.groupValues[1]}:${it.groupValues[2]}" }
+    return runCatching { Instant.parse(iso).toEpochMilliseconds() }.getOrNull()
 }
+
+private val offsetWithoutColon = Regex("""([+-]\d{2})(\d{2})$""")
 
 private fun option(value: JsonElement?): Int = (value as? JsonPrimitive)?.content?.trim()?.toIntOrNull() ?: 0
 
@@ -130,8 +140,8 @@ internal fun parsePollStart(payload: String, localNow: Long): Poll? {
     val wire = chatJson.decodeFromString<WirePollStart>(payload)
     if (wire.options.isEmpty()) return null
     // Timed on the server's clock: shift it onto this device's, as chat-gui does.
-    val serverNow = millis(wire.now)
-    val start = millis(wire.start)
+    val serverNow = siteMillis(wire.now)
+    val start = siteMillis(wire.start)
     val startedAt = if (start != null && serverNow != null) start - (serverNow - localNow) else start ?: localNow
     val totals = wire.totals.takeIf { it.size == wire.options.size } ?: List(wire.options.size) { 0L }
     return Poll(
@@ -184,6 +194,7 @@ fun parseFrame(raw: String, now: () -> Long): ChatEvent? {
                 )
             }
             "NAMES" -> ChatEvent.Names(payload)
+            "PRIVMSGSENT" -> ChatEvent.WhisperSent
             "SUBONLY" -> ChatEvent.Notice(subOnlyText(chatJson.decodeFromString<WireSubOnly>(payload)))
             "POLLSTART" -> parsePollStart(payload, now())?.let(ChatEvent::PollStart)
             "POLLSTOP" -> chatJson.decodeFromString<WirePollStop>(payload).let { ChatEvent.PollStop(it.totals, it.totalvotes) }
