@@ -53,6 +53,10 @@ elease.jks`, described by `release.properties`
   `rememberme`, one per line, piped from the owner's secrets folder. The next
   launch moves it into the encrypted store and deletes the file. Never put the
   values in the repo or on the host's command line.
+- Chat events the test account can't cause (polls, pins): write frames to
+  `files/dev-frames` next to `dev-session`, one per line, as the server sends
+  them (`POLLSTART {...}`); `sleep N` waits N ms and `$NOW` becomes the time.
+  Dev builds play them into chat once it connects, then delete the file.
 - Signing in: login keys (the site's developer page, Create Login Key) are what
   chat accepts as the `authtoken` cookie; the site's pages don't accept them.
   The site's login page can't run in a web view (Twitch's and Kick's bot

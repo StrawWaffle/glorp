@@ -42,6 +42,8 @@ fun GlorpApp(
     sessions: SessionStore,
     prefs: ChatPrefs = MemoryChatPrefs(),
     initialEmbed: String? = null,
+    /** Dev builds: frames played into chat once it connects (see `MainActivity.devFrames`). */
+    devFrames: List<String> = emptyList(),
     pictureInPicture: PictureInPicture = PictureInPicture(),
 ) {
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
@@ -51,7 +53,10 @@ fun GlorpApp(
         LocalPictureInPicture provides pictureInPicture,
         LocalBackgroundAudio provides backgroundAudio,
     ) { GlorpTheme {
-        val chat = viewModel { ChatViewModel(origin, sessions, prefs).also { vm -> initialEmbed?.let(Embed::parse)?.let(vm::watch) } }
+        val chat = viewModel { ChatViewModel(origin, sessions, prefs).also { vm ->
+            initialEmbed?.let(Embed::parse)?.let(vm::watch)
+            if (devFrames.isNotEmpty()) vm.play(devFrames)
+        } }
         // The socket is held only while the app is on screen. Leaving the app
         // closes it; coming back reconnects, and the backlog chat sends on
         // connect fills the gap.
@@ -71,6 +76,8 @@ fun GlorpApp(
         var communityArg by rememberSaveable { mutableStateOf<String?>(null) }
         val live by chat.live.collectAsStateWithLifecycle()
         val picked by chat.picked.collectAsStateWithLifecycle()
+        val poll by chat.poll.collectAsStateWithLifecycle()
+        val pinned by chat.pinned.collectAsStateWithLifecycle()
         var playerShown by rememberSaveable { mutableStateOf(true) }
         val embed = picked ?: live.defaultEmbed()
         // Leaving the app shrinks it to the video only while there is one.
@@ -87,6 +94,11 @@ fun GlorpApp(
             onHighlight = chat::highlight,
             onEmbed = { chat.watch(it); playerShown = true },
             onSearchUser = { communityArg = it; screen = "rustle" },
+            poll = poll,
+            onVote = chat::vote,
+            onClosePoll = chat::dismissPoll,
+            pinned = pinned,
+            onShowPin = chat::showPin,
             player = if (!playerShown) null else {
                 {
                     Bigscreen(

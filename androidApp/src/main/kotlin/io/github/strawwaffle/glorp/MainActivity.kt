@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
         // Dev builds: `am start … --es embed kick/destiny` opens an embed, for
         // trying players without posting links in chat.
         val embed = if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("embed") else null
+        val frames = if (BuildConfig.DEV_IMPORT) devFrames() else emptyList()
         addOnPictureInPictureModeChangedListener(pipListener)
         inPip = isInPictureInPictureMode
         setContent {
@@ -45,6 +46,7 @@ class MainActivity : ComponentActivity() {
                 sessions = sessions,
                 prefs = SharedChatPrefs(applicationContext),
                 initialEmbed = embed,
+                devFrames = frames,
                 pictureInPicture = PictureInPicture(
                     active = inPip,
                     setAvailable = { showing -> videoShowing = showing; updatePipParams() },
@@ -104,6 +106,20 @@ class MainActivity : ComponentActivity() {
      * `k` and a login key, or `c`, `sid` and `rememberme`, one per line.
      * Release builds never look for it.
      */
+    /**
+     * Dev and debug builds only: chat frames to play as if the server sent
+     * them, from `files/dev-frames` (deleted once read), for trying what the
+     * test account can't start, such as polls. One frame per line; `sleep N`
+     * waits N ms, and `${'$'}NOW` is the time in milliseconds when it's played.
+     */
+    private fun devFrames(): List<String> {
+        val file = getExternalFilesDir(null)?.resolve("dev-frames") ?: return emptyList()
+        if (!file.exists()) return emptyList()
+        val lines = file.readLines().map { it.trim() }.filter { it.isNotEmpty() }
+        file.delete()
+        return lines
+    }
+
     private fun importDevSession(sessions: KeystoreSessionStore) {
         val file = getExternalFilesDir(null)?.resolve("dev-session") ?: return
         if (!file.exists()) return

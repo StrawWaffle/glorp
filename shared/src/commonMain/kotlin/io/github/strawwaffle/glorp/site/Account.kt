@@ -3,6 +3,7 @@ package io.github.strawwaffle.glorp.site
 import io.github.strawwaffle.glorp.auth.Session
 import io.github.strawwaffle.glorp.chat.ChatSocket
 import io.github.strawwaffle.glorp.chat.chatJson
+import io.github.strawwaffle.glorp.chat.hasModPowers
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -11,8 +12,10 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
 
-/** Who is signed in. */
-data class Account(val nick: String, val features: List<String>, val subTier: Int)
+/** Who is signed in. [roles] carry the powers (`MODERATOR`, `POLLS`…); features are flairs. */
+data class Account(val nick: String, val features: List<String>, val subTier: Int, val roles: List<String> = emptyList()) {
+    val modPowers: Boolean get() = hasModPowers(features + roles)
+}
 
 sealed interface SessionCheck {
     /** Signed in. [session] may carry a fresh `sid` the site just issued. */
@@ -28,6 +31,7 @@ private data class Me(
     val nick: String? = null,
     val features: List<String> = emptyList(),
     val subscription: Sub? = null,
+    val roles: List<String> = emptyList(),
 ) {
     @Serializable
     data class Sub(val tier: Int = 0)
@@ -56,7 +60,7 @@ suspend fun checkSession(client: HttpClient, site: Site, session: Session.Cookie
             val nick = me?.nick
             if (nick.isNullOrEmpty()) SessionCheck.Invalid
             else SessionCheck.Valid(
-                Account(nick, me.features, me.subscription?.tier ?: 0),
+                Account(nick, me.features, me.subscription?.tier ?: 0, me.roles),
                 if (newSid != null) session.withSid(newSid) else session,
             )
         }

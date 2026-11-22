@@ -39,7 +39,7 @@ with memory and battery throughout.
    GIFs, flair badges, links. Images go through one Coil loader with a
    capped memory cache and a disk cache. Still to do: the hand-written CSS
    effects on about 40 emotes (bounces, glows, neighbour effects), mentions
-   and highlights, timestamps, combos, polls, the pinned message, emotes
+   and highlights, timestamps, emotes
    overlapping lines the way the site draws them rather than making lines
    taller.
 3. **Logged in** (started): a login key made on the site's developer page in
@@ -60,11 +60,15 @@ with memory and battery throughout.
    commands are read as it reads them: `/r`, `/ignore`, `/highlight`,
    `/help`, `/emotes`, `/embed` are handled in the app, moderator commands
    go to the server as the same events, and the ones that need the site's
-   login or features Glorp lacks (`/stalk`, polls, tags) say so. The ignore
+   login or features Glorp lacks (`/stalk`, tags) say so. Polls show above
+   chat as chat-gui shows them (bars, a timer, hidden and sub-weighted
+   polls, the winner); tapping an option or typing its number votes, and
+   `/poll`, `/pollstop`, `/showpoll` work for accounts with the `POLLS`
+   role. The pinned message sits above chat and can be closed per pin. The ignore
    and highlight lists and the history are kept on the device, not in the
    account's chat settings (login keys don't open the site's API). Tapping
    a name offers mention, whisper, highlight and ignore.
-   Still to do: a whisper inbox, chat settings from the account, polls,
+   Still to do: a whisper inbox, chat settings from the account,
    cookies for site pages.
 4. **Embeds** (started): a player above chat. It shows what bigscreen would
    (Destiny on the preferred platform, else the first live one, else what's

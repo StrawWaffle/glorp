@@ -3,6 +3,10 @@ package io.github.strawwaffle.glorp.chat
 import io.github.strawwaffle.glorp.site.Account
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import kotlin.time.Instant
 
 /**
  * One line of the chat server's `EVENT {json}` format, read only as far as the
@@ -28,6 +32,21 @@ sealed interface ChatEvent {
 
     /** The roster sent on connect, still as the server's JSON (see [rosterNicks]). */
     class Names(val payload: String) : ChatEvent
+
+    /** A poll started, or the one running, sent on connect. */
+    data class PollStart(val poll: Poll) : ChatEvent
+
+    /** The poll ended; a hidden poll's results come with it. */
+    data class PollStop(val totals: List<Long>?, val votes: Long?) : ChatEvent
+
+    /** Someone voted: [quantity] more for [option] (from 1; 0 in a hidden poll). */
+    data class VoteCast(val option: Int, val quantity: Long) : ChatEvent
+
+    /** This account's vote went in. */
+    data class VoteCounted(val option: Int) : ChatEvent
+
+    /** The pinned message, or none when [line] is null (unpinned). */
+    data class Pin(val uuid: String, val line: ChatLine?) : ChatEvent
 }
 
 internal val chatJson = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -39,6 +58,9 @@ internal data class WireUser(
     val timestamp: Long? = null,
     val data: String? = null,
     val subscription: WireSubscription? = null,
+    val roles: List<String> = emptyList(),
+    /** Only on `PIN`. */
+    val uuid: String? = null,
 )
 
 @Serializable
@@ -72,6 +94,61 @@ internal data class WirePrivate(
     val messageid: Long? = null,
 )
 
+@Serializable
+internal data class WirePollStart(
+    val canvote: Boolean = false,
+    val myvote: Int = 0,
+    val weighted: Boolean = false,
+    val hidden: Boolean = false,
+    val start: JsonElement? = null,
+    val now: JsonElement? = null,
+    val time: Long = 30_000,
+    val question: String = "",
+    val options: List<String> = emptyList(),
+    val totals: List<Long> = emptyList(),
+    val nick: String = "",
+    val totalvotes: Long = 0,
+)
+
+@Serializable
+internal data class WirePollStop(val totals: List<Long>? = null, val totalvotes: Long? = null)
+
+@Serializable
+internal data class WireVote(val vote: JsonElement? = null, val quantity: Long = 1)
+
+/** A time the server sends either as milliseconds or as an ISO date. */
+private fun millis(value: JsonElement?): Long? {
+    val primitive = value as? JsonPrimitive ?: return null
+    if (!primitive.isString) return primitive.longOrNull
+    return primitive.content.toLongOrNull()
+        ?: runCatching { Instant.parse(primitive.content).toEpochMilliseconds() }.getOrNull()
+}
+
+private fun option(value: JsonElement?): Int = (value as? JsonPrimitive)?.content?.trim()?.toIntOrNull() ?: 0
+
+internal fun parsePollStart(payload: String, localNow: Long): Poll? {
+    val wire = chatJson.decodeFromString<WirePollStart>(payload)
+    if (wire.options.isEmpty()) return null
+    // Timed on the server's clock: shift it onto this device's, as chat-gui does.
+    val serverNow = millis(wire.now)
+    val start = millis(wire.start)
+    val startedAt = if (start != null && serverNow != null) start - (serverNow - localNow) else start ?: localNow
+    val totals = wire.totals.takeIf { it.size == wire.options.size } ?: List(wire.options.size) { 0L }
+    return Poll(
+        question = wire.question,
+        options = wire.options,
+        totals = totals,
+        votes = wire.totalvotes,
+        by = wire.nick,
+        weighted = wire.weighted,
+        hidden = wire.hidden,
+        startedAt = startedAt,
+        durationMs = wire.time,
+        myVote = wire.myvote,
+        canVote = wire.canvote && wire.myvote == 0,
+    )
+}
+
 /** Parses one text frame. Returns null for events the app ignores or can't read. */
 fun parseFrame(raw: String, now: () -> Long): ChatEvent? {
     val space = raw.indexOf(' ')
@@ -96,7 +173,7 @@ fun parseFrame(raw: String, now: () -> Long): ChatEvent? {
             }
             "ME" -> ChatEvent.Me(
                 chatJson.decodeFromString<WireUser?>(payload)?.takeIf { it.nick.isNotEmpty() }
-                    ?.let { Account(it.nick, it.features, it.subscription?.tier ?: 0) },
+                    ?.let { Account(it.nick, it.features, it.subscription?.tier ?: 0, it.roles) },
             )
             "ERR" -> ChatEvent.Error(chatJson.decodeFromString<WireError>(payload).description)
             "PRIVMSG" -> {
@@ -108,6 +185,17 @@ fun parseFrame(raw: String, now: () -> Long): ChatEvent? {
             }
             "NAMES" -> ChatEvent.Names(payload)
             "SUBONLY" -> ChatEvent.Notice(subOnlyText(chatJson.decodeFromString<WireSubOnly>(payload)))
+            "POLLSTART" -> parsePollStart(payload, now())?.let(ChatEvent::PollStart)
+            "POLLSTOP" -> chatJson.decodeFromString<WirePollStop>(payload).let { ChatEvent.PollStop(it.totals, it.totalvotes) }
+            "VOTECAST" -> chatJson.decodeFromString<WireVote>(payload).let { ChatEvent.VoteCast(option(it.vote), it.quantity) }
+            "VOTECOUNTED" -> ChatEvent.VoteCounted(option(chatJson.decodeFromString<WireVote>(payload).vote))
+            "PIN" -> {
+                val pin = chatJson.decodeFromString<WireUser>(payload)
+                val text = pin.data.orEmpty()
+                val line = if (text.isBlank() || pin.nick.isEmpty()) null
+                else ChatLine.user(pin.nick, pin.features, text, pin.timestamp ?: now(), pin.subscription?.tier ?: 0)
+                ChatEvent.Pin(pin.uuid ?: line?.id.orEmpty(), line)
+            }
             else -> null
         }
     } catch (_: IllegalArgumentException) {

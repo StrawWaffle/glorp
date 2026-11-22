@@ -1,6 +1,7 @@
 package io.github.strawwaffle.glorp.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -58,6 +59,8 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import io.github.strawwaffle.glorp.chat.ChatInputState
 import io.github.strawwaffle.glorp.chat.ChatLine
+import io.github.strawwaffle.glorp.chat.ChatViewModel
+import io.github.strawwaffle.glorp.chat.Poll
 import io.github.strawwaffle.glorp.chat.Segment
 import io.github.strawwaffle.glorp.chat.SocketState
 import io.github.strawwaffle.glorp.chat.segments
@@ -88,6 +91,12 @@ fun ChatScreen(
      * player, so a stream keeps playing. Null shows chat.
      */
     instead: (@Composable () -> Unit)? = null,
+    /** The poll above chat, and the pinned message. */
+    poll: Poll? = null,
+    onVote: (Int) -> Unit = {},
+    onClosePoll: () -> Unit = {},
+    pinned: ChatViewModel.Pinned? = null,
+    onShowPin: (Boolean) -> Unit = {},
 ) {
     // In picture in picture only the player is left. Everything else is
     // skipped rather than moved, so the player keeps its place and isn't
@@ -118,6 +127,8 @@ fun ChatScreen(
         val signedIn = account != null
         val tapNick: (String) -> Unit = remember(input, signedIn) { { if (signedIn) input.tappedNick = it } }
         val highlighted = input.highlighted.nicks
+        if (pinned != null && !pinned.dismissed) PinnedBar(pinned, flairs, emotes, me, openEmbed, tapNick, onShowPin)
+        if (poll != null && !poll.dismissed) PollCard(poll, onVote, onClosePoll)
         val list = rememberLazyListState()
         // A lazy list keeps the row you're looking at in place when rows are
         // added, which hides new lines below the bottom. So: follow while
@@ -135,6 +146,17 @@ fun ChatScreen(
                     val marked = shown.line.kind == ChatLine.Kind.User && shown.line.nick?.lowercase() in highlighted
                     ChatRow(shown.line, shown.continued, flairs, emotes, me, mention, marked, openEmbed, tapNick)
                 }
+            }
+            if (pinned != null && pinned.dismissed) {
+                Text(
+                    "Pinned message",
+                    color = Palette.White,
+                    fontSize = 12.sp,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
+                        .background(Palette.NavyLight, RoundedCornerShape(12.dp))
+                        .clickable(onClickLabel = "Show the pinned message") { onShowPin(true) }
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                )
             }
             if (!following) {
                 val scope = rememberCoroutineScope()

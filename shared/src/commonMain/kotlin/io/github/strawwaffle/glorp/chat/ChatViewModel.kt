@@ -20,6 +20,10 @@ import io.github.strawwaffle.glorp.site.SessionCheck
 import io.github.strawwaffle.glorp.site.Site
 import io.github.strawwaffle.glorp.site.checkSession
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
@@ -28,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Clock
@@ -41,7 +46,7 @@ import kotlin.time.Duration.Companion.seconds
 class ChatViewModel(
     origin: String,
     private val store: SessionStore,
-    prefs: ChatPrefs = MemoryChatPrefs(),
+    private val prefs: ChatPrefs = MemoryChatPrefs(),
 ) : ViewModel() {
     private val client = createHttpClient()
 
@@ -83,6 +88,19 @@ class ChatViewModel(
     private val _picked = MutableStateFlow<Embed?>(null)
     /** An embed picked by hand; null follows what bigscreen would show. */
     val picked: StateFlow<Embed?> = _picked.asStateFlow()
+
+    private val _poll = MutableStateFlow<Poll?>(null)
+    /** The poll running in chat, or the one that just ended, still shown for a moment. */
+    val poll: StateFlow<Poll?> = _poll.asStateFlow()
+
+    private val _pinned = MutableStateFlow<Pinned?>(null)
+    /** The message a moderator pinned above chat. */
+    val pinned: StateFlow<Pinned?> = _pinned.asStateFlow()
+
+    /** A pinned message, and whether the reader closed it (kept per pin, as chat-gui does). */
+    data class Pinned(val uuid: String, val line: ChatLine, val dismissed: Boolean)
+
+    private var pollTimer: Job? = null
 
     fun watch(embed: Embed?) {
         _picked.value = embed
@@ -129,7 +147,7 @@ class ChatViewModel(
             combine(_emotes, _account) { e, a -> e to a }.collect { (emotes, account) ->
                 val features = account?.features.orEmpty()
                 input.completer.setEmotes(emotes.all.filter { mayUse(it, features, account?.subTier ?: 0) }.map { it.prefix })
-                input.completer.setCommands(commandWords(hasModPowers(features)))
+                input.completer.setCommands(commandWords(account?.modPowers == true))
             }
         }
     }
@@ -245,8 +263,16 @@ class ChatViewModel(
             notice("Sign in to chat.")
             return false
         }
-        val command = parseCommand(text, hasModPowers(me.features))
-        val needsChat = command is Command.Say || command is Command.Whisper || command is Command.Send || command is Command.PostEmbed
+        val command = parseCommand(text, me.modPowers)
+        val running = _poll.value?.takeIf { !it.ended }
+        // A number while a poll runs is a vote, as in chat-gui.
+        if (command is Command.Say && running != null && running.isVote(text)) {
+            input.setDraft("")
+            vote(text.toInt())
+            return true
+        }
+        val needsChat = command is Command.Say || command is Command.Whisper || command is Command.Send ||
+            command is Command.PostEmbed || command is Command.StartPoll || command is Command.StopPoll
         val chat = socket
         if (needsChat && (chat == null || _socketState.value != SocketState.Connected)) {
             notice("Not connected. Wait for the transmission to come back.")
@@ -290,16 +316,84 @@ class ChatViewModel(
                 notice("Your ignore list has been cleared.")
             }
             is Command.Highlight -> highlight(command.nick, command.on)
-            Command.Help -> notice(helpText(hasModPowers(me.features)))
+            Command.Help -> notice(helpText(me.modPowers))
             Command.EmoteList -> notice("Available emotes: ${_emotes.value.all.joinToString(", ") { it.prefix }}.")
             is Command.Watch -> {
                 val embed = Embed.parse(command.link)
                 if (embed == null) notice("Usage: /embed <link> OR /e <link> (bigscreen links and #platform/id)")
                 else watch(embed)
             }
+            is Command.StartPoll -> {
+                val request = command.request
+                when {
+                    request == null -> notice(
+                        "Usage: /${command.name} [--hidden] [--weighted] <question>? <option 1> or <option 2> " +
+                            "[or <option 3> [or <option 4> ... [or <option n>]]] [<time>].",
+                    )
+                    running != null -> notice("Poll already started.")
+                    !mayRunPolls(me.features + me.roles) -> notice("You do not have permission to start a poll.")
+                    else -> transmit { chat!!.sendEvent("STARTPOLL", pollPayload(request)) }
+                }
+            }
+            Command.StopPoll -> when {
+                running == null -> notice("No poll started.")
+                !mayRunPolls(me.features + me.roles) -> notice("You do not have permission to stop this poll.")
+                else -> transmit { chat!!.sendEvent("STOPPOLL", JsonObject(emptyMap())) }
+            }
+            Command.ShowPoll -> {
+                val last = _poll.value
+                if (last == null) notice("There hasn't been a poll yet.") else _poll.value = last.copy(dismissed = false)
+            }
             is Command.Problem -> notice(command.text)
         }
         return true
+    }
+
+    /**
+     * Dev builds: plays [frames] into chat as if the server sent them, once
+     * connected. `sleep N` waits N ms; `${'$'}NOW` becomes the time.
+     */
+    fun play(frames: List<String>) {
+        viewModelScope.launch {
+            _socketState.first { it == SocketState.Connected }
+            delay(2.seconds)
+            for (frame in frames) {
+                val pause = frame.removePrefix("sleep ").takeIf { it != frame }?.trim()?.toLongOrNull()
+                if (pause != null) delay(pause.milliseconds)
+                else events.send(frame.replace("${'$'}NOW", Clock.System.now().toEpochMilliseconds().toString()))
+            }
+        }
+    }
+
+    /** Votes for [option] (from 1) in the running poll, by tapping it or typing its number. */
+    fun vote(option: Int) {
+        val current = _poll.value ?: return
+        if (current.ended) return
+        val chat = socket
+        when {
+            _account.value == null -> notice("Sign in to vote.")
+            !current.canVote -> notice("You have already voted!")
+            chat == null || _socketState.value != SocketState.Connected -> notice("Not connected. Wait for the transmission to come back.")
+            else -> {
+                notice("Your vote has been cast!")
+                // Until the server counts it, so a second tap doesn't vote twice.
+                _poll.value = current.copy(canVote = false)
+                transmit { chat.sendEvent("CASTVOTE", buildJsonObject { put("vote", JsonPrimitive("$option")) }) }
+            }
+        }
+    }
+
+    /** Closes the poll; `/showpoll` brings it back. */
+    fun dismissPoll() {
+        _poll.value = _poll.value?.copy(dismissed = true)
+    }
+
+    /** Closes or reopens the pinned message. Closing is remembered for that pin. */
+    fun showPin(shown: Boolean) {
+        val pin = _pinned.value ?: return
+        _pinned.value = pin.copy(dismissed = !shown)
+        val closed = prefs.getList(PINS_CLOSED).filter { it != pin.uuid }
+        prefs.putList(PINS_CLOSED, if (shown) closed else (closed + pin.uuid).takeLast(20))
     }
 
     /** Tapping a name and choosing Ignore, or `/ignore`. Empty [nicks] lists who is ignored. */
@@ -410,6 +504,38 @@ class ChatViewModel(
                     else -> false
                 }
             }
+            is ChatEvent.PollStart -> {
+                val poll = event.poll
+                val known = _poll.value
+                // Sent again on every reconnect: the same poll keeps how it was shown.
+                val same = known != null && !known.ended && known.question == poll.question && known.options == poll.options
+                _poll.value = if (same) poll.copy(dismissed = known!!.dismissed) else poll
+                schedulePollEnd(poll.endsAt + POLL_GRACE_MS - now())
+                if (!same) log.add(ChatLine.info(poll.startText(), now())) else false
+            }
+            is ChatEvent.PollStop -> {
+                val running = _poll.value?.takeIf { !it.ended } ?: return false
+                val results = event.totals?.takeIf { running.hidden && it.size == running.options.size }
+                val ended = if (results != null) running.copy(hidden = false, totals = results, votes = event.votes ?: running.votes, ended = true)
+                else running.copy(ended = true)
+                _poll.value = ended
+                schedulePollEnd(Poll.END_SHOWN_MS)
+                log.add(ChatLine.info(ended.endText(), now()))
+            }
+            is ChatEvent.VoteCast -> {
+                _poll.value = _poll.value?.takeIf { !it.ended }?.cast(event.option, event.quantity) ?: return false
+                false
+            }
+            is ChatEvent.VoteCounted -> {
+                _poll.value = _poll.value?.copy(myVote = event.option, canVote = false)
+                false
+            }
+            is ChatEvent.Pin -> {
+                val line = event.line
+                _pinned.value = if (line == null) null
+                else Pinned(event.uuid, line, dismissed = event.uuid in prefs.getList(PINS_CLOSED))
+                false
+            }
             is ChatEvent.Error -> {
                 if (isFatal(event.code)) socket?.halt()
                 log.add(ChatLine.info(errorText(event.code), now()))
@@ -429,6 +555,27 @@ class ChatViewModel(
         return log.add(line, combo)
     }
 
+    /**
+     * Takes the poll down after [delayMs]: an ended one once it has been
+     * seen, a running one that never heard its end (the connection dropped
+     * as it closed) a little after its time is up.
+     */
+    private fun schedulePollEnd(delayMs: Long) {
+        pollTimer?.cancel()
+        pollTimer = viewModelScope.launch {
+            delay(delayMs.coerceAtLeast(0).milliseconds)
+            _poll.value = null
+        }
+    }
+
+    private fun pollPayload(request: PollRequest) = buildJsonObject {
+        put("weighted", JsonPrimitive(request.weighted))
+        put("hidden", JsonPrimitive(request.hidden))
+        put("time", JsonPrimitive(request.timeMs))
+        put("question", JsonPrimitive(request.question))
+        put("options", JsonArray(request.options.map({ JsonPrimitive(it) })))
+    }
+
     override fun onCleared() {
         youtube.close()
         client.close()
@@ -436,5 +583,7 @@ class ChatViewModel(
 
     private companion object {
         val publishInterval = 150.milliseconds
+        const val PINS_CLOSED = "pins-closed"
+        const val POLL_GRACE_MS = 15_000L
     }
 }

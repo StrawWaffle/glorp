@@ -22,7 +22,7 @@ fun mayUse(emote: Emote, features: List<String>, subTier: Int): Boolean =
     emote.minimumSubTier <= subTier || features.any { it in privileged }
 
 /** Moderator powers, as chat-gui's `hasModPowers`. */
-fun hasModPowers(features: List<String>): Boolean = features.any { it == "admin" || it == "moderator" }
+fun hasModPowers(features: List<String>): Boolean = features.any { it.equals("admin", true) || it.equals("moderator", true) }
 
 /**
  * Splits a message the way chat does: an emote is a whole word naming one the

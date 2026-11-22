@@ -30,6 +30,11 @@ sealed interface Command {
     /** Goes to the chat server as an event of its own, the way chat-gui sends it. */
     data class Send(val event: String, val payload: JsonObject) : Command
 
+    /** `/poll`: null [request] when it couldn't be read, to show the usage. */
+    data class StartPoll(val request: PollRequest?, val name: String) : Command
+    data object StopPoll : Command
+    data object ShowPoll : Command
+
     /** Nothing to send: tell the user [text] (usage, a bad nick). */
     data class Problem(val text: String) : Command
 }
@@ -52,6 +57,8 @@ val commandList = listOf(
     CommandInfo("message", listOf("msg", "whisper", "w", "tell", "t", "notify"), "Send a whisper to <nick>."),
     CommandInfo("mute", emptyList(), "Stop <nick> from sending messages.", mod = true),
     CommandInfo("pin", listOf("motd"), "Pin a message to chat.", mod = true),
+    CommandInfo("poll", listOf("vote", "v"), "Start a poll: <question>? <option 1> or <option 2> [<time>]."),
+    CommandInfo("pollstop", listOf("votestop", "vs"), "Stop the poll that is running."),
     CommandInfo("postembed", listOf("pe"), "Post a video embed in chat."),
     CommandInfo("reloadusers", emptyList(), "Reload all users in chat.", mod = true),
     CommandInfo("addphrase", listOf("addban", "addmute"), "Add a banned phrase to chat.", mod = true),
@@ -60,6 +67,7 @@ val commandList = listOf(
         "Remove a banned phrase from chat.", mod = true,
     ),
     CommandInfo("reply", listOf("r"), "Reply to the last whisper you received."),
+    CommandInfo("showpoll", listOf("showvote"), "Show the last poll again after closing it."),
     CommandInfo("subonly", emptyList(), "Set subscriber-only chat mode <on>, <off>, or to a specific <tier> (1-5).", mod = true),
     CommandInfo("unban", emptyList(), "Unban <nick>.", mod = true),
     CommandInfo("unhighlight", emptyList(), "Unhighlight <nick>."),
@@ -78,14 +86,6 @@ private val notHere = mapOf(
     "baninfo" to "needs the site's own login; your profile on the site shows bans",
     "host" to "needs the site's own login",
     "unhost" to "needs the site's own login",
-    "poll" to "polls aren't shown in Glorp yet",
-    "vote" to "polls aren't shown in Glorp yet",
-    "v" to "polls aren't shown in Glorp yet",
-    "pollstop" to "polls aren't shown in Glorp yet",
-    "votestop" to "polls aren't shown in Glorp yet",
-    "vs" to "polls aren't shown in Glorp yet",
-    "showpoll" to "polls aren't shown in Glorp yet",
-    "showvote" to "polls aren't shown in Glorp yet",
     "tag" to "tags aren't in Glorp yet",
     "untag" to "tags aren't in Glorp yet",
     "untagall" to "tags aren't in Glorp yet",
@@ -190,6 +190,9 @@ fun parseCommand(text: String, mod: Boolean): Command {
         "embed", "e" -> args.firstOrNull()?.let(Command::Watch)
             ?: Command.Problem("Usage: /embed <link> OR /e <link>")
         "postembed", "pe" -> Command.PostEmbed(args)
+        "poll", "vote", "v" -> Command.StartPoll(parsePoll(args), name)
+        "pollstop", "votestop", "vs" -> Command.StopPoll
+        "showpoll", "showvote" -> Command.ShowPoll
         "die", "suicide", "bitly" -> Command.Send("DIE", json("data" to ""))
         "mute" -> when {
             args.isEmpty() -> Command.Problem("Usage: /mute <nick> [<time>].")
