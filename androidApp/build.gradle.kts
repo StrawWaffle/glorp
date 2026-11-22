@@ -1,3 +1,6 @@
+import java.io.File
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
@@ -13,6 +16,19 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
+    }
+
+    // The release key lives outside the repo (see AGENTS.md). Every release
+    // must be signed with it, or phones refuse the update.
+    val releaseKey = File(System.getProperty("user.home"), ".secrets/glorp/release.properties")
+    if (releaseKey.exists()) {
+        val props = Properties().apply { releaseKey.inputStream().use(::load) }
+        signingConfigs.create("release") {
+            storeFile = file(props.getProperty("storeFile"))
+            storePassword = props.getProperty("storePassword")
+            keyAlias = props.getProperty("keyAlias")
+            keyPassword = props.getProperty("keyPassword")
+        }
     }
 
     buildTypes {
@@ -31,6 +47,7 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("String", "SITE_ORIGIN", "\"https://www.destiny.gg\"")
             buildConfigField("boolean", "DEV_IMPORT", "false")
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
         // What goes on a phone for trying things: optimised like a release,
         // because Compose in a debug build is several times slower and says
