@@ -13,6 +13,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.LivePlaybackSpeedControl
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -58,7 +59,15 @@ object Playback {
     }
 
     /** The player for [playable]: the one already playing it, or a new one. */
-    fun attach(context: Context, playable: Playable, background: Boolean, catchUp: Boolean = true): Active {
+    /**
+     * The fastest a live stream may play to catch up, from the menu's
+     * setting; 1 turns catching up off. Read by the player as it plays, so a
+     * change applies at once.
+     */
+    @Volatile
+    var catchUpMax = 1.5f
+
+    fun attach(context: Context, playable: Playable, background: Boolean): Active {
         active?.let { if (it.url == playable.hlsUrl) return it.also { start(context, background) } }
         release(context)
         val app = context.applicationContext
@@ -113,8 +122,8 @@ object Playback {
             .setMimeType(if (playable.mp4) MimeTypes.VIDEO_MP4 else MimeTypes.APPLICATION_M3U8)
             .setLiveConfiguration(
                 MediaItem.LiveConfiguration.Builder()
-                    .setMaxPlaybackSpeed(if (catchUp) MAX_CATCH_UP_SPEED else 1f)
-                    .setMinPlaybackSpeed(if (catchUp) 0.97f else 1f)
+                    .setMaxPlaybackSpeed(FASTEST_CATCH_UP)
+                    .setMinPlaybackSpeed(0.97f)
                     .build(),
             )
             .build()
@@ -146,8 +155,8 @@ object Playback {
     /**
      * Catching up with a live stream that's fallen behind (after a pause or a
      * stall): Media3's own control, tuned. Speed follows how far behind the
-     * target it is (1.5x from 5 s, 1.2x at 2 s; gentler than that went
-     * unnoticed on a phone: 7 s took over half a minute), so it eases off as the gap
+     * target it is (the setting's speed from 5 s, less as it closes; gentler
+     * than that went unnoticed on a phone: 7 s took over half a minute), so it eases off as the gap
      * closes instead of hitting the edge at full speed. Within 1.5 s it plays
      * at normal speed, so small wobbles don't switch it on and off. The
      * target never comes closer to live than what's buffered safely allows,
@@ -156,14 +165,41 @@ object Playback {
      * same spot to stall again. A seek back on purpose sets a new target,
      * so a rewind isn't undone.
      */
-    private fun catchUpControl() = DefaultLivePlaybackSpeedControl.Builder()
-        .setFallbackMaxPlaybackSpeed(MAX_CATCH_UP_SPEED)
+    private fun catchUpControl(): LivePlaybackSpeedControl = CappedSpeedControl(
+        DefaultLivePlaybackSpeedControl.Builder()
+            .setFallbackMaxPlaybackSpeed(FASTEST_CATCH_UP)
         .setProportionalControlFactor(0.1f)
         .setMaxLiveOffsetErrorMsForUnitSpeed(1_500)
-        .setTargetLiveOffsetIncrementOnRebufferMs(2_000)
-        .build()
+            .setTargetLiveOffsetIncrementOnRebufferMs(2_000)
+            .build(),
+    )
 
-    private const val MAX_CATCH_UP_SPEED = 1.5f
+    /**
+     * Media3's control picks the target (how close to live is safe, given
+     * the buffer and past stalls); the speed towards it follows the setting:
+     * its full speed from [FULL_SPEED_BEHIND_US] behind the target, easing
+     * down in proportion as the gap closes, normal speed within 1.5 s. Off
+     * ([catchUpMax] 1), it plays at normal speed.
+     */
+    private class CappedSpeedControl(private val inner: DefaultLivePlaybackSpeedControl) : LivePlaybackSpeedControl by inner {
+        override fun getAdjustedPlaybackSpeed(liveOffsetUs: Long, bufferedDurationUs: Long): Float {
+            val suggested = inner.getAdjustedPlaybackSpeed(liveOffsetUs, bufferedDurationUs)
+            val cap = catchUpMax
+            if (cap <= 1f) return 1f
+            val target = inner.targetLiveOffsetUs
+            if (target == C.TIME_UNSET) return minOf(suggested, cap)
+            val behindUs = liveOffsetUs - target
+            if (kotlin.math.abs(behindUs) < UNIT_SPEED_WITHIN_US) return 1f
+            val speed = 1f + (cap - 1f) * behindUs / FULL_SPEED_BEHIND_US
+            return speed.coerceIn(0.97f, cap)
+        }
+    }
+
+    private const val FULL_SPEED_BEHIND_US = 5_000_000f
+    private const val UNIT_SPEED_WITHIN_US = 1_500_000L
+
+    /** The highest the setting offers; the media item allows up to this, the setting picks below it. */
+    private const val FASTEST_CATCH_UP = 2f
 
     fun release(context: Context) {
         val current = active ?: return

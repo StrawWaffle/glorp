@@ -25,6 +25,7 @@ import io.github.strawwaffle.glorp.ui.LocalFullscreen
 import io.github.strawwaffle.glorp.ui.SystemFullscreen
 import io.github.strawwaffle.glorp.ui.LocalBackgroundAudio
 import io.github.strawwaffle.glorp.ui.LocalCatchUp
+import io.github.strawwaffle.glorp.ui.catchUpSpeeds
 import androidx.compose.runtime.remember
 import io.github.strawwaffle.glorp.community.CommunityEnv
 import io.github.strawwaffle.glorp.community.DinkDonkScreen
@@ -57,7 +58,16 @@ fun GlorpApp(
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
     // Keep a stream's sound going with the screen off: on unless turned off in the menu.
     var backgroundAudio by remember { mutableStateOf(prefs.get(BACKGROUND_AUDIO) != "false") }
-    var catchUp by remember { mutableStateOf(prefs.get(CATCH_UP) != "false") }
+    // Stored as the speed; older builds stored on ("true") or off ("false").
+    var catchUp by remember {
+        mutableStateOf(
+            when (val saved = prefs.get(CATCH_UP)) {
+                "false" -> 1f
+                null, "true" -> 1.5f
+                else -> saved.toFloatOrNull()?.takeIf { it in catchUpSpeeds } ?: 1.5f
+            },
+        )
+    }
     CompositionLocalProvider(
         LocalPictureInPicture provides pictureInPicture,
         LocalBackgroundAudio provides backgroundAudio,
@@ -161,7 +171,7 @@ fun GlorpApp(
                             },
                             catchUp = catchUp,
                             onToggleCatchUp = {
-                                catchUp = !catchUp
+                                catchUp = catchUpSpeeds[(catchUpSpeeds.indexOf(catchUp) + 1) % catchUpSpeeds.size]
                                 prefs.put(CATCH_UP, catchUp.toString())
                             },
                             onCommunity = { communityArg = null; screen = it },

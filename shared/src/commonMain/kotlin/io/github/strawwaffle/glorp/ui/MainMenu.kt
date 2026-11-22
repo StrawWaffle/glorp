@@ -45,7 +45,8 @@ fun MainMenu(
     onTogglePlayer: () -> Unit,
     backgroundAudio: Boolean = false,
     onToggleBackgroundAudio: () -> Unit = {},
-    catchUp: Boolean = true,
+    /** The catch-up speed; 1 is off. */
+    catchUp: Float = 1.5f,
     onToggleCatchUp: () -> Unit = {},
     /** Opens a community screen: "rustle", "polls" or "dinkdonk". */
     onCommunity: (String) -> Unit = {},
@@ -98,8 +99,8 @@ fun MainMenu(
         }
         item {
             Item(
-                if (catchUp) "Catch up to live: on" else "Catch up to live: off",
-                "A live stream that falls behind plays up to 1.5× until it's back. From the next stream you open",
+                "Catch-up speed: " + if (catchUp <= 1f) "off" else "${catchUp.toString().removeSuffix(".0")}×",
+                "How fast a live stream that fell behind plays until it's back. Tap to change",
                 onToggleCatchUp,
             )
         }

@@ -135,6 +135,11 @@ with memory and battery throughout.
    policy that retries on a neighbour; the stream address still has to come
    from AngelThump's own lookup (not in the script). Patreon viewers use a
    separate path the script leaves alone.
+   **Catch-up speed is a setting (0.1.5)**: off, 1.25x, 1.5x or 2x, applied
+   to the playing stream at once. Media3's control still picks the target;
+   the speed towards it is the setting's from 5 s behind, in proportion
+   below that (`CappedSpeedControl`). At 2x, 10 s behind was back in 12 s
+   with the buffer above 3.8 s.
    **Catch-up (done, 0.1.2).** Media3's `DefaultLivePlaybackSpeedControl`,
    tuned in `Playback.catchUpControl()`: up to 1.5x, proportional (0.1 per
    second behind; 0.05 was too gentle to notice on a phone, 7 s took 33 s.

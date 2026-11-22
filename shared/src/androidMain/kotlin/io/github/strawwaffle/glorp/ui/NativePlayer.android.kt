@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,7 +28,9 @@ import io.github.strawwaffle.glorp.video.Playback
 internal actual fun NativePlayer(playable: Playable, modifier: Modifier) {
     val context = LocalContext.current
     val background by rememberUpdatedState(LocalBackgroundAudio.current)
+    // The catch-up setting applies to the playing stream at once.
     val catchUp = LocalCatchUp.current
+    SideEffect { Playback.catchUpMax = catchUp }
     val view = remember {
         // Only the video surface: the controls are Glorp's own, made for live.
         PlayerView(context).apply {
@@ -47,7 +50,7 @@ internal actual fun NativePlayer(playable: Playable, modifier: Modifier) {
     // picked up without buffering again, or a new one). Off screen: keep only
     // the sound going, if that's on and it was playing; otherwise release.
     LifecycleStartEffect(playable.hlsUrl) {
-        val active = Playback.attach(context, playable, background, catchUp)
+        val active = Playback.attach(context, playable, background)
         view.player = active.player
         view.keepScreenOn = active.player.isPlaying
         val screenOn = object : Player.Listener {

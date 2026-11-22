@@ -21,5 +21,8 @@ val LocalPictureInPicture = compositionLocalOf { PictureInPicture() }
 /** Whether the native player keeps its sound going when the app is left or the screen goes off. */
 val LocalBackgroundAudio = compositionLocalOf { false }
 
-/** Whether a live stream that falls behind plays a little faster until it's back. */
-val LocalCatchUp = compositionLocalOf { true }
+/** How fast a live stream that fell behind may play until it's back; 1 is off. */
+val LocalCatchUp = compositionLocalOf { 1.5f }
+
+/** The catch-up speeds the menu offers, off first. */
+val catchUpSpeeds = listOf(1f, 1.25f, 1.5f, 2f)
