@@ -31,6 +31,12 @@ data class VideoState(
     val durationMs: Long = 0,
     /** A live stream that fell behind is playing faster to get back. */
     val catchingUp: Boolean = false,
+    /**
+     * Stopped by an error, or stuck loading, and not coming back by itself:
+     * the stream needs looking up again (its address may have expired, or
+     * the stream ended).
+     */
+    val failed: Boolean = false,
 )
 
 /** The controls' view of a player, so one set of controls serves every platform's player. */
@@ -45,4 +51,6 @@ interface VideoController {
     fun seekTo(positionMs: Long)
     /** Reads the position and how far behind live the player is. Called only while the controls are on screen. */
     fun refresh()
+    /** Starts the same stream again, from live, after it [VideoState.failed]. */
+    fun restart()
 }

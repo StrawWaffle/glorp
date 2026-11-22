@@ -7,6 +7,6 @@ import io.github.strawwaffle.glorp.video.Playable
 
 // AVPlayer plays HLS natively; it comes with the iOS app.
 @Composable
-internal actual fun NativePlayer(playable: Playable, modifier: Modifier) {
+internal actual fun NativePlayer(playable: Playable, modifier: Modifier, reload: () -> Unit) {
     Text("Video isn't available on iOS yet.", color = Palette.TextDim, modifier = modifier)
 }

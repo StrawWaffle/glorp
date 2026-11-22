@@ -7,7 +7,6 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
@@ -68,7 +67,13 @@ object Playback {
     var catchUpMax = 1.5f
 
     fun attach(context: Context, playable: Playable, background: Boolean): Active {
-        active?.let { if (it.url == playable.hlsUrl) return it.also { start(context, background) } }
+        active?.let {
+            if (it.url == playable.hlsUrl) {
+                // Back on screen, or looked up again, after it failed: start again.
+                if (it.controller.state.value.failed) it.controller.restart()
+                return it.also { start(context, background) }
+            }
+        }
         release(context)
         val app = context.applicationContext
         // AngelThump streams come from one of several edges; requests go to
@@ -107,14 +112,6 @@ object Playback {
                 if (stalls.size >= 3) {
                     stalls.clear()
                     edges.leave(edge)
-                }
-            }
-
-            override fun onPlayerError(error: PlaybackException) {
-                // A live stream fallen too far behind: jump back to live.
-                if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
-                    player.seekToDefaultPosition()
-                    player.prepare()
                 }
             }
         })
@@ -237,8 +234,10 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
-        // The session belongs to Playback, which releases it; only let go of it here.
-        Playback.active?.session?.let(::removeSession)
+        // The sessions belong to Playback, which releases them; only let go
+        // of the ones held here. (Playback may already have moved on to a new
+        // stream, whose session this service never held.)
+        sessions.toList().forEach(::removeSession)
         super.onDestroy()
     }
 }

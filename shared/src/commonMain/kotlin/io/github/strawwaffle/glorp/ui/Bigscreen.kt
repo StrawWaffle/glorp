@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -116,10 +117,19 @@ private fun Offline(live: LiveState) {
  */
 @Composable
 private fun Player(embed: Embed, playerUrl: String, origin: String, resolve: suspend (Embed) -> Resolution) {
-    val resolution by produceState<Resolution?>(null, embed) { value = resolve(embed) }
+    // Bumped when the player gives up on the stream, to look it up again:
+    // a fresh address, or the news that it ended.
+    var lookups by remember(embed) { mutableIntStateOf(0) }
+    val resolution by produceState<Resolution?>(null, embed, lookups) {
+        val found = resolve(embed)
+        // A failed lookup while the stream was playing natively (no network,
+        // say) keeps the player, which tries again, instead of swapping in
+        // the web player.
+        value = if (found == Resolution.Web && value is Resolution.Native) value else found
+    }
     when (val found = resolution) {
         null -> CircularProgressIndicator(color = Palette.Glorp)
-        is Resolution.Native -> NativePlayer(found.playable, Modifier.fillMaxSize())
+        is Resolution.Native -> NativePlayer(found.playable, Modifier.fillMaxSize(), reload = { lookups++ })
         is Resolution.Offline -> Note("${found.name} is offline.")
         Resolution.Web -> EmbedPlayer(playerUrl, origin, Modifier.fillMaxSize())
     }
@@ -194,4 +204,4 @@ internal expect fun EmbedPlayer(url: String, origin: String, modifier: Modifier)
 
 /** Plays [playable] in the platform's own video player, only while the app is on screen. */
 @Composable
-internal expect fun NativePlayer(playable: Playable, modifier: Modifier)
+internal expect fun NativePlayer(playable: Playable, modifier: Modifier, reload: () -> Unit)

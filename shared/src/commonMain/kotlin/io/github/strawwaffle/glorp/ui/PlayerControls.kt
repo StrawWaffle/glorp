@@ -49,7 +49,7 @@ private val LiveRed = Color(0xFFE5322D)
  * polled.
  */
 @Composable
-fun PlayerControls(controller: VideoController, modifier: Modifier = Modifier) {
+fun PlayerControls(controller: VideoController, modifier: Modifier = Modifier, retry: () -> Unit = controller::restart) {
     val state by controller.state.collectAsStateWithLifecycle()
     var shown by remember { mutableStateOf(true) }
     // Bumped by every tap on a control, so the hide timer starts over.
@@ -72,7 +72,19 @@ fun PlayerControls(controller: VideoController, modifier: Modifier = Modifier) {
             indication = null,
         ) { shown = !shown; touched++ },
     ) {
-        if (state.buffering) {
+        if (state.failed) {
+            // It tries again by itself; this is for not waiting.
+            Column(
+                Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("The stream stopped. Trying again…", color = Palette.TextDim, fontSize = 13.sp)
+                TextButton(onClick = { touched++; retry() }) {
+                    Text("Retry now", color = Palette.Glorp, fontWeight = FontWeight.Bold)
+                }
+            }
+        } else if (state.buffering) {
             CircularProgressIndicator(color = Palette.Glorp, modifier = Modifier.align(Alignment.Center).size(40.dp))
         }
         // The floating window has the system's own play and pause.

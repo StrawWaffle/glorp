@@ -1,12 +1,16 @@
 package io.github.strawwaffle.glorp.video
 
 import androidx.annotation.OptIn
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +31,34 @@ class ExoController(private val player: ExoPlayer) : VideoController {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             _state.update { it.copy(buffering = playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_IDLE) }
+            if (playbackState == Player.STATE_READY) {
+                retries = 0
+                _state.update { it.copy(failed = false) }
+            }
+            watchLoading()
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = watchLoading()
+
+        override fun onPlayerError(error: PlaybackException) {
+            handler.removeCallbacks(retry)
+            // A live stream fallen too far behind: jump back to live.
+            if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                player.seekToDefaultPosition()
+                player.prepare()
+                return
+            }
+            // A dropped connection may come straight back: try the same
+            // address a couple of times. Refused outright (an expired
+            // address, a stream that ended), or still failing, it needs
+            // looking up again, which the screen does.
+            val refused = (error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode in 400..499
+            if (!refused && retries < IN_PLACE_RETRIES) {
+                retries++
+                handler.postDelayed(retry, 2_000L * retries)
+            } else {
+                fail()
+            }
         }
 
         override fun onTracksChanged(tracks: Tracks) {
@@ -46,9 +78,45 @@ class ExoController(private val player: ExoPlayer) : VideoController {
         player.addListener(listener)
     }
 
+    private val handler = Handler(Looper.getMainLooper())
+    private var retries = 0
+
+    private val retry = Runnable {
+        if (player.playbackState == Player.STATE_IDLE) player.prepare()
+    }
+
+    /** Loading for too long while meant to be playing: as good as failed. */
+    private val stuck = Runnable { fail() }
+
+    private fun watchLoading() {
+        handler.removeCallbacks(stuck)
+        if (player.playbackState == Player.STATE_BUFFERING && player.playWhenReady) {
+            handler.postDelayed(stuck, STUCK_AFTER_MS)
+        }
+    }
+
+    private fun fail() {
+        handler.removeCallbacks(stuck)
+        handler.removeCallbacks(retry)
+        // Nothing more to fetch until the screen decides what to do.
+        player.stop()
+        _state.update { it.copy(failed = true, playing = false) }
+    }
+
+    override fun restart() {
+        handler.removeCallbacks(retry)
+        retries = 0
+        _state.update { it.copy(failed = false) }
+        player.stop()
+        if (player.isCurrentMediaItemLive || player.isCurrentMediaItemDynamic) player.seekToDefaultPosition()
+        player.playWhenReady = true
+        player.prepare()
+    }
+
     override fun play() {
         // Resuming a live stream picks up where it paused; the LIVE mark shows
         // how far behind that is, and one tap goes back.
+        if (_state.value.failed) return restart()
         if (player.playbackState == Player.STATE_IDLE) player.prepare()
         player.play()
     }
@@ -117,6 +185,7 @@ class ExoController(private val player: ExoPlayer) : VideoController {
     }
 
     fun release() {
+        handler.removeCallbacksAndMessages(null)
         player.removeListener(listener)
         player.release()
     }
@@ -144,5 +213,11 @@ class ExoController(private val player: ExoPlayer) : VideoController {
         // A few seconds of slack: buffering stalls put a stream a little behind
         // without it being worth a "go live".
         const val LIVE_EDGE_MS = 8_000L
+
+        /** Tries of the same address after an error, before looking the stream up again. */
+        const val IN_PLACE_RETRIES = 2
+
+        /** Loading this long without playing counts as failed. */
+        const val STUCK_AFTER_MS = 25_000L
     }
 }
