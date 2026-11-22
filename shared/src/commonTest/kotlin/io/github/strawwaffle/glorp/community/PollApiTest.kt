@@ -60,4 +60,19 @@ class PollApiTest {
             PollApi.parseYeePepe("""{"totalYee":61149,"totalPepe":55717,"points":[{"time":1552445570,"yeeVotes":46,"pepeVotes":37,"question":"Pepe vs YEE?","startedBy":"MrMouton"}]}"""),
         )
     }
+
+    @Test
+    fun writesNumbersAndDates() {
+        assertEquals("18,040", grouped(18040))
+        assertEquals("173", grouped(173))
+        assertEquals("1,000,000", grouped(1_000_000))
+        assertEquals("22 Nov 2026, 03:37 UTC", utcDate(1795318678000L, withTime = true))
+        assertEquals("10 Dec 2018", utcDate(1544472830000L))
+        assertEquals("29 Feb 2024", utcDate(1709208000000L))
+        val now = 1795318678000L
+        assertEquals("just now", whenText(now - 5_000, now))
+        assertEquals("6 h ago", whenText(now - 6 * 3_600_000L - 60_000, now))
+        assertEquals("3 days ago", whenText(now - 3 * 86_400_000L, now))
+        assertEquals("10 Dec 2018", whenText(1544472830000L, now))
+    }
 }
