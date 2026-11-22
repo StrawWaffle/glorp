@@ -80,6 +80,19 @@ with memory and battery throughout.
    rewindable live streams get a timeline. Next: Grayjay's plugin engine for
    YouTube, Rumble and the rest; Twitch clips; background audio with the
    screen off.
+   **AngelThump (later).** The community userscript "AngelThump Edge
+   Picker" (greasyfork.org/en/scripts/597526, MIT) shows how to play it well:
+   the same `/hls/...` stream is served by five edge servers
+   (`nyc1`, `sfo1`, `ams1`, `fra1`, `sgp1` `.angelthump.com`), so any request
+   can be rewritten to another edge. It times each edge's media playlist to
+   pick one automatically (with a manual override), retries a stalled
+   segment on the nearest other edges (up to two backups, nearest first:
+   nyc1 -> sfo1, ams1...; ams1 -> fra1, nyc1...), switches edge after three
+   rebuffers in a minute, and jumps back to live past 15 s of delay. Natively
+   that is an ExoPlayer DataSource that swaps the host, plus a load error
+   policy that retries on a neighbour; the stream address still has to come
+   from AngelThump's own lookup (not in the script). Patreon viewers use a
+   separate path the script leaves alone.
    **Catch-up (wanted, not built yet).** Behind live, play faster until
    caught up, then return to normal speed without a stall. YouTube's version
    shows the trap: it speeds up until it reaches the newest segment with an
