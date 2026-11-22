@@ -52,6 +52,7 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
     suspend fun resolve(embed: Embed): Resolution = try {
         when (embed.platform) {
             "kick" -> kick(embed.id)
+            "kick-vod" -> kickVod(embed.id.substringAfter('/'), embed.startSeconds)
             "twitch" -> twitch(embed.id, vod = false)
             "twitch-vod" -> twitch(embed.id, vod = true, startSeconds = embed.startSeconds)
             "twitch-clip" -> twitchClip(embed.id)
@@ -112,6 +113,28 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
         if (!Regex("[A-Za-z0-9_-]{11}").matches(id)) return Resolution.Web
         val hls = plugin.liveHls(id) ?: return Resolution.Web
         return Resolution.Native(Playable(hls, null, live = true))
+    }
+
+    @Serializable
+    private data class KickVideo(val source: String? = null, val livestream: KickVideoStream? = null)
+
+    @Serializable
+    private data class KickVideoStream(val session_title: String? = null)
+
+    /**
+     * A Kick VOD (`channel/uuid` in the site's embed), from kick.com's own
+     * video lookup, whose `source` is the recording's HLS playlist.
+     */
+    private suspend fun kickVod(uuid: String, startSeconds: Int?): Resolution {
+        if (!Regex("[0-9a-fA-F-]{36}").matches(uuid)) return Resolution.Web
+        val response = client.get("https://kick.com/api/v1/video/$uuid") {
+            header(HttpHeaders.UserAgent, BROWSER_USER_AGENT)
+            header(HttpHeaders.Accept, "application/json")
+        }
+        if (!response.status.isSuccess()) return Resolution.Web
+        val video = chatJson.decodeFromString<KickVideo>(response.bodyAsText())
+        val url = video.source?.takeIf { it.startsWith("https://") } ?: return Resolution.Web
+        return Resolution.Native(Playable(url, video.livestream?.session_title, live = false, startSeconds = startSeconds))
     }
 
     @Serializable
