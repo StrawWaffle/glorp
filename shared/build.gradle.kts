@@ -56,3 +56,9 @@ kotlin {
         }
     }
 }
+
+// The real-stylesheet check runs only when given a saved copy:
+// ./gradlew :shared:testAndroidHostTest -Pglorp.emotes=<dir with emotes.css and emotes.json>
+tasks.withType<Test>().configureEach {
+    (findProperty("glorp.emotes") as String?)?.let { systemProperty("glorp.emotes", it) }
+}

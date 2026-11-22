@@ -110,7 +110,8 @@ data class Motion(
 
     private fun sample(p: Float, base: Pose): Pose {
         var pose = base
-        interpolate(p, { it.transform }, Pose.Rest) { a, b, f ->
+        // Where a keyframe leaves the transform out, the emote's still one stands in.
+        interpolate(p, { it.transform }, base.copy(opacity = 1f, brightness = 1f)) { a, b, f ->
             Pose(lerp(a.tx, b.tx, f), lerp(a.ty, b.ty, f), lerp(a.rotate, b.rotate, f), lerp(a.sx, b.sx, f), lerp(a.sy, b.sy, f))
         }?.let { pose = pose.copy(tx = it.tx, ty = it.ty, rotate = it.rotate, sx = it.sx, sy = it.sy) }
         interpolate(p, { it.opacity }, 1f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(opacity = it) }
@@ -292,7 +293,8 @@ internal fun motionsOf(parts: List<String>, keyframes: Map<String, List<KeyFrame
     }
     val frames = name?.let(keyframes::get) ?: return@mapNotNull null
     val duration = times.getOrNull(0)?.takeIf { it > 0 } ?: return@mapNotNull null
-    Motion(frames, duration, times.getOrNull(1)?.coerceAtLeast(0) ?: 0, iterations.coerceAtLeast(1), easing, alternate, reverse, hold)
+    // A negative delay starts partway through, as in CSS.
+    Motion(frames, duration, times.getOrNull(1) ?: 0, iterations.coerceAtLeast(1), easing, alternate, reverse, hold)
 }
 
 /** `transform-origin` as fractions of the emote's width and height; the centre by default. */

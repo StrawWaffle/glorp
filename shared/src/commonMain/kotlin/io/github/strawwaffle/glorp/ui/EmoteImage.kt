@@ -82,7 +82,7 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
         }
     }
 
-    val moving = emote.motions.isNotEmpty()
+    val moving = emote.motions.isNotEmpty() || emote.rest != Pose.Rest
     val layer = if (!moving) Modifier else Modifier.graphicsLayer {
         val pose = pose(emote, elapsed.longValue)
         translationX = pose.tx.dp.toPx()
@@ -115,4 +115,4 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
 }
 
 private fun pose(emote: Emote, elapsedMs: Long): Pose =
-    emote.motions.fold(Pose.Rest) { pose, motion -> motion.apply(elapsedMs, pose) }
+    emote.motions.fold(emote.rest) { pose, motion -> motion.apply(elapsedMs, pose) }

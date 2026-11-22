@@ -26,6 +26,9 @@ class Flairs private constructor(
 ) {
 
     /** The name colour as 0xAARRGGBB, or null for the default colour. */
+    /** The flair whose colour the name takes, as chat-gui puts it on the name. */
+    fun nameFlair(features: List<String>): String? = colored.firstOrNull { it.first in features }?.first
+
     fun nameColor(features: List<String>): Long? {
         if (features.isEmpty()) return null
         return colored.firstOrNull { it.first in features }?.second

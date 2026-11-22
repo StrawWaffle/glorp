@@ -41,9 +41,17 @@ with memory and battery throughout.
    movements are read generically from each emote's own rule and keyframes
    (transform, opacity, brightness; timing, delays, repeats, easing,
    `steps()`, `transform-origin`) and drawn in a graphics layer, so they
-   don't re-lay out the line. Still to do: the effects that depend on a
-   neighbouring emote (`:has()`, `+`), on a combo's size, or on pseudo-
-   elements, filters other than brightness, timestamps, emotes
+   don't re-lay out the line. Effects that depend on where an emote is
+   (a neighbour, what else the line holds, first or last of its kind, the
+   sender's name flair, a combo's size) come from `site/EmoteContext.kt`: a
+   small selector matcher (`+`, `~`, `>`, descendant, `:not`, `:is`, `:has`,
+   `:nth-*`, `:*-of-type`, attribute tests) run against a model of the line
+   chat-gui would build, cascading by specificity over the emote's own
+   rules; still transforms (mirrored pairs), the animation longhands and a
+   combo's own picture are drawn. `RealStylesheetTest` checks it against a
+   saved copy of the site's stylesheet (`-Pglorp.emotes=<dir>`). Still to
+   do: hover and pseudo-element effects, filters other than brightness,
+   keyframes that use variables, timestamps, emotes
    overlapping lines the way the site draws them rather than making lines
    taller.
 3. **Logged in** (started): a login key made on the site's developer page in

@@ -35,9 +35,11 @@ data class Emote(
     /** `transform-origin`, as fractions of the emote's size. */
     val originX: Float = 0.5f,
     val originY: Float = 0.5f,
+    /** Its still `transform` (a mirrored emote facing its neighbour), under any movement. */
+    val rest: Pose = Pose.Rest,
 ) {
     /** Whether the picture is drawn whole, scaled to the emote's size, and still. */
-    val isWholePicture: Boolean get() = sprite == null && motions.isEmpty() && offsetX == 0 && sheetWidth == width && sheetHeight == height
+    val isWholePicture: Boolean get() = sprite == null && motions.isEmpty() && rest == Pose.Rest && offsetX == 0 && sheetWidth == width && sheetHeight == height
 
     /** When the last finite movement or sprite run ends, after the message; [Long.MAX_VALUE] if one never does. */
     val settlesAfterMs: Long
@@ -59,8 +61,56 @@ data class Sprite(
 }
 
 /** The emote list, keyed by the word that draws each one. */
-class Emotes private constructor(private val byPrefix: Map<String, Emote>) {
+class Emotes private constructor(
+    private val byPrefix: Map<String, Emote>,
+    private val builder: Builder? = null,
+) {
     operator fun get(word: String): Emote? = byPrefix[word]
+
+    /**
+     * The emotes of one line as they look there: the stylesheet changes some
+     * by what's next to them, what else the line holds, or a combo's size.
+     * [parts] are the line's emotes and links in order (null for a link);
+     * the result has the emote to draw for each emote part, in order.
+     */
+    internal fun inLine(line: LineModel): List<Emote?> {
+        val b = builder ?: return line.emotes.map { it.emoteName?.let(byPrefix::get) }
+        val extra = b.context.declarations(line)
+        return line.emotes.mapIndexed { i, el ->
+            val base = el.emoteName?.let(byPrefix::get) ?: return@mapIndexed null
+            val added = extra[i]
+            if (added.isEmpty()) base
+            else b.variants.getOrPut(base.prefix + "\u0000" + added.joinToString(";")) { b.variant(base, added) }
+        }
+    }
+
+    /** What building variants needs: each emote's own rules and image, the keyframes and the context rules. */
+    private class Builder(
+        val own: Map<String, Map<String, List<String>>>,
+        val images: Map<String, Pair<Int, Int>>,
+        val keyframes: Map<String, Int>,
+        val moving: Map<String, List<KeyFrame>>,
+        val context: EmoteContext,
+    ) {
+        val variants = HashMap<String, Emote>()
+
+        fun variant(base: Emote, added: List<Pair<String, String>>): Emote {
+            val decls = HashMap<String, MutableList<String>>()
+            own[base.prefix]?.forEach { (k, v) -> decls[k] = v.toMutableList() }
+            for ((name, value) in added) decls.getOrPut(name) { ArrayList() } += value
+            val (w, h) = images[base.prefix] ?: (base.width to base.height)
+            // A rule can swap the picture (a combo's own GIF): relative to the emote's own.
+            // Only when the line's rules set one; the emote's own is the list's picture.
+            val image = (if (added.none { it.first == "background-image" }) null else decls.value("background-image"))?.let { Regex("""url\(\s*["']?([^"')]+)["']?\s*\)""").find(it)?.groupValues?.get(1) }
+            val url = when {
+                image == null -> base.url
+                image.startsWith("http") -> image
+                image.startsWith("data:") -> base.url
+                else -> base.url.substringBeforeLast('/') + "/" + image
+            }
+            return build(base.prefix, url, w, h, base.minimumSubTier, decls, keyframes, moving)
+        }
+    }
     val size: Int get() = byPrefix.size
 
     /** Every emote, in the order the site lists them. */
@@ -90,34 +140,21 @@ class Emotes private constructor(private val byPrefix: Map<String, Emote>) {
         fun parse(json: String, css: String): Emotes {
             val rules = baseRules(css)
             val keyframes = keyframeOffsets(css)
-            val moving = motionKeyframes(css.replace(Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL), ""))
+            val clean = css.replace(Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL), "")
+            val moving = motionKeyframes(clean)
             val map = LinkedHashMap<String, Emote>()
+            val images = HashMap<String, Pair<Int, Int>>()
             for (entry in chatJson.decodeFromString<List<Entry>>(json)) {
                 val image = entry.image.firstOrNull() ?: continue
                 val url = image.url ?: continue
                 // Twitch-only emotes are never drawn in destiny.gg chat.
                 if (entry.prefix.isEmpty() || entry.twitch) continue
                 val decls = rules[entry.prefix].orEmpty()
-                var width = decls.px("width") ?: image.width.toDouble()
-                var height = decls.px("height") ?: image.height.toDouble()
-                val size = decls.backgroundSize()
-                var sheetWidth = size?.first ?: image.width.toDouble()
-                var sheetHeight = size?.second ?: if (size != null && image.width > 0) size.first * image.height / image.width else image.height.toDouble()
-                var offset = decls.backgroundX()
-                // No emote may be bigger than a line can take: a stylesheet
-                // this parser misreads must not draw a picture over chat.
-                val shrink = minOf(1.0, MAX_HEIGHT / height, MAX_WIDTH / width)
-                width *= shrink; height *= shrink; sheetWidth *= shrink; sheetHeight *= shrink; offset *= shrink
-                val sprite = decls["animation"]?.let { spriteOf(it, sheetWidth.toInt(), width.toInt(), keyframes) }
-                val motions = decls["animation"]?.let { motionsOf(topLevelParts(it.last()), moving) }.orEmpty()
-                val (originX, originY) = readOrigin(decls["transform-origin"]?.last())
-                map[entry.prefix] = Emote(
-                    entry.prefix, url, width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1), entry.minimumSubTier, sprite,
-                    sheetWidth = sheetWidth.toInt().coerceAtLeast(1), sheetHeight = sheetHeight.toInt().coerceAtLeast(1), offsetX = offset.toInt(),
-                    motions = motions, originX = originX, originY = originY,
-                )
+                images[entry.prefix] = image.width to image.height
+                map[entry.prefix] = build(entry.prefix, url, image.width, image.height, entry.minimumSubTier, decls, keyframes, moving)
             }
-            return Emotes(map)
+            val context = runCatching { EmoteContext.parse(clean) }.getOrDefault(EmoteContext.None)
+            return Emotes(map, Builder(rules, images, keyframes, moving, context))
         }
 
         suspend fun fetch(client: HttpClient, site: Site): Emotes = try {
@@ -142,6 +179,61 @@ class Emotes private constructor(private val byPrefix: Map<String, Emote>) {
 }
 
 // --- The little CSS this needs ----------------------------------------------
+
+/** One emote from its rules' declarations and its picture's own size. */
+private fun build(
+    prefix: String,
+    url: String,
+    imageWidth: Int,
+    imageHeight: Int,
+    minimumSubTier: Int,
+    decls: Decls,
+    keyframes: Map<String, Int>,
+    moving: Map<String, List<KeyFrame>>,
+): Emote {
+    var width = decls.px("width") ?: imageWidth.toDouble()
+    var height = decls.px("height") ?: imageHeight.toDouble()
+    val size = decls.backgroundSize()
+    var sheetWidth = size?.first ?: imageWidth.toDouble()
+    var sheetHeight = size?.second ?: if (size != null && imageWidth > 0) size.first * imageHeight / imageWidth else imageHeight.toDouble()
+    var offset = decls.backgroundX()
+    // No emote may be bigger than a line can take: a stylesheet this parser
+    // misreads must not draw a picture over chat.
+    val shrink = minOf(1.0, MAX_HEIGHT / height, MAX_WIDTH / width)
+    width *= shrink; height *= shrink; sheetWidth *= shrink; sheetHeight *= shrink; offset *= shrink
+    val animation = decls.value("animation")?.let { listOf(it) }
+    var sprite = animation?.let { spriteOf(it, sheetWidth.toInt(), width.toInt(), keyframes) }
+    var motions = animation?.let { motionsOf(topLevelParts(it.last()), moving) }.orEmpty()
+    // Longhands after the shorthand change every animation in it (`.emote.SOY + .emote.Clap`).
+    decls.value("animation-duration")?.let(::cssMillis)?.takeIf { it > 0 }?.let { ms ->
+        sprite = sprite?.copy(durationMs = ms); motions = motions.map { it.copy(durationMs = ms) }
+    }
+    decls.value("animation-delay")?.let(::cssMillis)?.let { ms -> motions = motions.map { it.copy(delayMs = ms) } }
+    decls.value("animation-iteration-count")?.trim()?.let { v ->
+        val n = if (v == "infinite") Int.MAX_VALUE else v.toDoubleOrNull()?.toInt()?.coerceAtLeast(1)
+        if (n != null) { sprite = sprite?.copy(iterations = n); motions = motions.map { it.copy(iterations = n) } }
+    }
+    val (originX, originY) = readOrigin(decls.value("transform-origin"))
+    // The still transform, and the separate `translate`, `rotate` and `scale` properties.
+    var rest = decls.value("transform")?.let(::readTransform) ?: Pose.Rest
+    decls.value("translate")?.let { readTransform("translate(${it.trim().replace(Regex("""\s+"""), ",")})") }?.let { rest = rest.copy(tx = rest.tx + it.tx, ty = rest.ty + it.ty) }
+    decls.value("rotate")?.let { readTransform("rotate(${it.trim()})") }?.let { rest = rest.copy(rotate = rest.rotate + it.rotate) }
+    decls.value("scale")?.let { readTransform("scale(${it.trim().replace(Regex("""\s+"""), ",")})") }?.let { rest = rest.copy(sx = rest.sx * it.sx, sy = rest.sy * it.sy) }
+    return Emote(
+        prefix, url, width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1), minimumSubTier, sprite,
+        sheetWidth = sheetWidth.toInt().coerceAtLeast(1), sheetHeight = sheetHeight.toInt().coerceAtLeast(1), offsetX = offset.toInt(),
+        motions = motions, originX = originX, originY = originY, rest = rest,
+    )
+}
+
+private fun cssMillis(text: String): Long? {
+    val v = text.trim().substringBefore(',').trim()
+    return when {
+        v.endsWith("ms") -> v.removeSuffix("ms").toDoubleOrNull()?.toLong()
+        v.endsWith("s") -> v.removeSuffix("s").toDoubleOrNull()?.times(1000)?.toLong()
+        else -> null
+    }
+}
 
 private typealias Decls = Map<String, List<String>>
 

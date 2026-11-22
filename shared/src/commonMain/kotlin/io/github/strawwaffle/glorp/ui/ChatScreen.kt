@@ -72,6 +72,7 @@ import io.github.strawwaffle.glorp.site.Account
 import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.site.Emotes
 import io.github.strawwaffle.glorp.site.Flairs
+import io.github.strawwaffle.glorp.site.LineModel
 
 @Composable
 fun ChatScreen(
@@ -246,6 +247,15 @@ private fun ConnectionNotice(state: SocketState) {
     )
 }
 
+/** The line's elements in chat-gui's markup, in order: an emote's name, or null for a link. Text isn't an element. */
+private fun elementsOf(parts: List<Segment>): List<String?> = buildList {
+    for (part in parts) when (part) {
+        is Segment.EmoteRef -> add(part.emote.prefix)
+        is Segment.Link, is Segment.EmbedLink -> add(null)
+        is Segment.Text -> Unit
+    }
+}
+
 private class Shown(val line: ChatLine, val continued: Boolean)
 
 /** Whether [line] carries on a run started by [previous]: two chat messages from the same person. */
@@ -328,9 +338,10 @@ private fun render(
             ChatLine.Kind.Combo -> {
                 // As chat-gui writes it: the emote, then "N X Hits C-C-C-COMBO",
                 // the count growing with the combo (its x5/x10/x20/x30/x50 steps).
-                val emote = emotes[line.text]
+                // A combo's size can change how its emote looks (data-combo-group).
+                val emote = emotes[line.text]?.let { emotes.inLine(LineModel.combo(it.prefix, line.comboCount)).firstOrNull() ?: it }
                 if (emote != null) {
-                    val id = "emote:${emote.prefix}"
+                    val id = "emote:${emote.prefix}:${emote.hashCode()}"
                     inline.getOrPut(id) {
                         InlineTextContent(placeholder(emote.width, emote.height)) { EmoteImage(emote, sentAt = line.at) }
                     }
@@ -393,16 +404,25 @@ private fun render(
             line.green -> SpanStyle(color = Palette.Greentext)
             else -> SpanStyle()
         }
+        val parts = segments(line, emotes)
+        // How each emote looks beside the others (BLADE next to BLADE…).
+        val placed = emotes.inLine(
+            LineModel.message(
+                line.features, flairs.nameFlair(line.features), continued, line.green && !line.action,
+                elementsOf(parts),
+            ),
+        )
+        var emoteIndex = 0
         withStyle(style) {
-            for (segment in segments(line, emotes)) when (segment) {
+            for (segment in parts) when (segment) {
                 is Segment.Text -> append(segment.text)
                 is Segment.Link -> withLink(LinkAnnotation.Url(segment.url, linkStyle)) { append(segment.text) }
                 is Segment.EmbedLink -> withLink(
                     LinkAnnotation.Clickable(segment.embed.key, linkStyle) { onEmbed(segment.embed) },
                 ) { append(segment.text) }
                 is Segment.EmoteRef -> {
-                    val emote = segment.emote
-                    val id = "emote:${emote.prefix}"
+                    val emote = placed.getOrNull(emoteIndex++) ?: segment.emote
+                    val id = "emote:${emote.prefix}:${emote.hashCode()}"
                     inline.getOrPut(id) {
                         InlineTextContent(placeholder(emote.width, emote.height)) {
                             EmoteImage(emote, sentAt = line.at)
