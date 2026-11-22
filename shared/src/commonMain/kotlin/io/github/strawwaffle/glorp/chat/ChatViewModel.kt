@@ -44,6 +44,9 @@ class ChatViewModel(
     prefs: ChatPrefs = MemoryChatPrefs(),
 ) : ViewModel() {
     private val client = createHttpClient()
+
+    /** The shared client, for screens that fetch from other sites. */
+    val http: io.ktor.client.HttpClient get() = client
     private var site = Site.guess(origin)
     private val log = ChatLog()
     private var session: Session? = store.load()

@@ -41,6 +41,8 @@ fun MainMenu(
     onSignOut: () -> Unit,
     onWatch: (Embed?) -> Unit,
     onTogglePlayer: () -> Unit,
+    /** Opens a community screen: "rustle", "polls" or "dinkdonk". */
+    onCommunity: (String) -> Unit = {},
 ) {
     val streams = live.liveStreams
     val embeds = live.embeds.filter { !live.isBanned(it.embed) }
@@ -81,12 +83,18 @@ fun MainMenu(
             item { Text("Nothing live right now.", color = Palette.TextDim, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) }
         }
 
+        item { Heading("Community") }
+        item { Item("Chat log search", "rustlesearch.dev", { onCommunity("rustle") }) }
+        item { Item("Poll archive", "mitchdev.net", { onCommunity("polls") }) }
+        item { Item("Movie nights", "dinkdonk.mov", { onCommunity("dinkdonk") }) }
+
         item { Heading("About") }
         item {
             Text(
                 "Glorp is an unofficial community app. It is not made by or affiliated with destiny.gg or Destiny. " +
                     "Free for non-commercial use (PolyForm Noncommercial 1.0.0). YouTube playback uses FUTO's Grayjay plugin, " +
-                    "run by code adapted from Grayjay under FUTO's Source First License 1.1.",
+                    "run by code adapted from Grayjay under FUTO's Source First License 1.1. " +
+                    "Community screens use rustlesearch.dev, mitchdev.net (by Mitchdev) and dinkdonk.mov (by Mitch), with thanks.",
                 color = Palette.TextDim,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),

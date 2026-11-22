@@ -19,6 +19,10 @@ import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.ui.Bigscreen
 import io.github.strawwaffle.glorp.ui.ChatScreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
+import io.github.strawwaffle.glorp.community.CommunityEnv
+import io.github.strawwaffle.glorp.community.DinkDonkScreen
+import io.github.strawwaffle.glorp.community.PollArchiveScreen
+import io.github.strawwaffle.glorp.community.RustleSearchScreen
 import io.github.strawwaffle.glorp.ui.MainMenu
 import io.github.strawwaffle.glorp.ui.OnBack
 import io.github.strawwaffle.glorp.ui.LocalPictureInPicture
@@ -57,6 +61,7 @@ fun GlorpApp(
         // Chat, the menu, or signing in. Back goes chat -> menu -> out of the
         // app; signing in goes back to the menu.
         var screen by rememberSaveable { mutableStateOf("chat") }
+        var communityArg by rememberSaveable { mutableStateOf<String?>(null) }
         val live by chat.live.collectAsStateWithLifecycle()
         val picked by chat.picked.collectAsStateWithLifecycle()
         var playerShown by rememberSaveable { mutableStateOf(true) }
@@ -103,6 +108,7 @@ fun GlorpApp(
                             onSignOut = chat::signOut,
                             onWatch = { chat.watch(it); playerShown = true; screen = "chat" },
                             onTogglePlayer = { playerShown = !playerShown },
+                            onCommunity = { communityArg = null; screen = it },
                         )
                     }
                 }
@@ -120,6 +126,25 @@ fun GlorpApp(
                             },
                             onClose = { screen = "menu" },
                         )
+                    }
+                }
+                "rustle", "polls", "dinkdonk" -> {
+                    {
+                        val env = CommunityEnv(
+                            http = chat.http,
+                            emotes = emotes,
+                            flairs = flairs,
+                            account = account,
+                            onClose = { screen = "menu" },
+                            onWatch = { chat.watch(it); playerShown = true; screen = "chat" },
+                            onOpen = { target, arg -> communityArg = arg; screen = target },
+                            argument = communityArg,
+                        )
+                        when (screen) {
+                            "rustle" -> RustleSearchScreen(env)
+                            "polls" -> PollArchiveScreen(env)
+                            else -> DinkDonkScreen(env)
+                        }
                     }
                 }
                 else -> null
