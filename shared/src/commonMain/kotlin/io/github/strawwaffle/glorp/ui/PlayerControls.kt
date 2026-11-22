@@ -120,7 +120,7 @@ fun PlayerControls(controller: VideoController, modifier: Modifier = Modifier) {
                     )
                 }
                 // Catching up: how much faster than normal it's playing.
-                if (state.catchingUp && !atEdge) {
+                if (state.catchingUp) {
                     Text("Catching up", color = Palette.Glorp, fontSize = 12.sp)
                 }
             }

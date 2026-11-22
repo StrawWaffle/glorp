@@ -136,8 +136,9 @@ with memory and battery throughout.
    from AngelThump's own lookup (not in the script). Patreon viewers use a
    separate path the script leaves alone.
    **Catch-up (done, 0.1.2).** Media3's `DefaultLivePlaybackSpeedControl`,
-   tuned in `Playback.catchUpControl()`: up to 1.5x, proportional (0.05 per
-   second behind), normal speed within 1.5 s, +2 s on the target after a
+   tuned in `Playback.catchUpControl()`: up to 1.5x, proportional (0.1 per
+   second behind; 0.05 was too gentle to notice on a phone, 7 s took 33 s.
+   Now 9.7 s behind is back in about 22 s), normal speed within 1.5 s, +2 s on the target after a
    stall. It already keeps the target above the smallest offset the buffer
    safely allows, which is what avoids YouTube's loop. Measured on the
    emulator (Twitch, `GlorpLive` log in dev builds): 46.8 s behind after a

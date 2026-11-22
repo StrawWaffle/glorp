@@ -146,7 +146,8 @@ object Playback {
     /**
      * Catching up with a live stream that's fallen behind (after a pause or a
      * stall): Media3's own control, tuned. Speed follows how far behind the
-     * target it is (1.5x at 10 s, 1.2x at 4 s), so it eases off as the gap
+     * target it is (1.5x from 5 s, 1.2x at 2 s; gentler than that went
+     * unnoticed on a phone: 7 s took over half a minute), so it eases off as the gap
      * closes instead of hitting the edge at full speed. Within 1.5 s it plays
      * at normal speed, so small wobbles don't switch it on and off. The
      * target never comes closer to live than what's buffered safely allows,
@@ -157,7 +158,7 @@ object Playback {
      */
     private fun catchUpControl() = DefaultLivePlaybackSpeedControl.Builder()
         .setFallbackMaxPlaybackSpeed(MAX_CATCH_UP_SPEED)
-        .setProportionalControlFactor(0.05f)
+        .setProportionalControlFactor(0.1f)
         .setMaxLiveOffsetErrorMsForUnitSpeed(1_500)
         .setTargetLiveOffsetIncrementOnRebufferMs(2_000)
         .build()
