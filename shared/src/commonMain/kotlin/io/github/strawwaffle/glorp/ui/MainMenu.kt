@@ -41,6 +41,8 @@ fun MainMenu(
     onSignOut: () -> Unit,
     onWatch: (Embed?) -> Unit,
     onTogglePlayer: () -> Unit,
+    backgroundAudio: Boolean = false,
+    onToggleBackgroundAudio: () -> Unit = {},
     /** Opens a community screen: "rustle", "polls" or "dinkdonk". */
     onCommunity: (String) -> Unit = {},
 ) {
@@ -69,6 +71,13 @@ fun MainMenu(
 
         item { Heading("Watch") }
         item { Item(if (playerShown) "Hide the player" else "Show the player", null, onTogglePlayer) }
+        item {
+            Item(
+                if (backgroundAudio) "Sound with the screen off: on" else "Sound with the screen off: off",
+                "Kick, Twitch and YouTube live keep playing their sound when you lock the phone",
+                onToggleBackgroundAudio,
+            )
+        }
         if (picked != null) item { Item("Back to Destiny", "Follow what bigscreen shows", { onWatch(null) }) }
         items(streams, key = { "d:" + it.embed.key }) { stream ->
             Entry("Destiny on ${stream.embed.platform}", stream.title, null) { onWatch(stream.embed) }

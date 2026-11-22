@@ -19,6 +19,8 @@ import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.ui.Bigscreen
 import io.github.strawwaffle.glorp.ui.ChatScreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
+import io.github.strawwaffle.glorp.ui.LocalBackgroundAudio
+import androidx.compose.runtime.remember
 import io.github.strawwaffle.glorp.community.CommunityEnv
 import io.github.strawwaffle.glorp.community.DinkDonkScreen
 import io.github.strawwaffle.glorp.community.PollArchiveScreen
@@ -43,7 +45,12 @@ fun GlorpApp(
     pictureInPicture: PictureInPicture = PictureInPicture(),
 ) {
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
-    CompositionLocalProvider(LocalPictureInPicture provides pictureInPicture) { GlorpTheme {
+    // Keep a stream's sound going with the screen off: on unless turned off in the menu.
+    var backgroundAudio by remember { mutableStateOf(prefs.get(BACKGROUND_AUDIO) != "false") }
+    CompositionLocalProvider(
+        LocalPictureInPicture provides pictureInPicture,
+        LocalBackgroundAudio provides backgroundAudio,
+    ) { GlorpTheme {
         val chat = viewModel { ChatViewModel(origin, sessions, prefs).also { vm -> initialEmbed?.let(Embed::parse)?.let(vm::watch) } }
         // The socket is held only while the app is on screen. Leaving the app
         // closes it; coming back reconnects, and the backlog chat sends on
@@ -109,6 +116,11 @@ fun GlorpApp(
                             onSignOut = chat::signOut,
                             onWatch = { chat.watch(it); playerShown = true; screen = "chat" },
                             onTogglePlayer = { playerShown = !playerShown },
+                            backgroundAudio = backgroundAudio,
+                            onToggleBackgroundAudio = {
+                                backgroundAudio = !backgroundAudio
+                                prefs.put(BACKGROUND_AUDIO, backgroundAudio.toString())
+                            },
                             onCommunity = { communityArg = null; screen = it },
                         )
                     }
@@ -153,3 +165,5 @@ fun GlorpApp(
         )
     } }
 }
+
+private const val BACKGROUND_AUDIO = "background-audio"

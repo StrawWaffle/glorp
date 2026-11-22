@@ -17,3 +17,6 @@ class PictureInPicture(
 )
 
 val LocalPictureInPicture = compositionLocalOf { PictureInPicture() }
+
+/** Whether the native player keeps its sound going when the app is left or the screen goes off. */
+val LocalBackgroundAudio = compositionLocalOf { false }
