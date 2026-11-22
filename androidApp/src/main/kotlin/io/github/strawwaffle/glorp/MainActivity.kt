@@ -12,8 +12,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val sessions = KeystoreSessionStore(applicationContext)
-        if (BuildConfig.DEV_IMPORT) importDevSession(sessions)
-        setContent { GlorpApp(origin = BuildConfig.SITE_ORIGIN, sessions = sessions) }
+        if (BuildConfig.DEV_IMPORT) {
+            importDevSession(sessions)
+            // Lets the player's pages be inspected from desktop Chrome.
+            android.webkit.WebView.setWebContentsDebuggingEnabled(true)
+        }
+        // Dev builds: `am start … --es embed kick/destiny` opens an embed, for
+        // trying players without posting links in chat.
+        val embed = if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("embed") else null
+        setContent { GlorpApp(origin = BuildConfig.SITE_ORIGIN, sessions = sessions, initialEmbed = embed) }
     }
 
     /**

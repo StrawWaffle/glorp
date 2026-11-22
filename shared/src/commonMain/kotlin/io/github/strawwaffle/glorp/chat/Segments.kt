@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.chat
 
+import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.site.Emote
 import io.github.strawwaffle.glorp.site.Emotes
 
@@ -8,6 +9,9 @@ sealed interface Segment {
     data class Text(val text: String) : Segment
     data class EmoteRef(val emote: Emote) : Segment
     data class Link(val text: String, val url: String) : Segment
+
+    /** A bigscreen link or `#platform/id`: opens in the app's player rather than the browser. */
+    data class EmbedLink(val text: String, val embed: Embed) : Segment
 }
 
 // Chat lets these use every emote whatever their subscription.
@@ -38,10 +42,14 @@ fun segments(line: ChatLine, emotes: Emotes): List<Segment> {
         while (end < s.length && !s[end].isWhitespace()) end++
         val word = s.substring(i, end)
         val emote = emotes[word]
-        val link = if (emote == null) linkFor(word) else null
+        val embed = if (emote == null && (word.startsWith('#') || "/bigscreen#" in word)) Embed.parse(word) else null
+        val link = if (emote == null && embed == null) linkFor(word) else null
         when {
             emote != null && (mayUseAll || emote.minimumSubTier <= line.subTier) -> {
                 flush(); out += Segment.EmoteRef(emote)
+            }
+            embed != null -> {
+                flush(); out += Segment.EmbedLink(word, embed)
             }
             link != null -> {
                 flush(); out += Segment.Link(word, link)

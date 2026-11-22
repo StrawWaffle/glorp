@@ -11,6 +11,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.setSingletonImageLoaderFactory
 import io.github.strawwaffle.glorp.auth.SessionStore
 import io.github.strawwaffle.glorp.chat.ChatViewModel
+import io.github.strawwaffle.glorp.site.Embed
+import io.github.strawwaffle.glorp.ui.Bigscreen
 import io.github.strawwaffle.glorp.ui.ChatScreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
 import io.github.strawwaffle.glorp.ui.SignInScreen
@@ -21,10 +23,10 @@ import io.github.strawwaffle.glorp.ui.glorpImageLoader
  * site in dev builds. [sessions] keeps the login between launches.
  */
 @Composable
-fun GlorpApp(origin: String, sessions: SessionStore) {
+fun GlorpApp(origin: String, sessions: SessionStore, initialEmbed: String? = null) {
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
     GlorpTheme {
-        val chat = viewModel { ChatViewModel(origin, sessions) }
+        val chat = viewModel { ChatViewModel(origin, sessions).also { vm -> initialEmbed?.let(Embed::parse)?.let(vm::watch) } }
         // The socket is held only while the app is on screen. Leaving the app
         // closes it; coming back reconnects, and the backlog chat sends on
         // connect fills the gap.
@@ -39,6 +41,10 @@ fun GlorpApp(origin: String, sessions: SessionStore) {
         val account by chat.account.collectAsStateWithLifecycle()
         val signingIn by chat.signingIn.collectAsStateWithLifecycle()
         var signInOpen by rememberSaveable { mutableStateOf(false) }
+        val live by chat.live.collectAsStateWithLifecycle()
+        val picked by chat.picked.collectAsStateWithLifecycle()
+        var playerShown by rememberSaveable { mutableStateOf(true) }
+        val embed = picked ?: live.defaultEmbed()
 
         if (signInOpen && account == null) {
             SignInScreen(
@@ -59,6 +65,21 @@ fun GlorpApp(origin: String, sessions: SessionStore) {
                 onSignIn = { signInOpen = true },
                 onSignOut = chat::signOut,
                 onSend = chat::send,
+                onEmbed = { chat.watch(it); playerShown = true },
+                player = if (!playerShown) null else {
+                    {
+                        Bigscreen(
+                            embed = embed,
+                            playerUrl = embed?.let(chat::playerUrl),
+                            origin = chat.playerOrigin,
+                            live = live,
+                            picked = picked != null,
+                            onPick = chat::watch,
+                            onHide = { playerShown = false },
+                        )
+                    }
+                },
+                onShowPlayer = if (playerShown) null else { { playerShown = true } },
             )
         }
     }

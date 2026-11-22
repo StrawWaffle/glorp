@@ -6,6 +6,10 @@ import io.github.strawwaffle.glorp.auth.Session
 import io.github.strawwaffle.glorp.auth.SessionStore
 import io.github.strawwaffle.glorp.net.createHttpClient
 import io.github.strawwaffle.glorp.site.Account
+import io.github.strawwaffle.glorp.site.Embed
+import io.github.strawwaffle.glorp.site.LiveSocket
+import io.github.strawwaffle.glorp.site.LiveState
+import io.github.strawwaffle.glorp.site.with
 import io.github.strawwaffle.glorp.site.Emotes
 import io.github.strawwaffle.glorp.site.Flairs
 import io.github.strawwaffle.glorp.site.SessionCheck
@@ -56,6 +60,24 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
 
     val host: String get() = site.origin.substringAfter("://").removePrefix("www.")
 
+    private val _live = MutableStateFlow(LiveState())
+    /** What's live, hosted and watched, pushed by the site's live socket. */
+    val live: StateFlow<LiveState> = _live.asStateFlow()
+
+    private val _picked = MutableStateFlow<Embed?>(null)
+    /** An embed picked by hand; null follows what bigscreen would show. */
+    val picked: StateFlow<Embed?> = _picked.asStateFlow()
+
+    fun watch(embed: Embed?) {
+        _picked.value = embed
+    }
+
+    /** The platform player's address for [embed], or null for a platform the site doesn't embed. */
+    fun playerUrl(embed: Embed): String? = embed.playerUrl(site)
+
+    /** The page the player is embedded in, as far as the platforms can tell: the site itself. */
+    val playerOrigin: String get() = site.origin
+
     // A busy chat sends several frames a second. They queue here and are
     // applied in batches, so the list is redrawn a few times a second at most
     // instead of once per message. Notices from the app go the same way, so
@@ -87,6 +109,7 @@ class ChatViewModel(origin: String, private val store: SessionStore) : ViewModel
             val chat = ChatSocket(client, site.chatSocketUrl, session?.cookieHeader)
             socket = chat
             launch { chat.state.collect { _socketState.value = it } }
+            launch { LiveSocket(client, site).run { update -> _live.value = _live.value.with(update) } }
             chat.run { events.send(it) }
         }
     }

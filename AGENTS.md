@@ -72,7 +72,12 @@ licence; check it before using one.
   `export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr"`.
 - `./gradlew :shared:testAndroidHostTest :androidApp:assembleDebug`
 - Emulators: `Pixel_9a`, `Medium_Phone_API_36.1` (`$LOCALAPPDATA/Android/Sdk/emulator`).
-  Install with `adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk`.
+- adb: use scrcpy's adb (see the folder's AGENTS.md) on its own server port,
+  `ANDROID_ADB_SERVER_PORT=5038`. Another, older adb on this machine keeps
+  restarting the default server and drops connections and port forwards.
+- Players: dev builds take `am start -n io.github.strawwaffle.glorp.dev/io.github.strawwaffle.glorp.MainActivity --es embed kick/destiny`
+  to open an embed, and their web views can be inspected over Chrome's
+  debugging protocol (`adb forward tcp:9333 localabstract:webview_devtools_remote_<pid>`).
 
 ## Layout
 

@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableStateOf
@@ -60,6 +61,7 @@ import io.github.strawwaffle.glorp.chat.Segment
 import io.github.strawwaffle.glorp.chat.SocketState
 import io.github.strawwaffle.glorp.chat.segments
 import io.github.strawwaffle.glorp.site.Account
+import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.site.Emotes
 import io.github.strawwaffle.glorp.site.Flairs
 
@@ -73,14 +75,22 @@ fun ChatScreen(
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
     onSend: (String) -> Boolean,
+    onEmbed: (Embed) -> Unit,
+    /** The player, shown above chat; null when hidden. */
+    player: (@Composable () -> Unit)?,
+    /** Shows the player again; null when there's nothing to show. */
+    onShowPlayer: (() -> Unit)?,
 ) {
     Column(Modifier.fillMaxSize().background(Palette.Black).safeDrawingPadding().imePadding()) {
-        TopBar(state, account, onSignIn, onSignOut)
+        TopBar(state, account, onSignIn, onSignOut, onShowPlayer)
+        player?.invoke()
         // Newest at the bottom, in a reversed list: only the rows on screen are
         // composed, so only their emotes are drawn or animated.
         val reversed = remember(lines) { lines.asReversed() }
         val me = account?.nick
         val mention = remember(me) { me?.let(::mentionPattern) }
+        val embedHandler = rememberUpdatedState(onEmbed)
+        val openEmbed: (Embed) -> Unit = remember { { embedHandler.value(it) } }
         val list = rememberLazyListState()
         // A lazy list keeps the row you're looking at in place when rows are
         // added, which hides new lines below the bottom. So: follow while
@@ -95,7 +105,7 @@ fun ChatScreen(
         Box(Modifier.fillMaxWidth().weight(1f)) {
             LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true) {
                 items(reversed, key = { it.id }, contentType = { it.kind }) { line ->
-                    ChatRow(line, flairs, emotes, me, mention)
+                    ChatRow(line, flairs, emotes, me, mention, openEmbed)
                 }
             }
             if (!following) {
@@ -112,7 +122,13 @@ fun ChatScreen(
 }
 
 @Composable
-private fun TopBar(state: SocketState, account: Account?, onSignIn: () -> Unit, onSignOut: () -> Unit) {
+private fun TopBar(
+    state: SocketState,
+    account: Account?,
+    onSignIn: () -> Unit,
+    onSignOut: () -> Unit,
+    onShowPlayer: (() -> Unit)?,
+) {
     val (text, color) = when (state) {
         SocketState.Connected -> "Receiving transmission" to Palette.Glorp
         SocketState.Connecting -> "Establishing contact…" to Palette.TextDim
@@ -124,6 +140,7 @@ private fun TopBar(state: SocketState, account: Account?, onSignIn: () -> Unit, 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text, color = color, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        onShowPlayer?.let { TextButton(onClick = it) { Text("Stream", color = Palette.Blue, fontSize = 13.sp) } }
         if (account == null) {
             TextButton(onClick = onSignIn) { Text("Sign in", color = Palette.Blue, fontSize = 13.sp) }
         } else {
@@ -174,9 +191,9 @@ private const val MAX_MESSAGE = 512
 private class RenderedLine(val text: AnnotatedString, val inline: Map<String, InlineTextContent>, val mentionsMe: Boolean)
 
 @Composable
-private fun ChatRow(line: ChatLine, flairs: Flairs, emotes: Emotes, me: String?, mention: Regex?) {
+private fun ChatRow(line: ChatLine, flairs: Flairs, emotes: Emotes, me: String?, mention: Regex?, onEmbed: (Embed) -> Unit) {
     val density = LocalDensity.current
-    val rendered = remember(line, flairs, emotes, density, me) { render(line, flairs, emotes, density, me, mention) }
+    val rendered = remember(line, flairs, emotes, density, me) { render(line, flairs, emotes, density, me, mention, onEmbed) }
     val background = when {
         line.kind == ChatLine.Kind.Whisper -> Palette.Blue.copy(alpha = 0.12f)
         rendered.mentionsMe -> Palette.Orange.copy(alpha = 0.14f)
@@ -200,7 +217,15 @@ internal fun mentionPattern(nick: String) =
 
 internal fun mentions(text: String, nick: String): Boolean = mentionPattern(nick).containsMatchIn(text)
 
-private fun render(line: ChatLine, flairs: Flairs, emotes: Emotes, density: Density, me: String?, mention: Regex?): RenderedLine {
+private fun render(
+    line: ChatLine,
+    flairs: Flairs,
+    emotes: Emotes,
+    density: Density,
+    me: String?,
+    mention: Regex?,
+    onEmbed: (Embed) -> Unit,
+): RenderedLine {
     val inline = HashMap<String, InlineTextContent>()
     fun placeholder(widthDp: Int, heightDp: Int) = with(density) {
         Placeholder(widthDp.dp.toSp(), heightDp.dp.toSp(), PlaceholderVerticalAlign.Center)
@@ -250,6 +275,9 @@ private fun render(line: ChatLine, flairs: Flairs, emotes: Emotes, density: Dens
             for (segment in segments(line, emotes)) when (segment) {
                 is Segment.Text -> append(segment.text)
                 is Segment.Link -> withLink(LinkAnnotation.Url(segment.url, linkStyle)) { append(segment.text) }
+                is Segment.EmbedLink -> withLink(
+                    LinkAnnotation.Clickable(segment.embed.key, linkStyle) { onEmbed(segment.embed) },
+                ) { append(segment.text) }
                 is Segment.EmoteRef -> {
                     val emote = segment.emote
                     val id = "emote:${emote.prefix}"

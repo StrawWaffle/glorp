@@ -54,8 +54,17 @@ with memory and battery throughout.
    mentions highlighted, a stop after `banned` or `toomanyconnections`.
    Still to do: a whisper inbox, ignore list, chat settings from the account,
    the rest of chat-gui's commands, cookies for site pages.
-4. **Embeds**: the bigscreen list and what chat is watching. First every embed
-   in a WebView with the platform's own player, so all of them work.
+4. **Embeds** (started): a player above chat. It shows what bigscreen would
+   (Destiny on the preferred platform, else the first live one, else what's
+   hosted), or an embed picked from the list of what chat is watching, or
+   from a `#platform/id` or bigscreen link in chat. The live socket
+   (`wss://live.<host>`) pushes all of that, so nothing is polled. Each
+   platform's own player runs in a web view, in a page whose origin is the
+   site's, as bigscreen embeds it; the page is emptied whenever the app
+   leaves the screen. Tested on the emulator: YouTube plays live; Kick plays
+   after a tap and only at 360p ("Visit KICK for HD"). Still to do: landscape
+   and full screen, remembering the chosen platform, the offline card's
+   preview image.
 5. **Native players**: Grayjay's plugin engine resolves an embed to its HLS or
    DASH stream, ExoPlayer plays it. Kick and Twitch first, then YouTube and
    Rumble. Picture in picture and background audio, with chat kept connected
