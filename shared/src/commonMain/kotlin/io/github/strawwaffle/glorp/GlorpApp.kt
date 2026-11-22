@@ -17,6 +17,8 @@ import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.ui.Bigscreen
 import io.github.strawwaffle.glorp.ui.ChatScreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
+import io.github.strawwaffle.glorp.ui.MainMenu
+import io.github.strawwaffle.glorp.ui.OnBack
 import io.github.strawwaffle.glorp.ui.LocalPictureInPicture
 import io.github.strawwaffle.glorp.ui.PictureInPicture
 import io.github.strawwaffle.glorp.ui.SignInScreen
@@ -49,51 +51,73 @@ fun GlorpApp(
         val state by chat.socketState.collectAsStateWithLifecycle()
         val account by chat.account.collectAsStateWithLifecycle()
         val signingIn by chat.signingIn.collectAsStateWithLifecycle()
-        var signInOpen by rememberSaveable { mutableStateOf(false) }
+        // Chat, the menu, or signing in. Back goes chat -> menu -> out of the
+        // app; signing in goes back to the menu.
+        var screen by rememberSaveable { mutableStateOf("chat") }
         val live by chat.live.collectAsStateWithLifecycle()
         val picked by chat.picked.collectAsStateWithLifecycle()
         var playerShown by rememberSaveable { mutableStateOf(true) }
         val embed = picked ?: live.defaultEmbed()
         // Leaving the app shrinks it to the video only while there is one.
-        val canShrink = playerShown && embed != null && !(signInOpen && account == null)
+        val canShrink = playerShown && embed != null
         LaunchedEffect(canShrink) { pictureInPicture.setAvailable(canShrink) }
+        if (screen == "signin" && account != null) screen = "menu"
+        OnBack(enabled = screen != "menu") { screen = "menu" }
 
-        if (signInOpen && account == null) {
-            SignInScreen(
-                origin = origin,
-                host = chat.host,
-                busy = signingIn,
-                onSession = { session, result ->
-                    chat.signIn(session) { error ->
-                        result(error)
-                        if (error == null) signInOpen = false
-                    }
-                },
-                onClose = { signInOpen = false },
-            )
-        } else {
-            ChatScreen(
-                lines, flairs, emotes, state, account,
-                onSignIn = { signInOpen = true },
-                onSignOut = chat::signOut,
-                onSend = chat::send,
-                onEmbed = { chat.watch(it); playerShown = true },
-                player = if (!playerShown) null else {
+        ChatScreen(
+            lines, flairs, emotes, state, account,
+            onSend = chat::send,
+            onEmbed = { chat.watch(it); playerShown = true },
+            player = if (!playerShown) null else {
+                {
+                    Bigscreen(
+                        embed = embed,
+                        playerUrl = embed?.let(chat::playerUrl),
+                        origin = chat.playerOrigin,
+                        live = live,
+                        picked = picked != null,
+                        onPick = chat::watch,
+                        onHide = { playerShown = false },
+                        resolve = chat::resolve,
+                    )
+                }
+            },
+            instead = when (screen) {
+                "menu" -> {
                     {
-                        Bigscreen(
-                            embed = embed,
-                            playerUrl = embed?.let(chat::playerUrl),
-                            origin = chat.playerOrigin,
+                        MainMenu(
+                            host = chat.host,
+                            state = state,
+                            account = account,
                             live = live,
-                            picked = picked != null,
-                            onPick = chat::watch,
-                            onHide = { playerShown = false },
-                            resolve = chat::resolve,
+                            playerShown = playerShown,
+                            picked = picked,
+                            onChat = { screen = "chat" },
+                            onSignIn = { screen = "signin" },
+                            onSignOut = chat::signOut,
+                            onWatch = { chat.watch(it); playerShown = true; screen = "chat" },
+                            onTogglePlayer = { playerShown = !playerShown },
                         )
                     }
-                },
-                onShowPlayer = if (playerShown) null else { { playerShown = true } },
-            )
-        }
+                }
+                "signin" -> {
+                    {
+                        SignInScreen(
+                            origin = origin,
+                            host = chat.host,
+                            busy = signingIn,
+                            onSession = { session, result ->
+                                chat.signIn(session) { error ->
+                                    result(error)
+                                    if (error == null) screen = "chat"
+                                }
+                            },
+                            onClose = { screen = "menu" },
+                        )
+                    }
+                }
+                else -> null
+            },
+        )
     } }
 }

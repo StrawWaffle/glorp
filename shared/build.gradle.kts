@@ -45,6 +45,7 @@ kotlin {
             implementation(libs.media3.hls)
             implementation(libs.media3.ui)
             implementation(libs.media3.session)
+            implementation(libs.activity.compose)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

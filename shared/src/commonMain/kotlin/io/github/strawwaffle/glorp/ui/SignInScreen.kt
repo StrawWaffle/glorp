@@ -59,7 +59,7 @@ fun SignInScreen(
     var error by remember { mutableStateOf<String?>(null) }
     val submit: (Session) -> Unit = { session -> error = null; onSession(session) { error = it } }
 
-    Column(Modifier.fillMaxSize().background(Palette.Black).safeDrawingPadding()) {
+    Column(Modifier.fillMaxSize().background(Palette.Black)) {
         Row(
             Modifier.fillMaxWidth().background(Palette.Navy).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
