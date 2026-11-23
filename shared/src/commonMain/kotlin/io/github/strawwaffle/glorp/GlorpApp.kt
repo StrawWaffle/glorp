@@ -131,7 +131,7 @@ fun GlorpApp(
             LocalChatLook provides ChatLook(
                 settings.showTime, settings.timestampFormat, settings.hideFlairIcons,
                 settings.highlightSelf, chat.input.tags.colors, settings.taggedVisibility,
-                chat.input.options.hiddenFlairs,
+                chat.input.options.hiddenFlairs, settings.censorRemoved,
             ),
         ) {
         ChatScreen(

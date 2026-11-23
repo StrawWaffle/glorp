@@ -302,6 +302,8 @@ data class ChatLook(
     val taggedVisibility: Boolean = false,
     /** Flair names whose icons aren't drawn. */
     val hiddenFlairs: Set<String> = emptySet(),
+    /** Whether a muted or banned user's messages hide behind `<censored>`. */
+    val censorRemoved: Boolean = true,
 )
 
 /** chat-gui's tag colours. */
@@ -350,9 +352,13 @@ internal fun ChatRow(
     // A press held long enough to open the sheet isn't also a tap on the
     // name or link under it, which would fire when the finger lifts.
     val gate = remember { HoldGate() }
-    val rendered = remember(line, continued, flairs, emotes, density, me, look) {
+    // A muted or banned user's message hides behind <censored> until tapped, as on the site.
+    var revealed by remember(line.id) { mutableStateOf(false) }
+    val censored = line.moderated && look.censorRemoved && !revealed
+    val rendered = remember(line, continued, flairs, emotes, density, me, look, censored) {
         render(
-            line, continued, flairs, emotes, density, me, mention, look,
+            line, continued, flairs, emotes, density, me, mention, look, censored,
+            onReveal = { revealed = true },
             onEmbed = { if (gate.open) onEmbed(it) },
             onNick = { if (gate.open) onNick(it) },
             onUrl = { if (gate.open) runCatching { uri.openUri(it) } },
@@ -408,6 +414,8 @@ private fun render(
     me: String?,
     mention: Regex?,
     look: ChatLook,
+    censored: Boolean,
+    onReveal: () -> Unit,
     onEmbed: (Embed) -> Unit,
     onNick: (String) -> Unit,
     onUrl: (String) -> Unit,
@@ -495,6 +503,12 @@ private fun render(
                 withStyle(SpanStyle(color = nameColor, fontWeight = FontWeight.Bold)) { append(line.nick) }
             }
             append(if (line.action) " " else ": ")
+        }
+        if (censored) {
+            withLink(LinkAnnotation.Clickable("censored", TextLinkStyles(SpanStyle(color = Palette.Blue))) { onReveal() }) {
+                append("<censored>")
+            }
+            return@buildAnnotatedString
         }
 
         val style = when {

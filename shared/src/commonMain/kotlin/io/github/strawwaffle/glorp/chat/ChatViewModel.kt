@@ -716,7 +716,7 @@ class ChatViewModel(
                 if (_account.value != null) input.completer.setRoster(rosterNicks(event.payload))
                 false
             }
-            is ChatEvent.Removal -> log.removeNick(event.nick)
+            is ChatEvent.Removal -> log.moderate(event.nick)
             is ChatEvent.Notice -> log.add(ChatLine.info(event.text, now()))
             is ChatEvent.Me -> {
                 val me = event.account

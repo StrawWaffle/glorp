@@ -27,6 +27,8 @@ data class ChatLine(
     val comboCount: Int = 0,
     /** For [Kind.Whisper]: the site's id for it, to mark it read. */
     val messageId: String? = null,
+    /** A moderator muted or banned the sender after this was sent; `showremoved` says how it shows. */
+    val moderated: Boolean = false,
 ) {
     enum class Kind {
         /** A chat message. */

@@ -52,6 +52,14 @@ class ChatSettings(private val prefs: ChatPrefs) {
     val ignoreMentions: Boolean get() = bool("ignorementions")
     val hideNsfw: Boolean get() = bool("hidensfw")
     val hideNsfl: Boolean get() = bool("hidensfl")
+
+    /**
+     * Whether a muted or banned user's earlier messages hide behind
+     * `<censored>`. `showremoved` is 0 (remove), 1 (censor) or 2 (do nothing),
+     * but chat-gui reads 0 as 1 (`get('showremoved') || '1'`), so on the site
+     * only 2 leaves them be; Glorp does the same.
+     */
+    val censorRemoved: Boolean get() = (get("showremoved") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() != 2
     val timestampFormat: String get() = (get("timestampformat") as? JsonPrimitive)?.contentOrNull ?: "HH:mm"
 
     fun setBool(key: String, on: Boolean) = set(key, JsonPrimitive(on))

@@ -113,6 +113,13 @@ fun SettingsScreen(
                 settings.setBool("ignorementions", it)
             }
         }
+        item {
+            SwitchRow(
+                "Censor messages from muted or banned users",
+                "Their earlier messages show as <censored> until tapped, as on the site",
+                settings.censorRemoved,
+            ) { settings.set("showremoved", kotlinx.serialization.json.JsonPrimitive(if (it) 1 else 2)) }
+        }
         item { SwitchRow("Hide messages marked NSFW", null, settings.hideNsfw) { settings.setBool("hidensfw", it) } }
         item { SwitchRow("Hide messages marked NSFL", null, settings.hideNsfl) { settings.setBool("hidensfl", it) } }
         item {

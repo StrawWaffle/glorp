@@ -67,6 +67,18 @@ class ChatTest {
     }
 
     @Test
+    fun aMuteMarksTheirMessagesSoFar() {
+        val log = ChatLog()
+        log.add(ChatLine.user("Spammer", emptyList(), "a", 1))
+        log.add(ChatLine.user("other", emptyList(), "b", 2))
+        assertTrue(log.moderate("SPAMMER"))
+        // Already marked: nothing changes.
+        assertEquals(false, log.moderate("spammer"))
+        log.add(ChatLine.user("spammer", emptyList(), "after", 3))
+        assertEquals(listOf(true, false, false), log.snapshot().map { it.moderated })
+    }
+
+    @Test
     fun backoffStaysInsideItsWindow() {
         assertEquals(500.milliseconds, retryDelay(1) { 0.0 })
         assertEquals(6.seconds, retryDelay(1) { 1.0 })

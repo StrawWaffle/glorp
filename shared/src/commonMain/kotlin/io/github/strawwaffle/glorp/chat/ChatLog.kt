@@ -47,7 +47,20 @@ class ChatLog(private val capacity: Int = DEFAULT_CAPACITY) {
         return true
     }
 
-    /** Takes out every line by [nick], as chat does when a moderator mutes or bans. */
+    /** Marks every chat message by [nick] so far as moderated: a mute or ban, which chat-gui censors. */
+    fun moderate(nick: String): Boolean {
+        var changed = false
+        for (i in lines.indices) {
+            val line = lines[i]
+            if (line.kind == ChatLine.Kind.User && !line.moderated && line.nick.equals(nick, ignoreCase = true)) {
+                lines[i] = line.copy(moderated = true)
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    /** Takes out every line by [nick] (someone just ignored). */
     fun removeNick(nick: String): Boolean {
         val gone = lines.filter { it.nick.equals(nick, ignoreCase = true) }
         if (gone.isEmpty()) return false
