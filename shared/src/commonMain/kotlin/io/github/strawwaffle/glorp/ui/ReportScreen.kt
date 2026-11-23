@@ -104,7 +104,7 @@ fun ReportScreen(diagnostics: Diagnostics) {
         item {
             SwitchRow(
                 "Include the app's recent log",
-                "${log.size} lines: connections, failures and the player, with times. No chat messages, names or logins",
+                "${log.size} lines about connections, failures and the player, with times. No chat messages, names or logins",
                 withLog,
             ) { withLog = it }
         }

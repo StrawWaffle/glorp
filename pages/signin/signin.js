@@ -54,7 +54,7 @@
     var r = clean(rememberme.value, "rememberme");
     problem.hidden = true;
     if (!s || fails(s) || fails(r)) {
-      problem.textContent = !s ? "Copy the value of sid first." : "That doesn't look like a cookie's value: copy just the Value column.";
+      problem.textContent = !s ? "Copy the value of sid first." : "That doesn't look like a cookie's value. Copy just the Value column.";
       problem.hidden = false;
       return;
     }

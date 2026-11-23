@@ -130,7 +130,7 @@ private fun ComputerSignIn(
     onProblem: (String) -> Unit,
 ) = Option(
     "Sign in from a computer",
-    "For everything: chat and whispers, settings that follow your account, whisper history, " +
+    "For everything. Chat and whispers, settings that follow your account, whisper history, " +
         "notifications, /stalk and /mentions, and what you're watching.",
 ) {
     @Suppress("DEPRECATION") // The newer clipboard API is suspend-only and platform-typed.
@@ -217,7 +217,7 @@ private fun LoginKeyForm(origin: String, host: String, busy: Boolean, submit: (S
     ) { Text("Sign in") }
     Text(
         "The key stays on this phone, encrypted, and works for chat until you remove it on the developer page. " +
-            "Pages of the site that need your account (profile, subscriptions) will ask for cookies later.",
+            "Settings that follow your account, whisper history and notifications need the computer sign-in instead.",
         color = Palette.TextDim,
         fontSize = 12.sp,
     )
@@ -237,8 +237,8 @@ private fun CookieForm(host: String, busy: Boolean, submit: (Session) -> Unit) {
     var rememberMe by remember { mutableStateOf("") }
     var problem by remember { mutableStateOf<String?>(null) }
     Text(
-        "Signed in to $host in a desktop browser, copy the values of its sid and rememberme cookies " +
-            "(the developer tools list them under the site's cookies). They stay on this phone, encrypted.",
+        "In a desktop browser signed in to $host, copy the values of its sid and rememberme cookies. " +
+            "The developer tools list them under the site's cookies. They stay on this phone, encrypted.",
         color = Palette.TextDim,
         fontSize = 14.sp,
     )
@@ -249,7 +249,7 @@ private fun CookieForm(host: String, busy: Boolean, submit: (Session) -> Unit) {
         modifier = Modifier.fillMaxWidth(),
     )
     OutlinedTextField(
-        rememberMe, { rememberMe = it }, label = { Text("rememberme (optional)") }, singleLine = true, colors = fieldColors(),
+        rememberMe, { rememberMe = it }, label = { Text("rememberme, if you have it") }, singleLine = true, colors = fieldColors(),
         visualTransformation = PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
         modifier = Modifier.fillMaxWidth(),

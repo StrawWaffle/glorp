@@ -180,7 +180,7 @@ private fun TagEditor(nick: String, tags: Tags, options: LocalOptions, onDone: (
         Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
             Text("Note", color = Palette.White, fontSize = 15.sp)
             Text(
-                if (color == null) "Kept with the tag: pick a colour and it's saved" else "Saved as you type. Shown on their name's sheet, as on the site",
+                if (color == null) "A note belongs to a tag. Pick a colour and it's saved" else "Saved as you type. Shown on their name's sheet, as on the site",
                 color = Palette.TextDim,
                 fontSize = 12.sp,
             )
@@ -212,7 +212,7 @@ private fun TagEditor(nick: String, tags: Tags, options: LocalOptions, onDone: (
 @Composable
 internal fun TagRow(tag: String?, onTag: (String?) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-        Text(if (tag == null) "Tag" else "Tagged $tag (tap it again to untag)", color = Palette.White, fontSize = 15.sp)
+        Text(if (tag == null) "Tag" else "Tagged $tag. Tap it again to untag", color = Palette.White, fontSize = 15.sp)
         FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             for (color in TAG_COLORS) {
                 Box(
@@ -237,7 +237,7 @@ private val QUICK_ICONS = listOf("⭐", "🔥", "💩", "👀", "🤡", "🐐", 
 internal fun IconRow(icon: String?, onIcon: (String?) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
         Text(
-            if (icon == null) "Icon before their name" else "Icon before their name: $icon (tap it again to remove)",
+            if (icon == null) "Icon before their name" else "Icon before their name, $icon. Tap it again to remove it",
             color = Palette.White,
             fontSize = 15.sp,
         )

@@ -169,7 +169,7 @@ fun SettingsScreen(
             )
         }
         item {
-            SwitchRow("Show timestamps", "Written as /timestampformat says (now ${settings.timestampFormat})", settings.showTime) {
+            SwitchRow("Show timestamps", "In the format /timestampformat sets, now ${settings.timestampFormat}", settings.showTime) {
                 settings.setBool("showtime", it)
             }
         }
@@ -193,7 +193,7 @@ fun SettingsScreen(
         item {
             Choices(
                 "Messages kept",
-                "How far back you can scroll in chat (the site's maxlines, now ${settings.maxLines}). More uses a little more memory",
+                "How far back you can scroll in chat, now ${settings.maxLines}. The site calls it maxlines. More uses a little more memory",
                 listOf(100, 250, 500, 1000),
                 settings.maxLines,
                 label = { "$it" },
@@ -203,7 +203,7 @@ fun SettingsScreen(
         item {
             SwitchRow(
                 "Warn about nukes, mutelinks and banned phrases",
-                "Before a message would get you muted or banned. The lists come from vyneer.me (d.gg utilities), checked every 30 seconds while chat is open",
+                "Before a message would get you muted or banned. The lists come from vyneer.me, as they did for the d.gg utilities userscript, and Glorp checks them every 30 seconds while chat is open",
                 warnings,
                 onWarnings,
             )
@@ -373,7 +373,7 @@ fun SettingsScreen(
 private enum class SettingsSection(val title: String, val summary: String) {
     Look("Look", "Theme, chat text size and font"),
     Chat("Chat", "Timestamps, link titles and previews, how much chat is kept, warnings"),
-    Hiding("Hiding", "Hidden words, messages and flair icons; chat from other streams"),
+    Hiding("Hiding", "Hidden words, messages and flair icons, and chat from other streams"),
     Highlights("Highlights and tags", "Mentions, highlight words and tagged people"),
     Notifications("Notifications", "Destiny going live, mentions and whispers"),
     Player("Player", "Destiny's platform, sound with the screen off, catching up"),
@@ -537,7 +537,7 @@ private fun NotificationSettings(
         ) { on -> turn(on) { settings.setBool("notificationwhisper", on) } }
         Choices(
             "Look every",
-            "Sooner means more checks: each is one small request per kind turned on",
+            "Sooner means more checks. Each check is one small request per kind turned on",
             NotifyOptions.INTERVALS,
             interval,
             label = { if (it < 60) "$it min" else "${it / 60} h" },
@@ -546,7 +546,7 @@ private fun NotificationSettings(
             Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { notify.openSystemSettings() }.padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
             Text("Sound and vibration", color = Palette.White, fontSize = 15.sp)
-            Text("Android's settings for each kind: sound, vibration, silent, or off", color = Palette.TextDim, fontSize = 12.sp)
+            Text("Android's settings for each kind set its sound and vibration, or silence it or turn it off", color = Palette.TextDim, fontSize = 12.sp)
         }
         if (options.any && !permitted) {
             Text(

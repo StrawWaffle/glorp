@@ -44,7 +44,7 @@ data class Warning(val kind: Kind, val what: String, val type: String, val durat
             return when (kind) {
                 Kind.Phrase -> "\"$what\" is a banned phrase: $penalty."
                 Kind.Nuke -> "\"$what\" is nuked: $penalty."
-                Kind.Links -> "Mutelinks is on: a link gets you $penalty."
+                Kind.Links -> "Mutelinks is on. Posting a link gets you $penalty."
                 Kind.Alert -> "\"$what\" is one of your alert words."
             }
         }

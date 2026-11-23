@@ -673,7 +673,7 @@ class ChatViewModel(
     }
 
     private fun transmit(action: suspend () -> Boolean) {
-        viewModelScope.launch { if (!action()) notice("Couldn't send: the connection dropped.") }
+        viewModelScope.launch { if (!action()) notice("Couldn't send. The connection dropped.") }
     }
 
     /** A frame read on a background thread, with the names in it when it's the user list. */

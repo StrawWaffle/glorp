@@ -20,13 +20,13 @@
 
   <section class="panel">
     <p>
-      Glorp needs destiny.gg's login cookies for the parts of the site a login key can't open:
-      settings that follow your account, whisper history, notifications, <code>/stalk</code> and what you're watching.
-      destiny.gg keeps those cookies away from web pages, so you copy them from your browser here,
-      and this page turns them into a code for the app to scan.
+      A login key gets you chat and whispers. Settings that follow your account, whisper history,
+      notifications, <code>/stalk</code> and what you're watching need destiny.gg's login cookies instead.
+      destiny.gg doesn't let web pages read those cookies, so you copy them from your browser here,
+      and this page turns them into a code for Glorp to scan.
     </p>
     <p class="quiet">
-      This page sends nothing anywhere: it isn't allowed to make requests, it stores nothing, and its code is
+      This page sends nothing anywhere. The browser won't let it make requests, it stores nothing, and its code is
       <a href="https://github.com/StrawWaffle/glorp/tree/main/pages/signin">on GitHub</a>.
     </p>
   </section>
@@ -37,14 +37,14 @@
         <p>Sign in to <a id="site-link" href="https://www.destiny.gg/login" target="_blank" rel="noopener"><span class="site-name">destiny.gg</span></a> in this browser, with <strong>Remember me</strong> ticked.</p>
       </li>
       <li>
-        <p>On a <span class="site-name">destiny.gg</span> tab, open the developer tools: <kbd>F12</kbd>, or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> (<kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>I</kbd> on a Mac).</p>
+        <p>On a <span class="site-name">destiny.gg</span> tab, open the developer tools with <kbd>F12</kbd> or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd>. On a Mac it's <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>I</kbd>.</p>
       </li>
       <li>
-        <p>Find the site's cookies:</p>
+        <p>Find the site's cookies.</p>
         <ul>
-          <li>Chrome, Edge, Brave: <b>Application</b> tab → <b>Storage</b> → <b>Cookies</b> → <code class="site-origin">https://www.destiny.gg</code></li>
-          <li>Firefox: <b>Storage</b> tab → <b>Cookies</b> → <code class="site-origin">https://www.destiny.gg</code></li>
-          <li>Safari: turn on <b>Show features for web developers</b> in Settings → Advanced, then <b>Develop</b> → <b>Show Web Inspector</b> → <b>Storage</b> → <b>Cookies</b></li>
+          <li>In Chrome, Edge or Brave, <b>Application</b> tab → <b>Storage</b> → <b>Cookies</b> → <code class="site-origin">https://www.destiny.gg</code></li>
+          <li>In Firefox, <b>Storage</b> tab → <b>Cookies</b> → <code class="site-origin">https://www.destiny.gg</code></li>
+          <li>In Safari, turn on <b>Show features for web developers</b> in Settings → Advanced, then <b>Develop</b> → <b>Show Web Inspector</b> → <b>Storage</b> → <b>Cookies</b></li>
         </ul>
       </li>
       <li>
@@ -54,13 +54,13 @@
           <input id="sid" type="password" spellcheck="false" autocapitalize="off">
           <label for="rememberme">rememberme</label>
           <input id="rememberme" type="password" spellcheck="false" autocapitalize="off">
-          <p class="quiet">Without rememberme, the app is signed out again when this browser session ends.</p>
+          <p class="quiet">Without rememberme, Glorp gets signed out again when this browser session ends.</p>
           <p id="problem" class="problem" hidden></p>
           <button id="show" type="submit" class="primary">Make the code</button>
         </form>
       </li>
       <li>
-        <p>In Glorp: menu → <b>Sign in</b> → <b>Sign in from a computer</b> → <b>Scan the code</b>.</p>
+        <p>In Glorp, open the menu, then <b>Sign in</b> → <b>Sign in from a computer</b> → <b>Scan the code</b>.</p>
       </li>
     </ol>
   </section>
@@ -85,7 +85,7 @@
         <button id="hide" type="button" class="primary">Hide it</button>
         <button id="copy" type="button">Copy it as text</button>
       </div>
-      <p class="quiet">Scan it in Glorp, then hide it. The text works too: paste it into the box under the scan button. It hides by itself if you switch tabs.</p>
+      <p class="quiet">Scan it in Glorp, then hide it. The text works too, pasted into the box under the scan button. The code hides itself if you switch tabs.</p>
     </div>
   </section>
 
