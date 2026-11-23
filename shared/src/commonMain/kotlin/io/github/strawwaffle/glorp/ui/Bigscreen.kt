@@ -54,7 +54,8 @@ fun Bigscreen(
     val pip = LocalPictureInPicture.current
     val fullscreen = LocalFullscreen.current
     val videoOnly = pip.active || fullscreen.active
-    Column(Modifier.fillMaxWidth().background(Palette.Black)) {
+    // Video sits on black in every theme.
+    Column(Modifier.fillMaxWidth().background(Color.Black)) {
         Box(
             Modifier.fillMaxWidth()
                 // 16:9 in what's left after the bar below: the full width
@@ -86,7 +87,7 @@ private fun Offline(live: LiveState) {
         Text("No signal", color = Palette.Glorp, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         Text(
             if (last != null) "Destiny is offline. Last stream: ${last.title}" else "Destiny is offline.",
-            color = Palette.TextDim,
+            color = VideoText,
             fontSize = 13.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -118,8 +119,11 @@ private fun Player(embed: Embed, playerUrl: String, origin: String, resolve: sus
     }
 }
 
+/** Text over the video area, which is black in every theme. */
+private val VideoText = Color(0xFFB4B8C0)
+
 @Composable
-private fun Note(text: String) = Text(text, color = Palette.TextDim, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+private fun Note(text: String) = Text(text, color = VideoText, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
 
 internal fun label(embed: Embed, live: LiveState): String {
     live.streams.firstOrNull { it.embed == embed }?.let { return "Destiny on ${PlatformIcons.name(embed.platform)}" + (it.title?.let { t -> ": $t" } ?: "") }

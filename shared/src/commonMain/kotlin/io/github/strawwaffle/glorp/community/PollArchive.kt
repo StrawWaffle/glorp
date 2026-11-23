@@ -167,7 +167,7 @@ private fun PollList(feed: PollFeed, listState: LazyListState, env: CommunityEnv
     }
 }
 
-private val linkStyle = TextLinkStyles(SpanStyle(color = Palette.Blue, textDecoration = TextDecoration.Underline))
+private val linkStyle get() = TextLinkStyles(SpanStyle(color = Palette.Blue, textDecoration = TextDecoration.Underline))
 
 /** The credit, and YEE vs PEPE when it has come in. */
 @Composable

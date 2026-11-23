@@ -76,4 +76,14 @@ class HidingTest {
         LocalOptions(prefs).treatOtherStreams(OtherStreams.Hide)
         assertEquals(OtherStreams.Hide, LocalOptions(prefs).otherStreams)
     }
+
+    @Test
+    fun nameIconsAreKeptByLowerCaseNick() {
+        val prefs = MemoryChatPrefs()
+        LocalOptions(prefs).setIcon("Ivory", "💩")
+        LocalOptions(prefs).setIcon("Pal", "👨‍👩‍👧‍👦")
+        assertEquals(mapOf("ivory" to "💩", "pal" to "👨‍👩‍👧‍👦"), LocalOptions(prefs).nameIcons)
+        LocalOptions(prefs).setIcon("IVORY", " ")
+        assertEquals(mapOf("pal" to "👨‍👩‍👧‍👦"), LocalOptions(prefs).nameIcons)
+    }
 }

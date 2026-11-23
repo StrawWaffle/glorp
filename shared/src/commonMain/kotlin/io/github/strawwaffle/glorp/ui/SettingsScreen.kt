@@ -80,6 +80,10 @@ fun SettingsScreen(
     warnings: Boolean,
     onWarnings: (Boolean) -> Unit,
     /** Whether test versions are offered; null in builds that don't update themselves. */
+    colorTheme: ColorTheme = ColorTheme.Glorp,
+    onColorTheme: (ColorTheme) -> Unit = {},
+    /** Opens the list of tagged people. */
+    onTags: () -> Unit = {},
     appFont: AppFont = AppFont.Phone,
     onAppFont: (AppFont) -> Unit = {},
     textScale: Float = 1f,
@@ -92,7 +96,17 @@ fun SettingsScreen(
         item {
             Text("Settings", color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(16.dp))
         }
-        item { SettingsHeading("Text") }
+        item { SettingsHeading("Look") }
+        item {
+            Choices(
+                "Theme",
+                "The Aerith themes are stolen from Aerith's themes for the site",
+                ColorTheme.entries,
+                colorTheme,
+                label = { it.label },
+                onPick = onColorTheme,
+            )
+        }
         item {
             Choices(
                 "Chat text size",
@@ -227,6 +241,18 @@ fun SettingsScreen(
                 "None. Messages with these words stand out",
                 settings.list("customhighlight"),
             ) { settings.setList("customhighlight", it) }
+        }
+        item {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onTags).padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Tagged people", color = Palette.White, fontSize = 15.sp)
+                    Text("Tag colours, notes and Glorp's name icons, all in one list", color = Palette.TextDim, fontSize = 12.sp)
+                }
+                Text("›", color = Palette.TextDim, fontSize = 22.sp)
+            }
         }
         item {
             SwitchRow(

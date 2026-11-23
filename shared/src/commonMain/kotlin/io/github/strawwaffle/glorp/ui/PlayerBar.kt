@@ -63,7 +63,7 @@ fun PlayerBar(
 ) {
     var listOpen by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().height(48.dp).background(Palette.Navy),
+        Modifier.fillMaxWidth().height(48.dp).background(Palette.Bar),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BarIcon(if (menuOpen) GlorpIcons.Close else GlorpIcons.Menu, if (menuOpen) "Back to chat" else "Menu", onMenu)
@@ -74,14 +74,14 @@ fun PlayerBar(
         ) {
             Text(
                 embed?.let { label(it, live) } ?: "Nothing on",
-                color = Palette.White,
+                color = Palette.OnBar,
                 fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 barNote(picked, if (embed == null) OtherStreams.Show else otherStreams),
-                color = Palette.TextDim,
+                color = Palette.OnBar.copy(alpha = 0.75f),
                 fontSize = 11.sp,
                 maxLines = 1,
             )
@@ -98,7 +98,7 @@ fun PlayerBar(
 @Composable
 private fun BarIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
     Box(Modifier.size(48.dp).clickable(onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, contentDescription = label, tint = Palette.White, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = label, tint = Palette.OnBar, modifier = Modifier.size(22.dp))
     }
 }
 

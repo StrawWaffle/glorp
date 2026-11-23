@@ -34,3 +34,14 @@ private tailrec fun Context.activity(): Activity? = when (this) {
     is ContextWrapper -> baseContext.activity()
     else -> null
 }
+
+@Composable
+internal actual fun SystemBarsLight(light: Boolean) {
+    val activity = LocalContext.current.activity() ?: return
+    DisposableEffect(light) {
+        // The status bar sits over the player, which is dark in every theme;
+        // the navigation bar sits under chat.
+        WindowCompat.getInsetsController(activity.window, activity.window.decorView).isAppearanceLightNavigationBars = light
+        onDispose {}
+    }
+}

@@ -412,6 +412,10 @@ data class ChatLook(
     val otherStreams: OtherStreams = OtherStreams.Show,
     /** Chat text size over the phone's own (see [textScales]). */
     val textScale: Float = 1f,
+    /** Glorp's own name icons (an emoji before someone's name), by lower-case nick. */
+    val icons: Map<String, String> = emptyMap(),
+    /** The colour theme: rows drawn in one are drawn again in another. */
+    val theme: ColorTheme = ColorTheme.Glorp,
 )
 
 /** chat-gui's tag colours. */
@@ -428,7 +432,8 @@ internal fun tagColor(name: String): Color = when (name) {
     else -> Color(0xFF4D4D4D)
 }
 
-private val taggedBackground = Color(0xFF232323)
+/** chat-gui's tag bar is 0.45em wide: about 6 dp beside 14 sp text. */
+private val TAG_BAR = 6.dp
 
 /** Whether a tap on a row's name or link should count: not after a hold. */
 private class HoldGate {
@@ -495,13 +500,16 @@ internal fun ChatRow(
     }
     // A tagged user's lines get a bar of their colour down the left, as chat-gui draws them.
     val tag = if (line.kind == ChatLine.Kind.User) line.nick?.lowercase()?.let { look.tags[it] } else null
+    val singled = (rendered.mentionsMe && look.highlightSelf) || highlighted
     val background = when {
         line.kind == ChatLine.Kind.Whisper -> Palette.Blue.copy(alpha = 0.12f)
-        (rendered.mentionsMe && look.highlightSelf) || highlighted -> Palette.Orange.copy(alpha = 0.14f)
-        tag != null && look.taggedVisibility -> taggedBackground
+        singled -> Palette.Mention
+        tag != null && look.taggedVisibility -> Palette.Tagged
         else -> Color.Transparent
     }
-    val bar = tag?.let(::tagColor)
+    // The tag's colour down the left, as chat-gui draws it; otherwise the
+    // theme's mention bar, where it has one (Aerith's teal).
+    val bar = tag?.let(::tagColor) ?: Palette.MentionBar?.takeIf { singled }
     // From someone watching another stream: faded as the site's eye button does.
     val faded = look.otherStreams == OtherStreams.Dim && !rendered.mentionsMe && !highlighted &&
         fromOtherStream(line, me, look.playing)
@@ -534,7 +542,7 @@ internal fun ChatRow(
         inlineContent = rendered.inline,
         onTextLayout = { layout = it },
         modifier = Modifier.fillMaxWidth().then(if (faded) Modifier.alpha(0.3f) else Modifier).background(background)
-            .then(if (bar == null) Modifier else Modifier.drawBehind { drawRect(bar, size = Size(4.dp.toPx(), size.height)) })
+            .then(if (bar == null) Modifier else Modifier.drawBehind { drawRect(bar, size = Size(TAG_BAR.toPx(), size.height)) })
             .then(
                 if (onHold == null) Modifier
                 else Modifier.pointerInput(line) {
@@ -552,7 +560,7 @@ internal fun ChatRow(
     ) }
 }
 
-private val linkStyle = TextLinkStyles(SpanStyle(color = Palette.Blue, textDecoration = TextDecoration.Underline))
+private val linkStyle get() = TextLinkStyles(SpanStyle(color = Palette.Blue, textDecoration = TextDecoration.Underline))
 
 // A name is tappable but looks like a name, not a link.
 private val nickStyle = TextLinkStyles(SpanStyle(textDecoration = TextDecoration.None))
@@ -658,6 +666,7 @@ private fun render(
                 appendInlineContent(id, badge.label)
                 append(' ')
             }
+            look.icons[line.nick!!.lowercase()]?.let { append(it); append(' ') }
             withLink(LinkAnnotation.Clickable("nick", nickStyle) { onNick(line.nick!!) }) {
                 val start = length
                 withStyle(SpanStyle(color = nameColor, fontWeight = FontWeight.Bold)) { append(line.nick) }

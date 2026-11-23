@@ -128,7 +128,7 @@ private fun LoginKeyForm(origin: String, host: String, busy: Boolean, submit: (S
             if (session == null) problem = "That doesn't look like a login key." else { problem = null; submit(session) }
         },
         enabled = !busy && key.isNotBlank(),
-        colors = ButtonDefaults.buttonColors(containerColor = Palette.Blue, contentColor = Palette.White),
+        colors = ButtonDefaults.buttonColors(containerColor = Palette.Blue, contentColor = Palette.OnAction),
     ) { Text("Sign in") }
     Text(
         "The key stays on this phone, encrypted, and works for chat until you remove it on the developer page. " +
@@ -177,7 +177,7 @@ private fun CookieForm(host: String, busy: Boolean, submit: (Session) -> Unit) {
             if (session == null) problem = "That doesn't look like a cookie value." else { problem = null; submit(session) }
         },
         enabled = !busy && sid.isNotBlank(),
-        colors = ButtonDefaults.buttonColors(containerColor = Palette.Blue, contentColor = Palette.White),
+        colors = ButtonDefaults.buttonColors(containerColor = Palette.Blue, contentColor = Palette.OnAction),
     ) { Text("Sign in") }
 }
 

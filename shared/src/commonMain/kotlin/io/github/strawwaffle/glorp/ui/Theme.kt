@@ -3,8 +3,12 @@ package io.github.strawwaffle.glorp.ui
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -16,33 +20,105 @@ import io.github.strawwaffle.glorp.resources.roboto_italic
 import io.github.strawwaffle.glorp.resources.roboto_regular
 import org.jetbrains.compose.resources.Font
 
-/** The palette. Blue for actions, orange for what wants attention, green for Glorp. */
+/**
+ * Colours by role. The names are Glorp's first, dark colours, kept so every
+ * screen reads the same: Black is the background, White the text, Navy the
+ * surfaces (sheets, fields, chips), Blue actions and links. Each reads the
+ * chosen [ColorTheme], so changing the theme redraws everything.
+ */
 object Palette {
-    val Black = Color(0xFF111113)
-    val Navy = Color(0xFF0C1D40)
-    val NavyLight = Color(0xFF15326C)
-    val Blue = Color(0xFF0090FF)
-    val White = Color(0xFFEDEEF0)
-    val Orange = Color(0xFFF3B122)
-    val Glorp = Color(0xFF8BD450)
+    /** Set where the theme is chosen (GlorpApp), never while drawing. */
+    var theme by mutableStateOf(ColorTheme.Glorp)
 
-    val TextDim = Color(0xFF9EA3AD)
-    val Greentext = Color(0xFF6CA528)
+    val Black get() = theme.background
+    val Navy get() = theme.surface
+    val NavyLight get() = theme.raised
+    val Blue get() = theme.action
+    val White get() = theme.text
+    val Orange get() = theme.attention
+    val Glorp get() = theme.accent
+    val TextDim get() = theme.textDim
+    val Greentext get() = theme.greentext
+
+    /** The bar between the player and chat, and what's on it. */
+    val Bar get() = theme.bar
+    val OnBar get() = theme.onBar
+
+    /** Text on a filled [Blue] button. */
+    val OnAction get() = theme.onAction
+
+    /** A message that mentions you or matches a highlight: its background, and a bar down the left where the theme has one. */
+    val Mention get() = theme.mention
+    val MentionBar get() = theme.mentionBar
+
+    /** A tagged user's lines, with "make tagged users stand out" on. */
+    val Tagged get() = theme.tagged
 }
 
-private val colors = darkColorScheme(
-    primary = Palette.Blue,
-    onPrimary = Palette.White,
-    secondary = Palette.Orange,
-    onSecondary = Palette.Black,
-    tertiary = Palette.Glorp,
-    background = Palette.Black,
-    onBackground = Palette.White,
-    surface = Palette.Navy,
-    onSurface = Palette.White,
-    surfaceVariant = Palette.NavyLight,
-    onSurfaceVariant = Palette.TextDim,
-)
+/** A set of colours for the whole app. */
+enum class ColorTheme(
+    val label: String,
+    val light: Boolean,
+    val background: Color,
+    val surface: Color,
+    val raised: Color,
+    val action: Color,
+    val text: Color,
+    val attention: Color,
+    val accent: Color,
+    val textDim: Color,
+    val greentext: Color,
+    val bar: Color,
+    val onBar: Color,
+    val onAction: Color,
+    val mention: Color,
+    val mentionBar: Color?,
+    val tagged: Color,
+) {
+    Glorp(
+        "Glorp", light = false,
+        background = Color(0xFF111113), surface = Color(0xFF0C1D40), raised = Color(0xFF15326C),
+        action = Color(0xFF0090FF), text = Color(0xFFEDEEF0), attention = Color(0xFFF3B122),
+        accent = Color(0xFF8BD450), textDim = Color(0xFF9EA3AD), greentext = Color(0xFF6CA528),
+        bar = Color(0xFF0C1D40), onBar = Color(0xFFEDEEF0), onAction = Color(0xFFEDEEF0),
+        mention = Color(0x24F3B122), mentionBar = null, tagged = Color(0xFF232323),
+    ),
+
+    // Aerith's themes for the site, light and dark: cream and brown, a
+    // sky-blue bar, teal for mentions. Stolen from Aerith, with thanks.
+    AerithLight(
+        "Aerith light", light = true,
+        background = Color(0xFFFAF8E8), surface = Color(0xFFEAE7D2), raised = Color(0xFFDCD6B8),
+        action = Color(0xFF308FD6), text = Color(0xFF5A4A38), attention = Color(0xFFD9801A),
+        accent = Color(0xFF2FA88A), textDim = Color(0xFF918168), greentext = Color(0xFF55A637),
+        bar = Color(0xFF6FB4EC), onBar = Color(0xFFFFFFFF), onAction = Color(0xFFFFFFFF),
+        mention = Color(0xFFE4F6F0), mentionBar = Color(0xFF6DE1C1), tagged = Color(0xFFEFE9D2),
+    ),
+    AerithDark(
+        "Aerith dark", light = false,
+        background = Color(0xFF2B3444), surface = Color(0xFF1F2A3C), raised = Color(0xFF3B444E),
+        action = Color(0xFF7BC3E9), text = Color(0xFFF1ECDA), attention = Color(0xFFFFAB4A),
+        accent = Color(0xFF6DE1C1), textDim = Color(0xFFB6AE98), greentext = Color(0xFF7DCF9B),
+        bar = Color(0xFF3F6F9E), onBar = Color(0xFFFFFFFF), onAction = Color(0xFF1A2332),
+        mention = Color(0xFF27463F), mentionBar = Color(0xFF6DE1C1), tagged = Color(0xFF243040),
+    ),
+}
+
+private fun ColorTheme.scheme() = if (light) {
+    lightColorScheme(
+        primary = action, onPrimary = onAction, secondary = attention, onSecondary = background,
+        tertiary = accent, background = background, onBackground = text, surface = surface, onSurface = text,
+        surfaceVariant = raised, onSurfaceVariant = textDim, surfaceContainer = surface, surfaceContainerHigh = surface,
+        surfaceContainerLow = background, outline = textDim,
+    )
+} else {
+    darkColorScheme(
+        primary = action, onPrimary = onAction, secondary = attention, onSecondary = background,
+        tertiary = accent, background = background, onBackground = text, surface = surface, onSurface = text,
+        surfaceVariant = raised, onSurfaceVariant = textDim, surfaceContainer = surface, surfaceContainerHigh = surface,
+        surfaceContainerLow = background, outline = textDim,
+    )
+}
 
 /** The text font: the phone's own (which follows the maker's font settings), or the site's. */
 enum class AppFont(val label: String) { Phone("Phone's font"), Site("Site's font (Roboto)") }
@@ -58,7 +134,7 @@ fun textScaleLabel(scale: Float) = when (scale) {
 }
 
 @Composable
-fun GlorpTheme(font: AppFont = AppFont.Phone, content: @Composable () -> Unit) {
+fun GlorpTheme(theme: ColorTheme = ColorTheme.Glorp, font: AppFont = AppFont.Phone, content: @Composable () -> Unit) {
     val family = when (font) {
         AppFont.Phone -> null
         // destiny.gg's chat is set in Roboto; bundled (Latin letters and
@@ -72,8 +148,14 @@ fun GlorpTheme(font: AppFont = AppFont.Phone, content: @Composable () -> Unit) {
         )
     }
     val typography = remember(family) { family?.let(Typography()::withFamily) ?: Typography() }
-    MaterialTheme(colorScheme = colors, typography = typography, content = content)
+    val scheme = remember(theme) { theme.scheme() }
+    SystemBarsLight(theme.light)
+    MaterialTheme(colorScheme = scheme, typography = typography, content = content)
 }
+
+/** Dark icons on the system bars over a light theme, light ones otherwise. */
+@Composable
+internal expect fun SystemBarsLight(light: Boolean)
 
 private fun Typography.withFamily(family: FontFamily) = Typography(
     displayLarge = displayLarge.copy(fontFamily = family),

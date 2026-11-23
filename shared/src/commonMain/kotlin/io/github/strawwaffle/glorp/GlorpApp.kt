@@ -34,6 +34,9 @@ import io.github.strawwaffle.glorp.ui.UserActions
 import io.github.strawwaffle.glorp.ui.Fullscreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
 import io.github.strawwaffle.glorp.ui.AppFont
+import io.github.strawwaffle.glorp.ui.ColorTheme
+import io.github.strawwaffle.glorp.ui.Palette
+import io.github.strawwaffle.glorp.ui.TagsScreen
 import io.github.strawwaffle.glorp.ui.textScales
 import io.github.strawwaffle.glorp.ui.LocalFullscreen
 import io.github.strawwaffle.glorp.ui.SystemFullscreen
@@ -89,13 +92,16 @@ fun GlorpApp(
             },
         )
     }
+    var colorTheme by remember {
+        mutableStateOf((ColorTheme.entries.firstOrNull { it.name == prefs.get(COLOR_THEME) } ?: ColorTheme.Glorp).also { Palette.theme = it })
+    }
     var appFont by remember { mutableStateOf(AppFont.entries.firstOrNull { it.name == prefs.get(APP_FONT) } ?: AppFont.Phone) }
     var textScale by remember { mutableStateOf(prefs.get(TEXT_SCALE)?.toFloatOrNull()?.takeIf { it in textScales } ?: 1f) }
     CompositionLocalProvider(
         LocalPictureInPicture provides pictureInPicture,
         LocalBackgroundAudio provides backgroundAudio,
         LocalCatchUp provides catchUp,
-    ) { GlorpTheme(appFont) {
+    ) { GlorpTheme(colorTheme, appFont) {
         val chat = viewModel { ChatViewModel(origin, sessions, prefs).also { vm ->
             initialEmbed?.let(Embed::parse)?.let(vm::watch)
             if (devFrames.isNotEmpty()) vm.play(devFrames)
@@ -187,6 +193,7 @@ fun GlorpApp(
                 settings.highlightSelf, chat.input.tags.colors, settings.taggedVisibility,
                 chat.input.options.hiddenFlairs, settings.censorRemoved,
                 playing = embed?.key, otherStreams = chat.input.options.otherStreams, textScale = textScale,
+                icons = chat.input.options.nameIcons, theme = colorTheme,
             ),
         ) {
         ChatScreen(
@@ -284,6 +291,9 @@ fun GlorpApp(
                             mentionsService = prefs.get(NotifyOptions.SERVER) != null,
                             warnings = chat.warnings,
                             onWarnings = chat::warnAbout,
+                            colorTheme = colorTheme,
+                            onColorTheme = { colorTheme = it; Palette.theme = it; prefs.put(COLOR_THEME, it.name) },
+                            onTags = { screen = "tags" },
                             appFont = appFont,
                             onAppFont = { appFont = it; prefs.put(APP_FONT, it.name) },
                             textScale = textScale,
@@ -294,6 +304,9 @@ fun GlorpApp(
                     }
                 }
                 "report" -> diagnostics?.let { d -> { ReportScreen(d) } }
+                "tags" -> {
+                    { TagsScreen(chat.input.tags, chat.input.options, synced = account != null && chat.whisperHistory) }
+                }
                 "signin", "signin-cookies" -> {
                     {
                         val forWhispers = screen == "signin-cookies"
@@ -366,4 +379,5 @@ fun GlorpApp(
 private const val BACKGROUND_AUDIO = "background-audio"
 private const val CATCH_UP = "catch-up"
 private const val APP_FONT = "app-font"
+private const val COLOR_THEME = "color-theme"
 private const val TEXT_SCALE = "text-scale"

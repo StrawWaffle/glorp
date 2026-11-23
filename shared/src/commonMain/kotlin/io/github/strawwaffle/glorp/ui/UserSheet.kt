@@ -153,6 +153,7 @@ fun UserSheet(
                 TagRow(tag) { color ->
                     if (color == null) input.tags.untag(key) else input.tags.tag(key, color, note)
                 }
+                IconRow(input.options.nameIcons[key]) { input.options.setIcon(key, it) }
                 val ignored = nick in input.ignored
                 Action(if (ignored) "Stop ignoring" else "Ignore", if (ignored) Palette.White else Palette.Orange) {
                     if (ignored) actions.unignore(nick) else actions.ignore(nick)
@@ -194,26 +195,6 @@ private fun Action(label: String, color: Color = Palette.White, onClick: () -> U
     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick)
         .padding(horizontal = 20.dp, vertical = 13.dp),
 )
-
-/** chat-gui's tag colours; the one they have is ringed, and tapping it again takes the tag off. */
-@Composable
-private fun TagRow(tag: String?, onTag: (String?) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-        Text(if (tag == null) "Tag" else "Tagged $tag (tap it again to untag)", color = Palette.White, fontSize = 15.sp)
-        FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            for (color in TAG_COLORS) {
-                Box(
-                    Modifier.size(44.dp)
-                        .clickable(onClickLabel = if (color == tag) "Untag" else "Tag $color") { onTag(if (color == tag) null else color) }
-                        .padding(6.dp)
-                        .then(if (color == tag) Modifier.border(2.dp, Palette.White, CircleShape) else Modifier)
-                        .padding(4.dp)
-                        .background(tagColor(color), CircleShape),
-                )
-            }
-        }
-    }
-}
 
 /** A moderator's action with its lengths; a ban asks for a second tap. */
 @Composable

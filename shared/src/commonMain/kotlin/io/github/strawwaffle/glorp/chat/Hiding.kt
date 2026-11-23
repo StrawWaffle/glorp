@@ -30,6 +30,21 @@ class LocalOptions(private val prefs: ChatPrefs) {
         prefs.put(OTHER_STREAMS, mode.name)
     }
 
+    /**
+     * Glorp's own tag: an emoji (or a few characters) shown before someone's
+     * name, by lower-case nick. Kept on this phone; the site has nothing like it.
+     */
+    var nameIcons by mutableStateOf(readIcons(prefs.getList(NAME_ICONS)))
+        private set
+
+    /** Sets [nick]'s icon, or takes it away when [icon] is blank. */
+    fun setIcon(nick: String, icon: String?) {
+        val key = nick.lowercase()
+        val clean = icon?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_ICON)
+        nameIcons = if (clean == null) nameIcons - key else nameIcons + (key to clean)
+        prefs.putList(NAME_ICONS, nameIcons.map { (n, i) -> "$n $i" }.sorted())
+    }
+
     fun keepMentions(on: Boolean) {
         stickyMentions = on
         prefs.put(STICKY_MENTIONS, on.toString())
@@ -50,12 +65,19 @@ class LocalOptions(private val prefs: ChatPrefs) {
         prefs.putList(ALERT_WORDS, list)
     }
 
-    private companion object {
-        const val HIDDEN_PHRASES = "hide.phrases"
-        const val HIDDEN_FLAIRS = "hide.flairs"
-        const val ALERT_WORDS = "alert.words"
-        const val STICKY_MENTIONS = "sticky.mentions"
-        const val OTHER_STREAMS = "other.streams"
+    companion object {
+        private const val HIDDEN_PHRASES = "hide.phrases"
+        private const val HIDDEN_FLAIRS = "hide.flairs"
+        private const val ALERT_WORDS = "alert.words"
+        private const val STICKY_MENTIONS = "sticky.mentions"
+        private const val OTHER_STREAMS = "other.streams"
+        private const val NAME_ICONS = "name.icons"
+
+        /** Room for one emoji made of several code points (a family, a flag with a modifier). */
+        const val MAX_ICON = 12
+
+        fun readIcons(list: List<String>): Map<String, String> =
+            list.mapNotNull { entry -> entry.split(' ', limit = 2).takeIf { it.size == 2 && it[1].isNotBlank() }?.let { it[0] to it[1] } }.toMap()
     }
 }
 
