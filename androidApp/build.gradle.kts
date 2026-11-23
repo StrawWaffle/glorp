@@ -1,5 +1,4 @@
 import java.io.File
-import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -32,14 +31,6 @@ android {
         // A test version is "Glorp Probe" on the phone, so it's plain which one
         // is installed; its release turns it back into Glorp.
         manifestPlaceholders["appLabel"] = if ("-test." in versionName!!) "Glorp Probe" else "Glorp"
-        // "Sign in with destiny.gg": Glorp's app on the site. The ID and secret
-        // live outside the repo (~/.secrets/glorp, like the release key); the
-        // app gets the secret's SHA-256, which is what the site keeps and
-        // checks, never the secret. A build without them has no such button.
-        // Dev builds use the test site, where the app isn't registered.
-        manifestPlaceholders["oauthScheme"] = "io.github.strawwaffle.glorp"
-        buildConfigField("String", "DGG_CLIENT_ID", quoted(glorpSecret("dgg_oauth_client_id")))
-        buildConfigField("String", "DGG_CLIENT_SECRET_SHA256", quoted(glorpSecret("dgg_oauth_client_secret").let { if (it.isEmpty()) "" else sha256Hex(it) }))
         // The mentions service (server/), for mention notifications without the
         // site's login; empty leaves them to the site's own list (cookies only).
         buildConfigField("String", "MENTIONS_URL", "\"${providers.gradleProperty("glorp.mentionsUrl").orElse("").get()}\"")
@@ -66,9 +57,6 @@ android {
         debug {
             applicationIdSuffix = ".dev"
             manifestPlaceholders["appLabel"] = "Glorp (dev)"
-            manifestPlaceholders["oauthScheme"] = "io.github.strawwaffle.glorp.dev"
-            buildConfigField("String", "DGG_CLIENT_ID", "\"\"")
-            buildConfigField("String", "DGG_CLIENT_SECRET_SHA256", "\"\"")
             buildConfigField("String", "SITE_ORIGIN", "\"https://www.omniliberal.dev\"")
             buildConfigField("boolean", "DEV_IMPORT", "true")
             buildConfigField("boolean", "SELF_UPDATE", "false")
@@ -92,9 +80,6 @@ android {
             initWith(getByName("release"))
             applicationIdSuffix = ".dev"
             manifestPlaceholders["appLabel"] = "Glorp (dev)"
-            manifestPlaceholders["oauthScheme"] = "io.github.strawwaffle.glorp.dev"
-            buildConfigField("String", "DGG_CLIENT_ID", "\"\"")
-            buildConfigField("String", "DGG_CLIENT_SECRET_SHA256", "\"\"")
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
             buildConfigField("String", "SITE_ORIGIN", "\"https://www.omniliberal.dev\"")
@@ -121,13 +106,3 @@ dependencies {
     implementation(libs.code.scanner)
     implementation(libs.fragment)
 }
-
-/** A value from ~/.secrets/glorp, or empty when it isn't there. */
-fun glorpSecret(name: String): String =
-    File(System.getProperty("user.home"), ".secrets/glorp/$name").takeIf { it.exists() }?.readText()?.trim().orEmpty()
-
-fun sha256Hex(text: String): String =
-    MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
-
-/** [value] as a Java string literal for a BuildConfig field. */
-fun quoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""

@@ -39,12 +39,9 @@ import androidx.compose.ui.unit.sp
 import io.github.strawwaffle.glorp.auth.Session
 
 /**
- * Signing in, three ways, easiest first:
+ * Signing in, easiest first:
  *
- * - "Sign in with destiny.gg": the site's OAuth flow in the phone's own
- *   browser (see [io.github.strawwaffle.glorp.site.AppSignIn]). One tap, but
- *   it only gives what a login key gives: chat and whispers.
- * - "From a computer": the site's login cookies, which open everything else
+ * - "From a computer": the site's login cookies, which open everything
  *   (settings that follow the account, whisper history, notifications,
  *   /stalk, what you're watching). The site keeps them out of reach of
  *   pages, so Glorp's sign-in page (on GitHub Pages) has you copy them from
@@ -52,7 +49,9 @@ import io.github.strawwaffle.glorp.auth.Session
  * - By hand: a login key from the developer page, or the cookies typed in.
  *
  * The site's login page can't run inside the app: Twitch's and Kick's bot
- * protection blank it in a web view, and Google refuses in-app sign-in.
+ * protection blank it in a web view, and Google refuses in-app sign-in. Its
+ * OAuth for apps doesn't help: chat takes only login keys made by hand, and
+ * turns away any token an app holds (ApiController::userByAuthToken).
  */
 @Composable
 fun SignInScreen(
@@ -61,17 +60,13 @@ fun SignInScreen(
     busy: Boolean,
     onSession: (Session, (String?) -> Unit) -> Unit,
     onClose: () -> Unit,
-    /** Opens the site's sign-in for Glorp's app in the browser; null when this build has none. */
-    onSiteSignIn: (() -> Unit)? = null,
     /** Scans a QR code; null where there's no scanner. */
     scanCode: (((String?) -> Unit) -> Unit)? = null,
     /** Reads a sign-in code from the computer page. */
     readCode: (String) -> Session? = { null },
-    /** What went wrong coming back from the browser, if anything. */
-    error: String? = null,
 ) {
     var way by remember { mutableStateOf(Way.Choose) }
-    var problem by remember(error) { mutableStateOf(error) }
+    var problem by remember { mutableStateOf<String?>(null) }
     val submit: (Session) -> Unit = { session -> problem = null; onSession(session) { problem = it } }
 
     Column(Modifier.fillMaxSize().background(Palette.Black)) {
@@ -90,7 +85,6 @@ fun SignInScreen(
                 problem?.let { Text(it, color = Palette.Orange, fontSize = 14.sp) }
                 when (way) {
                     Way.Choose -> {
-                        if (onSiteSignIn != null) SiteSignIn(host, busy, onSiteSignIn)
                         ComputerSignIn(host, busy, scanCode, readCode, submit) { problem = it }
                         Text("Other ways", color = Palette.TextDim, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         TextButton(onClick = { way = Way.Key; problem = null }) { Text("Paste a login key", color = Palette.Blue) }
@@ -127,19 +121,6 @@ private fun Option(title: String, detail: String, content: @Composable () -> Uni
 }
 
 @Composable
-private fun SiteSignIn(host: String, busy: Boolean, onSiteSignIn: () -> Unit) = Option(
-    "Sign in with $host",
-    "Opens $host in your browser: sign in there as usual if you aren't already, and tap Authorize. " +
-        "Gives chat and whispers.",
-) {
-    Button(
-        onClick = onSiteSignIn,
-        enabled = !busy,
-        colors = ButtonDefaults.buttonColors(containerColor = Palette.Blue, contentColor = Palette.OnAction),
-    ) { Text("Sign in with $host") }
-}
-
-@Composable
 private fun ComputerSignIn(
     host: String,
     busy: Boolean,
@@ -149,8 +130,8 @@ private fun ComputerSignIn(
     onProblem: (String) -> Unit,
 ) = Option(
     "Sign in from a computer",
-    "For everything else too: settings that follow your account, whisper history, notifications, " +
-        "/stalk and /mentions, and what you're watching.",
+    "For everything: chat and whispers, settings that follow your account, whisper history, " +
+        "notifications, /stalk and /mentions, and what you're watching.",
 ) {
     @Suppress("DEPRECATION") // The newer clipboard API is suspend-only and platform-typed.
     val clipboard = LocalClipboardManager.current

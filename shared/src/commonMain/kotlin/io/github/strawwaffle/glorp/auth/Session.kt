@@ -14,18 +14,11 @@ sealed interface Session {
      * A login key from the site's developer page (Connections → Create Login
      * Key). Chat takes it as the `authtoken` cookie. It lasts until removed on
      * that page, but the rest of the site doesn't accept it.
-     *
-     * "Sign in with destiny.gg" gives the same kind of token, made for Glorp's
-     * app on the site: it runs out after an hour and is renewed with [refresh]
-     * (see [io.github.strawwaffle.glorp.site.AppSignIn]).
      */
-    class LoginKey(val key: String, val refresh: String? = null, val expiresAt: Long? = null) : Session {
+    class LoginKey(val key: String) : Session {
         override val cookieHeader get() = "authtoken=$key"
-
-        /** Made by "Sign in with destiny.gg", and so renewable. */
-        val renewable: Boolean get() = refresh != null
-        override fun toString() = "LoginKey(…${if (renewable) ", renewable" else ""})"
-        override fun equals(other: Any?) = other is LoginKey && other.key == key && other.refresh == refresh && other.expiresAt == expiresAt
+        override fun toString() = "LoginKey(…)"
+        override fun equals(other: Any?) = other is LoginKey && other.key == key
         override fun hashCode() = key.hashCode()
     }
 
@@ -64,19 +57,14 @@ sealed interface Session {
 
         /** The stored form: a kind letter, then the values on their own lines. */
         fun encode(session: Session): String = when (session) {
-            is LoginKey ->
-                if (session.refresh == null) "k\n${session.key}"
-                else "k\n${session.key}\n${session.refresh}\n${session.expiresAt ?: 0}"
+            is LoginKey -> "k\n${session.key}"
             is Cookies -> "c\n${session.sid}\n${session.rememberMe.orEmpty()}"
         }
 
         fun decode(text: String): Session? {
             val parts = text.split('\n')
             return when (parts.firstOrNull()) {
-                "k" -> parts.getOrNull(1)?.let(::loginKey)?.let { key ->
-                    val refresh = parts.getOrNull(2)?.takeIf { keyShape.matches(it) }
-                    if (refresh == null) key else LoginKey(key.key, refresh, parts.getOrNull(3)?.toLongOrNull())
-                }
+                "k" -> parts.getOrNull(1)?.let(::loginKey)
                 "c" -> cookies(parts.getOrElse(1) { "" }, parts.getOrElse(2) { "" })
                 else -> null
             }

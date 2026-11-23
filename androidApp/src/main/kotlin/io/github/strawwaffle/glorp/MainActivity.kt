@@ -30,7 +30,6 @@ import io.github.strawwaffle.glorp.notify.Notifier
 import io.github.strawwaffle.glorp.notify.NotifyControls
 import io.github.strawwaffle.glorp.notify.NotifyOptions
 import io.github.strawwaffle.glorp.notify.OpenRequests
-import io.github.strawwaffle.glorp.site.AppClient
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
@@ -105,8 +104,6 @@ class MainActivity : ComponentActivity() {
                 ),
                 notify = notify,
                 diagnostics = Crashes.diagnostics(applicationContext, BuildConfig.VERSION_NAME),
-                appClient = BuildConfig.DGG_CLIENT_ID.takeIf { it.isNotEmpty() && BuildConfig.DGG_CLIENT_SECRET_SHA256.isNotEmpty() }
-                    ?.let { AppClient(it, BuildConfig.DGG_CLIENT_SECRET_SHA256) },
                 scanCode = ::scanCode,
             )
         }
@@ -141,12 +138,8 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    /** A tapped notification says where to go (see Notifier); the browser may be back from signing in. */
+    /** A tapped notification says where to go (see Notifier). */
     private fun takeOpenRequest(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_VIEW && intent.data?.host == "oauth") {
-            OpenRequests.signIn.value = intent.data.toString()
-            intent.data = null
-        }
         intent?.getStringExtra(Notifier.EXTRA_OPEN)?.let { OpenRequests.pending.value = it }
         intent?.removeExtra(Notifier.EXTRA_OPEN)
     }

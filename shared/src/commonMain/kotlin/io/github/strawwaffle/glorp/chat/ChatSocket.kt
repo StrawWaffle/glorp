@@ -37,11 +37,8 @@ enum class SocketState { Connecting, Connected, Waiting, Stopped }
 class ChatSocket(
     private val client: HttpClient,
     private val url: String,
-    /** The login to connect with, asked on every connect: a sign-in token may have been renewed meanwhile. */
-    private val cookieHeader: suspend () -> String?,
+    private val cookieHeader: String?,
 ) {
-    constructor(client: HttpClient, url: String, cookieHeader: String?) : this(client, url, { cookieHeader })
-
     private val _state = MutableStateFlow(SocketState.Connecting)
     val state: StateFlow<SocketState> = _state.asStateFlow()
 
@@ -55,10 +52,9 @@ class ChatSocket(
             _state.value = SocketState.Connecting
             var opened: TimeSource.Monotonic.ValueTimeMark? = null
             try {
-                val login = cookieHeader()
                 client.webSocket(urlString = url, request = {
                     header(HttpHeaders.UserAgent, USER_AGENT)
-                    if (login != null) header(HttpHeaders.Cookie, login)
+                    if (cookieHeader != null) header(HttpHeaders.Cookie, cookieHeader)
                 }) {
                     current = this
                     opened = TimeSource.Monotonic.markNow()

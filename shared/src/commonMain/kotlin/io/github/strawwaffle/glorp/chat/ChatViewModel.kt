@@ -10,9 +10,6 @@ import io.github.strawwaffle.glorp.site.Account
 import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.site.LiveSocket
 import io.github.strawwaffle.glorp.site.LookBack
-import io.github.strawwaffle.glorp.site.AppClient
-import io.github.strawwaffle.glorp.site.AppSignIn
-import io.github.strawwaffle.glorp.site.needsRenewal
 import io.github.strawwaffle.glorp.site.LinkTitles
 import io.github.strawwaffle.glorp.site.LiveState
 import io.github.strawwaffle.glorp.site.with
@@ -60,8 +57,6 @@ class ChatViewModel(
     origin: String,
     private val store: SessionStore,
     private val prefs: ChatPrefs = MemoryChatPrefs(),
-    /** Glorp's app on the site, for "Sign in with destiny.gg"; null in builds without it. */
-    private val app: AppClient? = null,
 ) : ViewModel() {
     private val client = createHttpClient()
 
@@ -276,7 +271,7 @@ class ChatViewModel(
                 LiveSocket(client, site, (session as? Session.Cookies)?.cookieHeader, reportedWatching)
                     .run { update -> _live.value = _live.value.with(update) }
             }
-            val chat = ChatSocket(client, site.chatSocketUrl) { renewIfDue(); session?.cookieHeader }
+            val chat = ChatSocket(client, site.chatSocketUrl, session?.cookieHeader)
             socket = chat
             launch { chat.state.collect { _socketState.value = it } }
             // Frames are read off the main thread (a backlog or the user list
@@ -343,42 +338,6 @@ class ChatViewModel(
         if (!wanted) return
         stop()
         start()
-    }
-
-    /** Whether "Sign in with destiny.gg" is there in this build. */
-    val canSignInWithSite: Boolean get() = app != null
-
-    private fun appSignIn() = app?.let { AppSignIn(client, site, it, prefs) }
-
-    /** The site's sign-in page for Glorp's app, to open in the browser. */
-    fun appSignInUrl(): String? = appSignIn()?.authorizeUrl()
-
-    /** The browser came back from the site's sign-in with [redirect]. */
-    fun finishAppSignIn(redirect: String, onResult: (String?) -> Unit) {
-        val flow = appSignIn() ?: return onResult("This build can't sign in with $host.")
-        viewModelScope.launch {
-            ready.await()
-            _signingIn.value = true
-            val result = flow.complete(redirect)
-            _signingIn.value = false
-            when (result) {
-                is AppSignIn.Result.Failed -> onResult(result.why)
-                is AppSignIn.Result.Signed -> signIn(result.session, onResult)
-            }
-        }
-    }
-
-    /** A sign-in token from the site's app runs out after an hour: renewed before chat uses it. */
-    private suspend fun renewIfDue() {
-        val key = session as? Session.LoginKey ?: return
-        if (!needsRenewal(key)) return
-        val renewed = appSignIn()?.renew(key)
-        if (renewed != null) {
-            session = renewed
-            store.save(renewed)
-        } else {
-            AppLog.note("signin", "couldn't renew the sign-in")
-        }
     }
 
     /** A login key being tried: chat's ME answer decides, then [onResult] hears. */
