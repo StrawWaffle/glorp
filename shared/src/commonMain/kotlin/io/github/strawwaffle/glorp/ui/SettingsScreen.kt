@@ -80,6 +80,10 @@ fun SettingsScreen(
     warnings: Boolean,
     onWarnings: (Boolean) -> Unit,
     /** Whether test versions are offered; null in builds that don't update themselves. */
+    appFont: AppFont = AppFont.Phone,
+    onAppFont: (AppFont) -> Unit = {},
+    textScale: Float = 1f,
+    onTextScale: (Float) -> Unit = {},
     testVersions: Boolean? = null,
     onTestVersions: (Boolean) -> Unit = {},
 ) {
@@ -88,6 +92,19 @@ fun SettingsScreen(
         item {
             Text("Settings", color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(16.dp))
         }
+        item { SettingsHeading("Text") }
+        item {
+            Choices(
+                "Chat text size",
+                "On top of your phone's text size, which Glorp follows everywhere",
+                textScales,
+                textScale,
+                label = ::textScaleLabel,
+                onPick = onTextScale,
+            )
+        }
+        item { Choices("Font", null, AppFont.entries, appFont, label = { it.label }, onPick = onAppFont) }
+
         item { SettingsHeading("Chat") }
         item {
             Text(

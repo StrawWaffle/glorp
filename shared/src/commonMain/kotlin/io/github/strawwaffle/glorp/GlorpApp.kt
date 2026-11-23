@@ -33,6 +33,8 @@ import io.github.strawwaffle.glorp.ui.SettingsScreen
 import io.github.strawwaffle.glorp.ui.UserActions
 import io.github.strawwaffle.glorp.ui.Fullscreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
+import io.github.strawwaffle.glorp.ui.AppFont
+import io.github.strawwaffle.glorp.ui.textScales
 import io.github.strawwaffle.glorp.ui.LocalFullscreen
 import io.github.strawwaffle.glorp.ui.SystemFullscreen
 import io.github.strawwaffle.glorp.ui.LocalBackgroundAudio
@@ -87,11 +89,13 @@ fun GlorpApp(
             },
         )
     }
+    var appFont by remember { mutableStateOf(AppFont.entries.firstOrNull { it.name == prefs.get(APP_FONT) } ?: AppFont.Phone) }
+    var textScale by remember { mutableStateOf(prefs.get(TEXT_SCALE)?.toFloatOrNull()?.takeIf { it in textScales } ?: 1f) }
     CompositionLocalProvider(
         LocalPictureInPicture provides pictureInPicture,
         LocalBackgroundAudio provides backgroundAudio,
         LocalCatchUp provides catchUp,
-    ) { GlorpTheme {
+    ) { GlorpTheme(appFont) {
         val chat = viewModel { ChatViewModel(origin, sessions, prefs).also { vm ->
             initialEmbed?.let(Embed::parse)?.let(vm::watch)
             if (devFrames.isNotEmpty()) vm.play(devFrames)
@@ -182,7 +186,7 @@ fun GlorpApp(
                 settings.showTime, settings.timestampFormat, settings.hideFlairIcons,
                 settings.highlightSelf, chat.input.tags.colors, settings.taggedVisibility,
                 chat.input.options.hiddenFlairs, settings.censorRemoved,
-                playing = embed?.key, otherStreams = chat.input.options.otherStreams,
+                playing = embed?.key, otherStreams = chat.input.options.otherStreams, textScale = textScale,
             ),
         ) {
         ChatScreen(
@@ -280,6 +284,10 @@ fun GlorpApp(
                             mentionsService = prefs.get(NotifyOptions.SERVER) != null,
                             warnings = chat.warnings,
                             onWarnings = chat::warnAbout,
+                            appFont = appFont,
+                            onAppFont = { appFont = it; prefs.put(APP_FONT, it.name) },
+                            textScale = textScale,
+                            onTextScale = { textScale = it; prefs.put(TEXT_SCALE, it.toString()) },
                             testVersions = testVersions,
                             onTestVersions = { on -> testVersions = on; updates?.testVersions = on },
                         )
@@ -357,3 +365,5 @@ fun GlorpApp(
 
 private const val BACKGROUND_AUDIO = "background-audio"
 private const val CATCH_UP = "catch-up"
+private const val APP_FONT = "app-font"
+private const val TEXT_SCALE = "text-scale"

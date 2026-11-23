@@ -69,6 +69,20 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import io.github.strawwaffle.glorp.chat.ChatInputState
@@ -396,6 +410,8 @@ data class ChatLook(
     /** The embed playing here (`platform/id`), and what to do with chat from people watching another. */
     val playing: String? = null,
     val otherStreams: OtherStreams = OtherStreams.Show,
+    /** Chat text size over the phone's own (see [textScales]). */
+    val textScale: Float = 1f,
 )
 
 /** chat-gui's tag colours. */
@@ -425,7 +441,19 @@ val LocalChatLook = staticCompositionLocalOf { ChatLook() }
 val LocalOpenLink = staticCompositionLocalOf<(String) -> Boolean> { { false } }
 
 /** A line laid out once per change of its inputs, with pictures as inline content. */
-private class RenderedLine(val text: AnnotatedString, val inline: Map<String, InlineTextContent>, val mentionsMe: Boolean)
+private class RenderedLine(
+    val text: AnnotatedString,
+    val inline: Map<String, InlineTextContent>,
+    val mentionsMe: Boolean,
+    /** Where the name is, when it's drawn in the moving rainbow (Tier 5). */
+    val rainbowName: IntRange? = null,
+)
+
+/** The site's rainbow (flairs.css): eight hues at 100% saturation, 65% lightness, once across the name. */
+private val rainbow = (0..8).map { Color.hsl(it * 45f, 1f, 0.65f) }
+
+/** Once along the name every 3 seconds, as the site's `move` animation. */
+private const val RAINBOW_MS = 3_000
 
 @Composable
 internal fun ChatRow(
@@ -441,8 +469,13 @@ internal fun ChatRow(
     /** Holding the line: its message's sheet. Null for lines that have none. */
     onHold: ((ChatLine) -> Unit)? = null,
 ) {
-    val density = LocalDensity.current
     val look = LocalChatLook.current
+    // The chat text size setting scales the text, not the emotes and badges,
+    // whose sizes are set in dp from this same density.
+    val outer = LocalDensity.current
+    val density = remember(outer, look.textScale) {
+        if (look.textScale == 1f) outer else Density(outer.density, outer.fontScale * look.textScale)
+    }
     val uri = LocalUriHandler.current
     val openLink = LocalOpenLink.current
     // A press held long enough to open the sheet isn't also a tap on the
@@ -472,9 +505,34 @@ internal fun ChatRow(
     // From someone watching another stream: faded as the site's eye button does.
     val faded = look.otherStreams == OtherStreams.Dim && !rendered.mentionsMe && !highlighted &&
         fromOtherStream(line, me, look.playing)
-    Text(
+    // A Tier 5 name: the text is drawn, then the moving rainbow is laid over
+    // the name's letters only (SrcAtop, in a layer of its own). Each frame
+    // redraws; nothing is laid out again.
+    val rainbowName = rendered.rainbowName
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val phase = if (rainbowName == null) null else rememberInfiniteTransition().animateFloat(
+        0f, 1f, infiniteRepeatable(tween(RAINBOW_MS, easing = LinearEasing)),
+    )
+    val rainbowLayer = if (rainbowName == null || phase == null) Modifier else Modifier
+        .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+        .drawWithContent {
+            drawContent()
+            val text = layout ?: return@drawWithContent
+            if (rainbowName.last >= text.layoutInput.text.length) return@drawWithContent
+            val path = text.getPathForRange(rainbowName.first, rainbowName.last + 1)
+            val bounds = path.getBounds()
+            val width = bounds.width.coerceAtLeast(1f)
+            val from = bounds.left + phase.value * width
+            drawPath(
+                path,
+                Brush.linearGradient(rainbow, Offset(from, 0f), Offset(from + width, 0f), TileMode.Repeated),
+                blendMode = BlendMode.SrcAtop,
+            )
+        }
+    CompositionLocalProvider(LocalDensity provides density) { Text(
         rendered.text,
         inlineContent = rendered.inline,
+        onTextLayout = { layout = it },
         modifier = Modifier.fillMaxWidth().then(if (faded) Modifier.alpha(0.3f) else Modifier).background(background)
             .then(if (bar == null) Modifier else Modifier.drawBehind { drawRect(bar, size = Size(4.dp.toPx(), size.height)) })
             .then(
@@ -486,11 +544,12 @@ internal fun ChatRow(
                     )
                 },
             )
-            .padding(horizontal = 10.dp, vertical = 2.dp),
+            .padding(horizontal = 10.dp, vertical = 2.dp)
+            .then(rainbowLayer),
         color = Palette.White,
         fontSize = 14.sp,
         lineHeight = 20.sp,
-    )
+    ) }
 }
 
 private val linkStyle = TextLinkStyles(SpanStyle(color = Palette.Blue, textDecoration = TextDecoration.Underline))
@@ -524,6 +583,7 @@ private fun render(
         Placeholder(widthDp.dp.toSp(), heightDp.dp.toSp(), PlaceholderVerticalAlign.Center)
     }
     var mentionsMe = false
+    var rainbowName: IntRange? = null
 
     val text = buildAnnotatedString {
         // The time first, as chat-gui puts it, for everything but a combo.
@@ -599,7 +659,9 @@ private fun render(
                 append(' ')
             }
             withLink(LinkAnnotation.Clickable("nick", nickStyle) { onNick(line.nick!!) }) {
+                val start = length
                 withStyle(SpanStyle(color = nameColor, fontWeight = FontWeight.Bold)) { append(line.nick) }
+                if (flairs.rainbowName(line.features)) rainbowName = start until length
             }
             append(if (line.action) " " else ": ")
         }
@@ -653,5 +715,5 @@ private fun render(
             }
         }
     }
-    return RenderedLine(text, inline, mentionsMe)
+    return RenderedLine(text, inline, mentionsMe, rainbowName)
 }

@@ -12,6 +12,8 @@ kotlin {
         compileSdk = 37
         minSdk = 26
         withHostTestBuilder {}
+        // The bundled font (composeResources/font).
+        androidResources { enable = true }
     }
 
     listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
@@ -27,6 +29,7 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
             implementation(libs.compose.material3)
+            implementation(libs.compose.resources)
             implementation(libs.lifecycle.viewmodel.compose)
             implementation(libs.lifecycle.runtime.compose)
             implementation(libs.coroutines.core)
@@ -58,6 +61,10 @@ kotlin {
             implementation(libs.ktor.client.mock)
         }
     }
+}
+
+compose.resources {
+    packageOfResClass = "io.github.strawwaffle.glorp.resources"
 }
 
 // The real-stylesheet check runs only when given a saved copy:

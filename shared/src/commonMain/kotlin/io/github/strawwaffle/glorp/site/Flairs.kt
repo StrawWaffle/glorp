@@ -25,7 +25,11 @@ data class Badge(val name: String, val label: String, val url: String, val width
 class Flairs private constructor(
     private val colored: List<Pair<String, Long>>,
     private val badges: Map<String, Pair<Int, Badge>>,
+    /** Flairs whose name colour is the site's moving rainbow (Tier 5) instead of their colour. */
+    private val rainbow: Set<String> = emptySet(),
 ) {
+    /** Whether the name is drawn in the moving rainbow: its colour comes from a rainbow flair. */
+    fun rainbowName(features: List<String>): Boolean = nameFlair(features)?.let { it in rainbow } == true
 
     /** The name colour as 0xAARRGGBB, or null for the default colour. */
     /** The flair whose colour the name takes, as chat-gui puts it on the name. */
@@ -54,6 +58,7 @@ class Flairs private constructor(
             val name: String = "",
             val label: String = "",
             val color: String? = null,
+            val rainbowColor: Boolean = false,
             val hidden: Boolean = false,
             val priority: Int = 0,
             val image: List<Image> = emptyList(),
@@ -71,7 +76,7 @@ class Flairs private constructor(
                 if (entry.hidden || entry.name.isEmpty()) return@mapNotNull null
                 entry.name to (entry.priority to Badge(entry.name, entry.label, url, image.width ?: 16, image.height ?: 16))
             }.toMap()
-            return Flairs(colored, badges)
+            return Flairs(colored, badges, entries.filter { it.rainbowColor && it.name.isNotEmpty() }.map { it.name }.toSet())
         }
 
         suspend fun fetch(client: HttpClient, site: Site): Flairs = try {

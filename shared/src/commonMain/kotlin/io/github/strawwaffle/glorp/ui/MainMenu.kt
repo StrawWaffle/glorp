@@ -131,7 +131,7 @@ fun MainMenu(
             Text(
                 "Glorp is an unofficial community app. It is not made by or affiliated with destiny.gg or Destiny. " +
                     "Free for non-commercial use (PolyForm Noncommercial 1.0.0). YouTube playback uses FUTO's Grayjay plugin, " +
-                    "run by code adapted from Grayjay under FUTO's Source First License 1.1. " +
+                    "run by code adapted from Grayjay under FUTO's Source First License 1.1. The site's font, Roboto, is Google's (Apache 2.0). " +
                     "Community screens use rustlesearch.dev, mitchdev.net (by Mitchdev) and dinkdonk.mov (by Mitch), " +
                     "and the nuke, mutelinks and banned phrase warnings use vyneer.me (by vyneer), with thanks.",
                 color = Palette.TextDim,
