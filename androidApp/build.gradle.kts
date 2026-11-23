@@ -10,6 +10,10 @@ android {
     namespace = "io.github.strawwaffle.glorp"
     compileSdk = 37
 
+    // Native libraries (QuickJS, libavif) compressed in the APK: one APK holds
+    // every processor's copy, and installing unpacks only the one in use.
+    packaging { jniLibs { useLegacyPackaging = true } }
+
     defaultConfig {
         applicationId = "io.github.strawwaffle.glorp"
         minSdk = 26
