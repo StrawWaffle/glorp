@@ -90,6 +90,8 @@ import io.github.strawwaffle.glorp.chat.ChatLine
 import io.github.strawwaffle.glorp.chat.ChatViewModel
 import io.github.strawwaffle.glorp.chat.Highlighter
 import io.github.strawwaffle.glorp.chat.LineFilter
+import io.github.strawwaffle.glorp.site.LinkTitles
+import io.github.strawwaffle.glorp.site.mediaOf
 import io.github.strawwaffle.glorp.chat.OtherStreams
 import io.github.strawwaffle.glorp.chat.fromOtherStream
 import io.github.strawwaffle.glorp.chat.Poll
@@ -445,6 +447,11 @@ val LocalChatLook = staticCompositionLocalOf { ChatLook() }
 /** Links the app opens itself (rustlesearch.dev searches); true when it took the link, false for the browser. */
 val LocalOpenLink = staticCompositionLocalOf<(String) -> Boolean> { { false } }
 
+/** Titles for YouTube and Rumble links; null where they aren't looked up (turned off, or no app around). */
+val LocalLinkTitles = staticCompositionLocalOf<LinkTitles?> { null }
+
+private val anyUrl = Regex("""https?://\S+""")
+
 /** A line laid out once per change of its inputs, with pictures as inline content. */
 private class RenderedLine(
     val text: AnnotatedString,
@@ -489,9 +496,18 @@ internal fun ChatRow(
     // A muted or banned user's message hides behind <censored> until tapped, as on the site.
     var revealed by remember(line.id) { mutableStateOf(false) }
     val censored = line.moderated && look.censorRemoved && !revealed
-    val rendered = remember(line, continued, flairs, emotes, density, me, look, censored) {
+    // YouTube and Rumble links on screen are looked up for their titles;
+    // the row is drawn again as each arrives.
+    val titles = LocalLinkTitles.current
+    val media = remember(line.id, titles) {
+        if (titles == null) emptyList() else anyUrl.findAll(line.text).map { it.value }.filter { mediaOf(it) != null }.toList()
+    }
+    if (titles != null && media.isNotEmpty()) LaunchedEffect(line.id) { media.forEach(titles::request) }
+    val knownTitles = media.map { titles?.titleOf(it) }
+    val rendered = remember(line, continued, flairs, emotes, density, me, look, censored, knownTitles) {
         render(
             line, continued, flairs, emotes, density, me, mention, look, censored,
+            titleOf = { url -> titles?.titleOf(url) },
             onReveal = { revealed = true },
             onEmbed = { if (gate.open) onEmbed(it) },
             onNick = { if (gate.open) onNick(it) },
@@ -581,6 +597,7 @@ private fun render(
     mention: Regex?,
     look: ChatLook,
     censored: Boolean,
+    titleOf: (String) -> LinkTitles.Title? = { null },
     onReveal: () -> Unit,
     onEmbed: (Embed) -> Unit,
     onNick: (String) -> Unit,
@@ -698,7 +715,23 @@ private fun render(
         withStyle(style) {
             for (segment in parts) when (segment) {
                 is Segment.Text -> append(segment.text)
-                is Segment.Link -> withLink(LinkAnnotation.Clickable(segment.url, linkStyle) { onUrl(segment.url) }) { append(segment.text) }
+                is Segment.Link -> withLink(LinkAnnotation.Clickable(segment.url, linkStyle) { onUrl(segment.url) }) {
+                    // A video link with its title: the platform's mark, the title and channel.
+                    val title = titleOf(segment.url)
+                    if (title == null) append(segment.text)
+                    else {
+                        val id = "platform:${title.platform}"
+                        inline.getOrPut(id) {
+                            InlineTextContent(placeholder(19, 16)) { PlatformIcon(title.platform, 15.dp, Modifier.padding(end = 4.dp)) }
+                        }
+                        appendInlineContent(id, " ")
+                        append(title.title)
+                        if (title.channel != null) {
+                            append(" · ")
+                            append(title.channel)
+                        }
+                    }
+                }
                 is Segment.EmbedLink -> withLink(
                     LinkAnnotation.Clickable(segment.embed.key, linkStyle) { onEmbed(segment.embed) },
                 ) {

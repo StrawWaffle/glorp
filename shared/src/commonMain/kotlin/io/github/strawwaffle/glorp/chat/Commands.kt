@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.chat
 
+import io.github.strawwaffle.glorp.site.LookBack
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -43,6 +44,15 @@ sealed interface Command {
     data object StopPoll : Command
     data object ShowPoll : Command
 
+    /** `/stalk [nick] [limit]`: someone's last messages; null [nick] is you. */
+    data class Stalk(val nick: String?, val limit: Int) : Command
+
+    /** `/mentions [nick] [limit]`: the last messages naming someone; null [nick] is you. */
+    data class Mentions(val nick: String?, val limit: Int) : Command
+
+    /** `/maxlines [n]`: how many lines chat keeps; null asks. */
+    data class MaxLines(val lines: Int?) : Command
+
     /** `/open nick`: the whisper conversation with them. */
     data class Open(val nick: String) : Command
 
@@ -64,7 +74,9 @@ val commandList = listOf(
     CommandInfo("highlight", emptyList(), "Highlight messages from <nick> for easier visibility."),
     CommandInfo("ignore", emptyList(), "Stop showing messages from <nick>."),
     CommandInfo("ipban", emptyList(), "Ban <nick> and their IP address.", mod = true),
+    CommandInfo("maxlines", emptyList(), "The maximum number of lines the chat will store."),
     CommandInfo("me", emptyList(), "Send an action message in italics."),
+    CommandInfo("mentions", listOf("m"), "Return a list of messages where <nick> is mentioned."),
     CommandInfo("message", listOf("msg", "whisper", "w", "tell", "t", "notify"), "Send a whisper to <nick>."),
     CommandInfo("mute", emptyList(), "Stop <nick> from sending messages.", mod = true),
     CommandInfo("open", listOf("o"), "Open a whisper conversation with <nick>."),
@@ -80,6 +92,7 @@ val commandList = listOf(
     ),
     CommandInfo("reply", listOf("r"), "Reply to the last whisper you received."),
     CommandInfo("showpoll", listOf("showvote"), "Show the last poll again after closing it."),
+    CommandInfo("stalk", listOf("s"), "Return a list of messages from <nick>."),
     CommandInfo("subonly", emptyList(), "Set subscriber-only chat mode <on>, <off>, or to a specific <tier> (1-5).", mod = true),
     CommandInfo("tag", emptyList(), "Mark <nick>'s messages."),
     CommandInfo("timestampformat", emptyList(), "Set the time format of the chat."),
@@ -95,15 +108,10 @@ val commandList = listOf(
 
 /** chat-gui's commands Glorp doesn't do, and why, so they don't go to chat as text. */
 private val notHere = mapOf(
-    "stalk" to "needs the site's own login, which login keys don't give",
-    "s" to "needs the site's own login, which login keys don't give",
-    "mentions" to "needs the site's own login, which login keys don't give",
-    "m" to "needs the site's own login, which login keys don't give",
     "baninfo" to "needs the site's own login; your profile on the site shows bans",
     "host" to "needs the site's own login",
     "unhost" to "needs the site's own login",
     "exit" to "conversations close with the back button",
-    "maxlines" to "Glorp keeps a fixed number of lines",
     "hint" to "there are no hints in Glorp",
     "connect" to "Glorp connects by itself",
 )
@@ -224,6 +232,26 @@ fun parseCommand(text: String, mod: Boolean): Command {
         "poll", "vote", "v" -> Command.StartPoll(parsePoll(args), name)
         "pollstop", "votestop", "vs" -> Command.StopPoll
         "showpoll", "showvote" -> Command.ShowPoll
+        "stalk", "s", "mentions", "m" -> {
+            val stalk = name.startsWith("s")
+            // chat-gui: a number first is the limit, for yourself.
+            val first = args.firstOrNull()
+            val selfLimit = first?.all { it.isDigit() } == true
+            val nick = if (selfLimit) null else first
+            val limit = (if (selfLimit) first else args.getOrNull(1))?.toIntOrNull()
+                ?.coerceIn(1, LookBack.MAX_LIMIT) ?: LookBack.DEFAULT_LIMIT
+            when {
+                nick != null && !isNick(nick) -> Command.Problem("Invalid nick - /$name <nick> <limit>")
+                stalk && nick == null && !selfLimit -> Command.Problem("Invalid nick - /stalk <nick> <limit>")
+                stalk -> Command.Stalk(nick, limit)
+                else -> Command.Mentions(nick, limit)
+            }
+        }
+        "maxlines" -> when {
+            args.isEmpty() -> Command.MaxLines(null)
+            else -> args[0].toIntOrNull()?.let { kotlin.math.abs(it) }?.takeIf { it > 0 }?.let { Command.MaxLines(it) }
+                ?: Command.Problem("Invalid argument - /maxlines is expecting a number.")
+        }
         "open", "o" -> when {
             args.isEmpty() -> Command.Problem("Usage: /$name <nick>")
             !isNick(args[0]) -> Command.Problem("Invalid nick - /$name <nick>")

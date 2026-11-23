@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -84,6 +85,9 @@ fun SettingsScreen(
     onColorTheme: (ColorTheme) -> Unit = {},
     /** Opens the list of tagged people. */
     onTags: () -> Unit = {},
+    /** Where Destiny's stream plays when he's live on several platforms. */
+    preferredPlatform: String = "kick",
+    onPreferredPlatform: (String) -> Unit = {},
     appFont: AppFont = AppFont.Phone,
     onAppFont: (AppFont) -> Unit = {},
     textScale: Float = 1f,
@@ -135,6 +139,14 @@ fun SettingsScreen(
             }
         }
         item { SwitchRow("Show flair icons", null, !settings.hideFlairIcons) { settings.setBool("hideflairicons", !it) } }
+        item {
+            SwitchRow(
+                "Titles for YouTube and Rumble links",
+                "The video's title and channel in place of the link. Each one is asked of YouTube or Rumble, which sees your IP address, as when you open it",
+                options.linkTitles,
+                options::showLinkTitles,
+            )
+        }
         item {
             Choices(
                 "Messages kept",
@@ -269,6 +281,16 @@ fun SettingsScreen(
 
         item { SettingsHeading("Player") }
         item {
+            Choices(
+                "Destiny's stream on",
+                "When he's live on several platforms. You can still pick another from the bar",
+                listOf("kick", "youtube", "twitch", "rumble"),
+                preferredPlatform,
+                label = PlatformIcons::name,
+                onPick = onPreferredPlatform,
+            )
+        }
+        item {
             SwitchRow(
                 "Keep playing with the screen off",
                 "Kick, Twitch and YouTube live keep their sound when you lock the phone",
@@ -336,12 +358,14 @@ internal fun SwitchRow(title: String, detail: String?, on: Boolean, onChange: (B
 }
 
 /** One of a few values, all in view. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun <T> Choices(title: String, detail: String?, values: List<T>, current: T, label: (T) -> String, onPick: (T) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(title, color = Palette.White, fontSize = 15.sp)
         detail?.let { Text(it, color = Palette.TextDim, fontSize = 12.sp) }
-        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Wraps onto a second line on a narrow phone or with large text.
+        FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             for (value in values) {
                 val picked = value == current
                 Text(

@@ -161,8 +161,23 @@ class InputTest {
 
     @Test
     fun saysWhatItDoesNotDo() {
-        assertTrue(assertIs<Command.Problem>(parseCommand("/stalk someone", false)).text.startsWith("/stalk isn't in Glorp"))
+        assertTrue(assertIs<Command.Problem>(parseCommand("/host someone", false)).text.startsWith("/host isn't in Glorp"))
         assertEquals(Command.Problem("Unknown command. Try /help"), parseCommand("/frobnicate", false))
+    }
+
+    @Test
+    fun readsStalkMentionsAndMaxlinesLikeChatGui() {
+        assertEquals(Command.Stalk("Pal", 3), parseCommand("/stalk Pal", false))
+        assertEquals(Command.Stalk("Pal", 10), parseCommand("/s Pal 10", false))
+        // A number first is the limit, for yourself.
+        assertEquals(Command.Stalk(null, 5), parseCommand("/stalk 5", false))
+        assertIs<Command.Problem>(parseCommand("/stalk", false))
+        assertEquals(Command.Mentions(null, 3), parseCommand("/mentions", false))
+        assertEquals(Command.Mentions("Pal", 50), parseCommand("/m Pal 999", false))
+        assertIs<Command.Problem>(parseCommand("/mentions bad!nick", false))
+        assertEquals(Command.MaxLines(null), parseCommand("/maxlines", false))
+        assertEquals(Command.MaxLines(400), parseCommand("/maxlines -400", false))
+        assertIs<Command.Problem>(parseCommand("/maxlines lots", false))
     }
 
     @Test

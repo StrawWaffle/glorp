@@ -88,6 +88,11 @@ data class LiveState(
     /** Whether the site has said yet which of Destiny's streams are live. */
     val known: Boolean = false,
 ) {
+    companion object {
+        /** Kick unless the settings say otherwise. */
+        const val DEFAULT_PLATFORM = "kick"
+    }
+
     val liveStreams: List<LiveStream> get() = streams.filter { it.live }
 
     /**
@@ -95,7 +100,7 @@ data class LiveState(
      * preferred platform if it's live there, else on the first live one, else
      * whatever is being hosted. (The site's `handleDataUpdate`.)
      */
-    fun defaultEmbed(preferredPlatform: String = "youtube"): Embed? {
+    fun defaultEmbed(preferredPlatform: String = DEFAULT_PLATFORM): Embed? {
         val live = liveStreams
         return (live.firstOrNull { it.embed.platform == preferredPlatform } ?: live.firstOrNull())?.embed ?: hosting
     }

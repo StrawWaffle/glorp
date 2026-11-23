@@ -9,6 +9,8 @@ import io.github.strawwaffle.glorp.net.createHttpClient
 import io.github.strawwaffle.glorp.site.Account
 import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.site.LiveSocket
+import io.github.strawwaffle.glorp.site.LookBack
+import io.github.strawwaffle.glorp.site.LinkTitles
 import io.github.strawwaffle.glorp.site.LiveState
 import io.github.strawwaffle.glorp.site.with
 import io.github.strawwaffle.glorp.video.Resolution
@@ -63,6 +65,13 @@ class ChatViewModel(
     private var site = Site.guess(origin)
     private val log = ChatLog()
     private var session: Session? = store.load()
+
+    /** What plays here, told to the site (see [LiveSocket]); a banned embed counts as nothing, as on bigscreen. */
+    private val reportedWatching = MutableStateFlow<Embed?>(null)
+
+    fun reportWatching(embed: Embed?) {
+        reportedWatching.value = embed?.takeUnless { _live.value.isBanned(it) }
+    }
     private var socket: ChatSocket? = null
 
     /** The input's draft, history, suggestions and the ignore and highlight lists. */
@@ -257,7 +266,10 @@ class ChatViewModel(
             ready.await()
             // Chat and the live feed connect while the emote list loads; the
             // event loop waits for the list before it groups the backlog.
-            launch { LiveSocket(client, site).run { update -> _live.value = _live.value.with(update) } }
+            launch {
+                LiveSocket(client, site, (session as? Session.Cookies)?.cookieHeader, reportedWatching)
+                    .run { update -> _live.value = _live.value.with(update) }
+            }
             val chat = ChatSocket(client, site.chatSocketUrl, session?.cookieHeader)
             socket = chat
             launch { chat.state.collect { _socketState.value = it } }
@@ -273,6 +285,15 @@ class ChatViewModel(
                 )
             }
         }
+    }
+
+    /** Where Destiny's stream plays when he's live on several platforms (see [LiveState.defaultEmbed]). */
+    var preferredPlatform by mutableStateOf(prefs.get(PREFERRED_PLATFORM) ?: LiveState.DEFAULT_PLATFORM)
+        private set
+
+    fun preferPlatform(platform: String) {
+        preferredPlatform = platform
+        prefs.put(PREFERRED_PLATFORM, platform)
     }
 
     /** Whether nukes, mutelinks and banned phrases are fetched to warn the input (on unless turned off). */
@@ -437,7 +458,7 @@ class ChatViewModel(
             is Command.Send -> transmit { chat!!.sendEvent(command.event, command.payload) }
             is Command.PostEmbed -> {
                 val first = command.args.firstOrNull()?.let(Embed::parse)
-                val embed = first ?: _picked.value ?: _live.value.defaultEmbed()
+                val embed = first ?: _picked.value ?: _live.value.defaultEmbed(preferredPlatform)
                 val words = if (first != null) command.args.drop(1) else command.args
                 if (embed == null) notice("Nothing embedded")
                 else transmit { chat!!.sendMessage(("#${embed.key} " + words.joinToString(" ")).trim()) }
@@ -474,6 +495,14 @@ class ChatViewModel(
                 notice("New format: ${command.format}.")
             }
             Command.Help -> notice(helpText(me.modPowers))
+            is Command.Stalk -> lookBack(command.nick ?: me.nick, stalk = true, command.limit)
+            is Command.Mentions -> lookBack(command.nick ?: me.nick, stalk = false, command.limit)
+            is Command.MaxLines -> if (command.lines == null) {
+                notice("Maximum lines stored: ${settings.maxLines}.")
+            } else {
+                settings.set("maxlines", kotlinx.serialization.json.JsonPrimitive(command.lines))
+                notice("Set maximum lines to ${settings.maxLines}.")
+            }
             Command.EmoteList -> notice("Available emotes: ${_emotes.value.all.joinToString(", ") { it.prefix }}.")
             is Command.Watch -> {
                 val embed = Embed.parse(command.link)
@@ -713,6 +742,34 @@ class ChatViewModel(
         }
     }
 
+    /** Titles for YouTube and Rumble links in chat. */
+    val linkTitles = LinkTitles(client, viewModelScope)
+
+    private var lookingBack: Job? = null
+
+    /** `/stalk` and `/mentions`, as chat-gui shows them: a line saying when, then the messages. */
+    private fun lookBack(nick: String, stalk: Boolean, limit: Int) {
+        if (lookingBack?.isActive == true) {
+            notice(if (stalk) "Still busy stalking $nick ..." else "Still busy getting $nick's mentions")
+            return
+        }
+        notice(if (stalk) "Getting messages from $nick ..." else "Getting mentions for $nick ...")
+        val look = LookBack(client, site, session as? Session.Cookies, prefs.get(io.github.strawwaffle.glorp.notify.NotifyOptions.SERVER))
+        lookingBack = viewModelScope.launch {
+            when (val found = if (stalk) look.stalk(nick, limit) else look.mentions(nick, limit)) {
+                is LookBack.Result.Failed -> notice(found.why)
+                is LookBack.Result.Lines -> if (found.lines.isEmpty()) {
+                    notice(if (stalk) "No messages from $nick." else "No mentions for $nick.")
+                } else {
+                    val last = io.github.strawwaffle.glorp.community.localDateTime(found.lines.last().at / 1000)
+                    val from = found.source?.let { " (from $it)" }.orEmpty()
+                    notice(if (stalk) "Stalked $nick last seen $last$from." else "Mentions for $nick last seen $last$from.")
+                    found.lines.forEach { events.trySend(ChatLine.user(it.nick, emptyList(), it.text, it.at)) }
+                }
+            }
+        }
+    }
+
     private fun notice(text: String) {
         events.trySend(ChatLine.info(text, Clock.System.now().toEpochMilliseconds()))
     }
@@ -882,6 +939,7 @@ class ChatViewModel(
         const val POLL_GRACE_MS = 15_000L
         /** chat-gui's `chat.settings.synced`: the user this device's settings last synced for. */
         const val WARNINGS = "warnings"
+        const val PREFERRED_PLATFORM = "preferred-platform"
         const val SETTINGS_SYNCED = "settings.synced"
         /** chat-gui's `chat.settings.pending`: the user with changes here the account's copy lacks. */
         const val SETTINGS_PENDING = "settings.pending"

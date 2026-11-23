@@ -23,6 +23,7 @@ import io.github.strawwaffle.glorp.ui.ChatScreen
 import io.github.strawwaffle.glorp.ui.ChatLook
 import io.github.strawwaffle.glorp.ui.LocalChatLook
 import io.github.strawwaffle.glorp.ui.LocalOpenLink
+import io.github.strawwaffle.glorp.ui.LocalLinkTitles
 import io.github.strawwaffle.glorp.notify.AlertCheck
 import io.github.strawwaffle.glorp.notify.NotifyControls
 import io.github.strawwaffle.glorp.notify.NotifyOptions
@@ -137,10 +138,12 @@ fun GlorpApp(
             opening?.let { communityArg = it; screen = "whispers"; chat.conversationShown() }
         }
         var playerShown by rememberSaveable { mutableStateOf(true) }
-        val embed = picked ?: live.defaultEmbed()
+        val embed = picked ?: live.defaultEmbed(chat.preferredPlatform)
         // Leaving the app shrinks it to the video only while there is one.
         val canShrink = playerShown && embed != null
         LaunchedEffect(canShrink) { pictureInPicture.setAvailable(canShrink) }
+        // The site hears what plays here (signed in with cookies), as bigscreen tells it.
+        LaunchedEffect(chat, embed, playerShown) { chat.reportWatching(if (playerShown) embed else null) }
         if (screen == "signin" && account != null) screen = "menu"
         // Back: from anywhere to the menu, from the menu out of the app.
         OnBack(enabled = screen != "menu") { screen = "menu" }
@@ -179,6 +182,7 @@ fun GlorpApp(
         }
         CompositionLocalProvider(
             LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it },
+            LocalLinkTitles provides chat.linkTitles.takeIf { chat.input.options.linkTitles },
             // rustlesearch.dev links open the app's own log search on that query.
             LocalOpenLink provides { url ->
                 if (rustleLinkOf(url) == null) false
@@ -294,6 +298,8 @@ fun GlorpApp(
                             colorTheme = colorTheme,
                             onColorTheme = { colorTheme = it; Palette.theme = it; prefs.put(COLOR_THEME, it.name) },
                             onTags = { screen = "tags" },
+                            preferredPlatform = chat.preferredPlatform,
+                            onPreferredPlatform = chat::preferPlatform,
                             appFont = appFont,
                             onAppFont = { appFont = it; prefs.put(APP_FONT, it.name) },
                             textScale = textScale,

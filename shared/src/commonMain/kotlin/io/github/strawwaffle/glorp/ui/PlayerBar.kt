@@ -81,7 +81,7 @@ fun PlayerBar(
             )
             Text(
                 barNote(picked, if (embed == null) OtherStreams.Show else otherStreams),
-                color = Palette.OnBar.copy(alpha = 0.75f),
+                color = Palette.OnBar,
                 fontSize = 11.sp,
                 maxLines = 1,
             )

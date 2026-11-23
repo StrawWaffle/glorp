@@ -63,6 +63,7 @@ fun TagsScreen(tags: Tags, options: LocalOptions, synced: Boolean) {
     val people = (colors.keys + icons.keys).sorted()
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     var adding by rememberSaveable { mutableStateOf("") }
+    var removed by remember { mutableStateOf<Snapshot?>(null) }
 
     LazyColumn(Modifier.fillMaxSize().background(Palette.Black)) {
         item {
@@ -89,6 +90,18 @@ fun TagsScreen(tags: Tags, options: LocalOptions, synced: Boolean) {
                 }
                 Field(adding, "Tag someone by name", Modifier.weight(1f), onDone = add) { adding = it.filter { c -> !c.isWhitespace() } }
                 TextButton(onClick = add) { Text("Add", color = Palette.Blue) }
+            }
+        }
+        removed?.let { gone ->
+            item {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                        .background(Palette.Navy, RoundedCornerShape(8.dp)).padding(start = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Removed ${gone.nick}'s tag and icon", color = Palette.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { gone.restore(tags, options); removed = null }) { Text("Undo", color = Palette.Blue) }
+                }
             }
         }
         if (people.isEmpty()) item {
@@ -127,51 +140,69 @@ fun TagsScreen(tags: Tags, options: LocalOptions, synced: Boolean) {
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = Palette.Navy,
         ) {
-            TagEditor(nick, tags, options, onDone = { editing = null })
+            TagEditor(nick, tags, options, onDone = { editing = null }, onRemoved = { removed = it; editing = null })
         }
     }
 }
 
+/** Someone's tag, note and icon at one moment, to put back. */
+private class Snapshot(val nick: String, val color: String?, val note: String, val icon: String?) {
+    fun restore(tags: Tags, options: LocalOptions) {
+        if (color == null) tags.untag(nick) else tags.tag(nick, color, note)
+        options.setIcon(nick, icon)
+    }
+}
+
+private fun snapshot(nick: String, tags: Tags, options: LocalOptions) =
+    Snapshot(nick, tags.colors[nick], tags.notes[nick].orEmpty(), options.nameIcons[nick])
+
+/**
+ * Changes save as they're made, the note as it's typed. Undo puts back how
+ * they were when the editor opened; Remove all can be undone from the list.
+ */
 @Composable
-private fun TagEditor(nick: String, tags: Tags, options: LocalOptions, onDone: () -> Unit) {
+private fun TagEditor(nick: String, tags: Tags, options: LocalOptions, onDone: () -> Unit, onRemoved: (Snapshot) -> Unit) {
+    val opened = remember(nick) { snapshot(nick, tags, options) }
     val color = tags.colors[nick]
-    var note by remember(nick) { mutableStateOf(tags.notes[nick].orEmpty()) }
+    val icon = options.nameIcons[nick]
+    // Typed before a colour is picked, the note waits for one: a tag is a colour first.
+    var note by remember(nick) { mutableStateOf(opened.note) }
+    val changed = color != opened.color || icon != opened.icon || note.trim() != opened.note
     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp)) {
         Text(
-            listOfNotNull(options.nameIcons[nick], nick).joinToString(" "),
+            listOfNotNull(icon, nick).joinToString(" "),
             color = color?.let(::tagColor) ?: Palette.White,
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
         )
-        TagRow(color) { picked -> if (picked == null) tags.untag(nick) else tags.tag(nick, picked, note) }
+        TagRow(color) { picked -> if (picked == null) tags.untag(nick) else tags.tag(nick, picked, note.trim()) }
         Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
             Text("Note", color = Palette.White, fontSize = 15.sp)
             Text(
-                if (color == null) "Kept with the tag: pick a colour first" else "Shown on their name's sheet, as the site shows it",
+                if (color == null) "Kept with the tag: pick a colour and it's saved" else "Saved as you type. Shown on their name's sheet, as on the site",
                 color = Palette.TextDim,
                 fontSize = 12.sp,
             )
-            Field(
-                note,
-                "Why they're tagged",
-                Modifier.fillMaxWidth().padding(top = 8.dp),
-                enabled = color != null,
-                onDone = { color?.let { tags.tag(nick, it, note.trim()) } },
-            ) { note = it }
-        }
-        IconRow(options.nameIcons[nick]) { options.setIcon(nick, it) }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.End) {
-            if (color != null || options.nameIcons[nick] != null) {
-                TextButton(onClick = { tags.untag(nick); options.setIcon(nick, null); onDone() }) {
-                    Text("Remove all", color = Palette.Orange)
-                }
+            Field(note, "Why they're tagged", Modifier.fillMaxWidth().padding(top = 8.dp), onDone = onDone) {
+                note = it
+                color?.let { c -> tags.tag(nick, c, it.trim()) }
             }
-            TextButton(onClick = {
-                // A changed note is saved with the tag it belongs to.
-                color?.let { if (note.trim() != tags.notes[nick].orEmpty()) tags.tag(nick, it, note.trim()) }
-                onDone()
-            }) { Text("Done", color = Palette.Blue) }
+        }
+        IconRow(icon) { options.setIcon(nick, it) }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.End) {
+            if (changed) {
+                TextButton(onClick = { opened.restore(tags, options); note = opened.note }) { Text("Undo", color = Palette.Blue) }
+            }
+            if (color != null || icon != null) {
+                TextButton(onClick = {
+                    val before = snapshot(nick, tags, options)
+                    tags.untag(nick)
+                    options.setIcon(nick, null)
+                    onRemoved(before)
+                }) { Text("Remove all", color = Palette.Orange) }
+            }
+            TextButton(onClick = onDone) { Text("Done", color = Palette.Blue) }
         }
     }
 }

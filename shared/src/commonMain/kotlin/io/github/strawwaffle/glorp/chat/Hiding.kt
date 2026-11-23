@@ -45,6 +45,15 @@ class LocalOptions(private val prefs: ChatPrefs) {
         prefs.putList(NAME_ICONS, nameIcons.map { (n, i) -> "$n $i" }.sorted())
     }
 
+    /** Titles and channels for YouTube and Rumble links (on unless turned off). */
+    var linkTitles by mutableStateOf(prefs.get(LINK_TITLES) != "false")
+        private set
+
+    fun showLinkTitles(on: Boolean) {
+        linkTitles = on
+        prefs.put(LINK_TITLES, on.toString())
+    }
+
     fun keepMentions(on: Boolean) {
         stickyMentions = on
         prefs.put(STICKY_MENTIONS, on.toString())
@@ -72,6 +81,7 @@ class LocalOptions(private val prefs: ChatPrefs) {
         private const val STICKY_MENTIONS = "sticky.mentions"
         private const val OTHER_STREAMS = "other.streams"
         private const val NAME_ICONS = "name.icons"
+        private const val LINK_TITLES = "link.titles"
 
         /** Room for one emoji made of several code points (a family, a flag with a modifier). */
         const val MAX_ICON = 12

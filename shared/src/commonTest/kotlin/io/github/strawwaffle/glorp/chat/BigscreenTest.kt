@@ -51,8 +51,11 @@ class BigscreenTest {
         val banned = assertIs<LiveUpdate.Banned>(parseLiveMessage("""{"type":"dggApi:bannedEmbeds","data":[{"platform":"kick","name":"Bad","reason":""}]}"""))
         val state = LiveState().with(streams).with(embeds).with(banned)
         // YouTube is bigscreen's default platform when Destiny is live on several.
-        assertEquals(Embed("youtube", "vid1"), state.defaultEmbed())
-        assertEquals(Embed("kick", "destiny"), state.defaultEmbed("kick"))
+        // Kick unless another platform is preferred.
+        assertEquals(Embed("kick", "destiny"), state.defaultEmbed())
+        assertEquals(Embed("youtube", "vid1"), state.defaultEmbed("youtube"))
+        // Preferred but not live there: the first that is.
+        assertEquals(Embed("youtube", "vid1"), state.defaultEmbed("rumble"))
         assertEquals(true, state.isBanned(Embed("kick", "bad")))
         assertNull(LiveState().defaultEmbed())
     }

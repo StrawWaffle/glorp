@@ -12,6 +12,11 @@ import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.isActive
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -31,8 +36,21 @@ import kotlin.time.TimeSource
  * The site's "live" socket, which every page of the site opens: it pushes
  * what's live, what's hosted, which embeds are banned and what chat is
  * watching, whenever that changes. Nothing is polled.
+ *
+ * Signed in with the site's cookies, it also says what this app is playing,
+ * as bigscreen does: the server answers a signed-in socket with `me`, then
+ * takes `watching` ({platform, id}, or null), and chat shows it beside your
+ * messages (the site's "watching the same stream" dimming, the embeds list).
+ * A login key isn't taken here, so then nothing is sent.
  */
-class LiveSocket(private val client: HttpClient, site: Site) {
+class LiveSocket(
+    private val client: HttpClient,
+    site: Site,
+    /** The site's login cookies; null for a login key or signed out. */
+    private val cookieHeader: String? = null,
+    /** What plays here, if anything; sent each time it changes. */
+    private val watching: StateFlow<Embed?> = MutableStateFlow(null),
+) {
     private val url = "wss://live." + site.origin.substringAfter("://").removePrefix("www.").substringBefore('/')
 
     suspend fun run(onUpdate: (LiveUpdate) -> Unit) {
@@ -41,10 +59,25 @@ class LiveSocket(private val client: HttpClient, site: Site) {
             attempts++
             var opened: TimeSource.Monotonic.ValueTimeMark? = null
             try {
-                client.webSocket(urlString = url, request = { header(HttpHeaders.UserAgent, ChatSocket.USER_AGENT) }) {
+                client.webSocket(urlString = url, request = {
+                    header(HttpHeaders.UserAgent, ChatSocket.USER_AGENT)
+                    if (cookieHeader != null) header(HttpHeaders.Cookie, cookieHeader)
+                }) {
                     opened = TimeSource.Monotonic.markNow()
-                    for (frame in incoming) {
-                        if (frame is Frame.Text) parseLiveMessage(frame.readText())?.let(onUpdate)
+                    var reporting: Job? = null
+                    try {
+                        for (frame in incoming) {
+                            if (frame !is Frame.Text) continue
+                            val text = frame.readText()
+                            if (reporting == null && isMe(text)) {
+                                reporting = launch {
+                                    watching.collect { embed -> send(Frame.Text(watchingMessage(embed))) }
+                                }
+                            }
+                            parseLiveMessage(text)?.let(onUpdate)
+                        }
+                    } finally {
+                        reporting?.cancel()
                     }
                 }
             } catch (e: CancellationException) {
@@ -55,6 +88,16 @@ class LiveSocket(private val client: HttpClient, site: Site) {
             delay(retryDelay(attempts, Random::nextDouble))
         }
     }
+}
+
+/** The server's word that this socket is signed in. */
+internal fun isMe(text: String): Boolean =
+    text.startsWith("{") && runCatching { chatJson.parseToJsonElement(text).jsonObject["type"].str() == "me" }.getOrDefault(false)
+
+/** bigscreen's message for what plays: `{"type":"watching","data":{"platform":…,"id":…}}`, or null data for nothing. */
+internal fun watchingMessage(embed: Embed?): String {
+    val data = if (embed == null) JsonNull else JsonObject(mapOf("platform" to JsonPrimitive(embed.platform), "id" to JsonPrimitive(embed.id)))
+    return JsonObject(mapOf("type" to JsonPrimitive("watching"), "data" to data)).toString()
 }
 
 /** One message from the live socket that bigscreen cares about. */
