@@ -13,6 +13,11 @@ import kotlin.math.ceil
  *   2-second segments), and with nothing better a player stays three of
  *   those behind live. It's brought down to the longest segment present.
  *
+ * With prefetched segments the newest finished one is no longer the limit:
+ * video is there up to about now. How far behind to play is then set
+ * against the clock ([LOW_LATENCY_TARGET_MS]), not as three segments (6 s on
+ * 2-second segments, over 12 s on a channel sending 4-second ones).
+ *
  * Anything else (a multivariant playlist, one without segments) is left as
  * it is.
  */
@@ -41,5 +46,12 @@ fun lowLatencyPlaylist(text: String): String {
     }
     return out.toString().trimEnd('\n') + "\n"
 }
+
+/**
+ * How far behind real time (the segments' own clock) a low-latency live
+ * stream plays. On a Pixel, 2.3 s held without stalls but with only a
+ * second of buffer; this leaves about two. A stall moves it 2 s back.
+ */
+const val LOW_LATENCY_TARGET_MS = 3_500L
 
 private val PREFETCH_TAGS = listOf("#EXT-X-PREFETCH:", "#EXT-X-TWITCH-PREFETCH:")

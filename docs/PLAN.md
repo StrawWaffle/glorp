@@ -164,6 +164,10 @@ with memory and battery throughout.
    target duration the longest segment. Measured: Kick 19.9 s -> 4.0 s on a
    Pixel, Twitch about 4.7 s, steady, no stalls. A stall still moves the
    target 2 s back.
+   Segments aren't always 2 s (one Kick channel sends 4.17 s ones, which
+   still sat 10 s behind), so Kick and Twitch live now set the target against
+   the clock, 3.5 s (`LOW_LATENCY_TARGET_MS`), and catch-up acts on gaps over
+   0.75 s: both channels hold about 4.2 s on a Pixel with 3 s of buffer.
    **Stalls (0.1.7).** An error or 25 s of loading marks the player failed:
    a dropped connection is retried in place twice, then the screen looks
    the stream up again with growing waits (3 s doubling to a minute) and

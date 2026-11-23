@@ -41,6 +41,12 @@ data class Playable(
      * recording looked up again (its address expired) picks up where it was.
      */
     val key: String? = null,
+    /**
+     * Live from Amazon IVS (Kick) or Twitch, whose playlists name the
+     * segments being made: the player can sit [LOW_LATENCY_TARGET_MS] behind
+     * real time rather than three segments behind the playlist's end.
+     */
+    val lowLatency: Boolean = false,
 ) {
     enum class Format { Hls, Mp4, Dash }
 }
@@ -110,7 +116,7 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
         return when {
             live == null || !live.is_live -> Resolution.Offline(channel.user?.username ?: slug)
             url.isNullOrEmpty() -> Resolution.Web
-            else -> Resolution.Native(Playable(url, live.session_title, live = true))
+            else -> Resolution.Native(Playable(url, live.session_title, live = true, lowLatency = true))
         }
     }
 
@@ -205,7 +211,7 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
         return when {
             check.status.value == 404 && !vod -> Resolution.Offline(id)
             !check.status.isSuccess() -> Resolution.Web
-            else -> Resolution.Native(Playable(url, null, live = !vod, startSeconds = startSeconds))
+            else -> Resolution.Native(Playable(url, null, live = !vod, startSeconds = startSeconds, lowLatency = !vod))
         }
     }
 

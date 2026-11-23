@@ -146,6 +146,7 @@ object Playback {
             )
             .setLiveConfiguration(
                 MediaItem.LiveConfiguration.Builder()
+                    .apply { if (playable.lowLatency) setTargetOffsetMs(LOW_LATENCY_TARGET_MS) }
                     .setMaxPlaybackSpeed(FASTEST_CATCH_UP)
                     .setMinPlaybackSpeed(0.97f)
                     .build(),
@@ -190,7 +191,7 @@ object Playback {
      * stall): Media3's own control, tuned. Speed follows how far behind the
      * target it is (the setting's speed from 5 s, less as it closes; gentler
      * than that went unnoticed on a phone: 7 s took over half a minute), so it eases off as the gap
-     * closes instead of hitting the edge at full speed. Within 1.5 s it plays
+     * closes instead of hitting the edge at full speed. Within 0.75 s it plays
      * at normal speed, so small wobbles don't switch it on and off. The
      * target never comes closer to live than what's buffered safely allows,
      * so it doesn't run the buffer dry chasing the newest segment, and each
@@ -202,7 +203,7 @@ object Playback {
         DefaultLivePlaybackSpeedControl.Builder()
             .setFallbackMaxPlaybackSpeed(FASTEST_CATCH_UP)
         .setProportionalControlFactor(0.1f)
-        .setMaxLiveOffsetErrorMsForUnitSpeed(1_500)
+        .setMaxLiveOffsetErrorMsForUnitSpeed(750)
             .setTargetLiveOffsetIncrementOnRebufferMs(2_000)
             .build(),
     )
@@ -211,7 +212,7 @@ object Playback {
      * Media3's control picks the target (how close to live is safe, given
      * the buffer and past stalls); the speed towards it follows the setting:
      * its full speed from [FULL_SPEED_BEHIND_US] behind the target, easing
-     * down in proportion as the gap closes, normal speed within 1.5 s. Off
+     * down in proportion as the gap closes, normal speed within 0.75 s. Off
      * ([catchUpMax] 1), it plays at normal speed.
      */
     private class CappedSpeedControl(private val inner: DefaultLivePlaybackSpeedControl) : LivePlaybackSpeedControl by inner {
@@ -229,7 +230,7 @@ object Playback {
     }
 
     private const val FULL_SPEED_BEHIND_US = 5_000_000f
-    private const val UNIT_SPEED_WITHIN_US = 1_500_000L
+    private const val UNIT_SPEED_WITHIN_US = 750_000L
 
     /** The highest the setting offers; the media item allows up to this, the setting picks below it. */
     private const val FASTEST_CATCH_UP = 2f
