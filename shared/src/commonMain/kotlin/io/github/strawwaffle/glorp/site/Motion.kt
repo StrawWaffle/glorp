@@ -5,9 +5,8 @@ import kotlin.math.abs
 import kotlin.math.floor
 
 /**
- * How an emote is moved, turned, scaled, faded or brightened at one moment:
- * what the stylesheet's `transform`, `opacity` and `filter: brightness()`
- * keyframes come to, and how far its picture is slid inside its box
+ * How an emote is moved, turned, scaled, faded or coloured at one moment:
+ * what the stylesheet's `transform`, `opacity` and `filter` keyframes come to, and how far its picture is slid inside its box
  * ([bx], [by]: `background-position` keyframes, from where the emote's own
  * rules put it). Distances are CSS pixels. [ox], [oy] are a
  * `transform-origin` keyframe's pivot as fractions of the emote's size (NaN:
@@ -20,7 +19,7 @@ data class Pose(
     val sx: Float = 1f,
     val sy: Float = 1f,
     val opacity: Float = 1f,
-    val brightness: Float = 1f,
+    val filter: Filter = Filter.None,
     val bx: Float = 0f,
     val by: Float = 0f,
     val ox: Float = Float.NaN,
@@ -37,7 +36,7 @@ data class KeyFrame(
     val at: Float,
     val transform: Pose?,
     val opacity: Float?,
-    val brightness: Float?,
+    val filter: Filter?,
     /** `background-position` in CSS pixels (x, y), as written; once in an emote's [Motion], relative to the emote's own. */
     val background: Pair<Float, Float>? = null,
     /** `transform-origin` as written; an emote's [Motion] has it as [origin], fractions of its size. */
@@ -134,11 +133,11 @@ data class Motion(
     private fun sample(p: Float, base: Pose): Pose {
         var pose = base
         // Where a keyframe leaves the transform out, the emote's still one stands in.
-        interpolate(p, { it.transform }, base.copy(opacity = 1f, brightness = 1f)) { a, b, f ->
+        interpolate(p, { it.transform }, base.copy(opacity = 1f, filter = Filter.None)) { a, b, f ->
             Pose(lerp(a.tx, b.tx, f), lerp(a.ty, b.ty, f), lerp(a.rotate, b.rotate, f), lerp(a.sx, b.sx, f), lerp(a.sy, b.sy, f))
         }?.let { pose = pose.copy(tx = it.tx, ty = it.ty, rotate = it.rotate, sx = it.sx, sy = it.sy) }
         interpolate(p, { it.opacity }, 1f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(opacity = it) }
-        interpolate(p, { it.brightness }, 1f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(brightness = it) }
+        interpolate(p, { it.filter }, base.filter) { a, b, f -> a.mix(b, f) }?.let { pose = pose.copy(filter = it) }
         interpolate(p, { it.background }, 0f to 0f) { a, b, f -> lerp(a.first, b.first, f) to lerp(a.second, b.second, f) }
             ?.let { pose = pose.copy(bx = it.first, by = it.second) }
         interpolate(p, { it.origin }, restOrigin) { a, b, f -> lerp(a.first, b.first, f) to lerp(a.second, b.second, f) }
@@ -207,18 +206,18 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
             val decls = declarations(s.groupValues[2])
             val transform = decls["transform"]?.let(::readTransform)
             val opacity = decls["opacity"]?.trim()?.let(::number)
-            val brightness = decls["filter"]?.let(::readBrightness)
+            val filter = (decls["filter"] ?: decls["-webkit-filter"])?.let(::readFilter)
             val background = decls["background-position"]?.let(::readBackgroundPosition)
             val origin = decls["transform-origin"]
             val clip = decls["clip-path"]?.let(::readPolygon)
-            if (transform == null && opacity == null && brightness == null && background == null && origin == null && clip == null) continue
+            if (transform == null && opacity == null && filter == null && background == null && origin == null && clip == null) continue
             for (at in s.groupValues[1].split(',')) {
                 val offset = when (val word = at.trim().lowercase()) {
                     "from" -> 0f
                     "to" -> 1f
                     else -> word.removeSuffix("%").toFloatOrNull()?.div(100f)
                 } ?: continue
-                frames += KeyFrame(offset, transform, opacity, brightness, background, origin, clip = clip)
+                frames += KeyFrame(offset, transform, opacity, filter, background, origin, clip = clip)
             }
         }
         if (frames.isNotEmpty()) out[match.groupValues[1]] = frames.sortedBy { it.at }
@@ -303,20 +302,6 @@ internal fun readTransform(written: String): Pose? {
         }
     }
     return pose
-}
-
-/**
- * The `brightness()` in a `filter`. Only when it's the filter's one colour
- * change: brightness alone from a mix of grayscale, sepia and hue turns
- * would wash the emote out rather than tint it. A glow (`drop-shadow`) is
- * left out.
- */
-private fun readBrightness(value: String): Float? {
-    if ("var(" in value) return null
-    val others = function.findAll(value).map { it.groupValues[1].lowercase() }.filter { it != "brightness" && it != "drop-shadow" && it != "rgba" && it != "rgb" }
-    if (others.any()) return null
-    val arg = Regex("""brightness\(([^)]*)\)""").find(value)?.groupValues?.get(1)?.trim() ?: return null
-    return if (arg.endsWith("%")) arg.removeSuffix("%").toFloatOrNull()?.div(100f) else arg.toFloatOrNull()
 }
 
 private val simpleCalc = Regex("""calc\(\s*(-?\d*\.?\d+)\s*([*/])\s*(-?\d*\.?\d+)\s*\)""")

@@ -114,9 +114,7 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
             else -> 0
         }
         val now = if (moving) pose(emote, at) else Pose.Rest
-        val brightness = now.brightness
-        val filter = if (brightness == 1f) null
-        else ColorFilter.colorMatrix(ColorMatrix().apply { setToScale(brightness, brightness, brightness, 1f) })
+        val filter = now.filter.colorMatrix()?.let { ColorFilter.colorMatrix(ColorMatrix(it)) }
         val scale = size.height / emote.height
         // While the strip plays, its keyframes place it (from their start);
         // at rest, the emote's own background-position does.

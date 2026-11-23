@@ -375,8 +375,8 @@ private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top
     val playing = sprite != null && at < sprite.totalMs
     val base = if (playing) sprite?.startX ?: emote.offsetX else emote.offsetX
     val offset = (base + frame * emote.width) * scale
-    val filter = if (pose.brightness == 1f) null
-    else ColorFilter.colorMatrix(ColorMatrix().apply { setToScale(pose.brightness, pose.brightness, pose.brightness, 1f) })
+    val stages = pose.filter.colorStages()
+    val filter = stages.firstOrNull()?.let { ColorFilter.colorMatrix(ColorMatrix(it)) }
     // A keyframe's own pivot (BLADE stabs from its corner) over the emote's.
     val pivot = Offset((if (pose.ox.isNaN()) emote.originX else pose.ox) * w, (if (pose.oy.isNaN()) emote.originY else pose.oy) * h)
     val dx = left + pose.tx.dp.toPx()
@@ -393,12 +393,37 @@ private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top
                 close()
             }
         }
-        if (shape != null) clipPath(shape) { drawSheet(emote, painter, w, h, offset, scale, pose, filter) }
-        else drawSheet(emote, painter, w, h, offset, scale, pose, filter)
+        if (shape != null) clipPath(shape) { drawSheet(emote, painter, w, h, offset, scale, pose, filter, stages) }
+        else drawSheet(emote, painter, w, h, offset, scale, pose, filter, stages)
     }
 }
 
-private fun DrawScope.drawSheet(emote: Emote, painter: Painter, w: Float, h: Float, offset: Float, scale: Float, pose: Pose, filter: ColorFilter?) {
+private fun DrawScope.drawSheet(emote: Emote, painter: Painter, w: Float, h: Float, offset: Float, scale: Float, pose: Pose, filter: ColorFilter?, stages: List<FloatArray>) {
+    // A `drop-shadow` glow: the emote's shape in the glow's colour, spread
+    // out by drawing it round a ring or two (a cheap stand-in for a blur).
+    for (glow in pose.filter.glows) {
+        val color = androidx.compose.ui.graphics.Color(glow.argb.toInt())
+        if (color.alpha == 0f) continue
+        val r = glow.blur * scale
+        val rings = if (r < 1.5f) listOf(r / 2) else listOf(r / 3, r * 2 / 3)
+        val points = rings.flatMap { ring -> (0 until 8).map { k -> ring to k * kotlin.math.PI.toFloat() / 4 } }
+        val tint = ColorFilter.tint(color.copy(alpha = 1f), BlendMode.SrcIn)
+        val each = (color.alpha * 2f / points.size).coerceAtMost(1f) * pose.opacity.coerceIn(0f, 1f)
+        for ((ring, angle) in points) {
+            translate(glow.dx * scale + ring * kotlin.math.cos(angle), glow.dy * scale + ring * kotlin.math.sin(angle)) {
+                clipRect(0f, 0f, w, h) {
+                    translate(left = -offset + pose.bx * scale, top = pose.by * scale) {
+                        with(painter) { draw(Size(emote.sheetWidth * scale, emote.sheetHeight * scale), alpha = each, colorFilter = tint) }
+                    }
+                }
+            }
+        }
+    }
+    // Each later colour stage in a layer of its own, which clamps what's under it first.
+    val layers = stages.drop(1).asReversed()
+    for (stage in layers) {
+        drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, w, h), Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(stage)) })
+    }
     run {
         clipRect(0f, 0f, w, h) {
             // A picture slid inside its box (GIGACHAD arriving) as well.
@@ -407,4 +432,5 @@ private fun DrawScope.drawSheet(emote: Emote, painter: Painter, w: Float, h: Flo
             }
         }
     }
+    repeat(layers.size) { drawContext.canvas.restore() }
 }

@@ -3,6 +3,7 @@ package io.github.strawwaffle.glorp.site
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class MotionTest {
@@ -48,7 +49,7 @@ class MotionTest {
         val early = shake.apply((1550 * 0.075).toLong(), Pose.Rest)
         assertTrue(early.tx < 0f && early.tx > -0.5f)
         near(shake.apply(775, Pose.Rest).opacity, 0.5f)
-        near(shake.apply(775, Pose.Rest).brightness, 1.5f)
+        near(shake.apply(775, Pose.Rest).filter.functions.single().amount, 1.5f)
         assertEquals(Pose.Rest, shake.apply(2_000, Pose.Rest))
     }
 
@@ -66,10 +67,20 @@ class MotionTest {
     }
 
     @Test
-    fun leavesMixedColourFiltersAlone() {
+    fun readsWholeFilters() {
         val frames = motionKeyframes("@keyframes a { 50% { filter: grayscale(1) brightness(1.8); } } @keyframes b { 50% { filter: brightness(120%) drop-shadow(0 0 2px rgba(0,0,0,.5)); } }")
-        assertTrue("a" !in frames)
-        near(frames.getValue("b").single().brightness!!, 1.2f)
+        assertEquals(listOf("grayscale", "brightness"), frames.getValue("a").single().filter!!.functions.map { it.name })
+        val b = frames.getValue("b").single().filter!!
+        near(b.functions.single().amount, 1.2f)
+        assertEquals(0x80000000, b.glows.single().argb)
+        // Grey: every channel the same mix of the three.
+        val grey = assertNotNull(Filter(listOf(Filter.Fn("grayscale", 1f))).colorMatrix())
+        near(grey[0], grey[5]); near(grey[1], grey[6])
+        // A hue turned all the way round changes nothing.
+        assertEquals(null, Filter(listOf(Filter.Fn("hue-rotate", 360f))).colorMatrix())
+        // Blended function by function, the shorter list filled out.
+        val mid = Filter(listOf(Filter.Fn("hue-rotate", 0f))).mix(Filter(listOf(Filter.Fn("hue-rotate", -360f), Filter.Fn("saturate", 3f))), 0.5f)
+        near(mid.functions[0].amount, -180f); near(mid.functions[1].amount, 2f)
     }
 
     @Test

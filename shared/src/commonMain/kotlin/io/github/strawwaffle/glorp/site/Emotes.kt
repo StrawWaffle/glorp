@@ -151,7 +151,7 @@ class Emotes private constructor(
         /**
          * Reads `emotes.json`, and from `emotes.css` the size chat draws each
          * emote at, its sprite animation and its hand-made movements
-         * (transform, opacity and brightness keyframes). Effects that depend
+         * (transform, opacity and filter keyframes). Effects that depend
          * on neighbouring emotes, on combos or on hovering, and other filters,
          * are not read.
          */
@@ -266,6 +266,8 @@ private fun build(
     var rest = decls.value("transform")?.let(::readTransform) ?: Pose.Rest
     decls.value("translate")?.let { readTransform("translate(${it.trim().replace(Regex("""\s+"""), ",")})") }?.let { rest = rest.copy(tx = rest.tx + it.tx, ty = rest.ty + it.ty) }
     decls.value("rotate")?.let { readTransform("rotate(${it.trim()})") }?.let { rest = rest.copy(rotate = rest.rotate + it.rotate) }
+    // Its still `filter`: a tint for a flair, a glow.
+    decls.value("filter")?.let(::readFilter)?.takeIf { !it.isNone }?.let { rest = rest.copy(filter = it) }
     decls.value("scale")?.let { readTransform("scale(${it.trim().replace(Regex("""\s+"""), ",")})") }?.let { rest = rest.copy(sx = rest.sx * it.sx, sy = rest.sy * it.sy) }
     return Emote(
         prefix, url, width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1), minimumSubTier, sprite,
@@ -273,7 +275,7 @@ private fun build(
         // A motion whose keyframes this can't read moves nothing; kept, an endless
         // one would redraw the emote every frame for nothing (EatFresh's x5 combo).
         motions = motions.map { m -> m.slidingFrom(offset, shrink).withOrigins(width / shrink, height / shrink, originX to originY) }
-            .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.brightness != null || it.background != null || it.origin != null || it.clip != null } },
+            .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.filter != null || it.background != null || it.origin != null || it.clip != null } },
         originX = originX, originY = originY, rest = rest,
     )
 }
