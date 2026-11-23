@@ -74,7 +74,7 @@ fun ReportScreen(diagnostics: Diagnostics) {
                 Text("Report a problem", color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                 Text(
                     "This opens a new issue on GitHub with what's below filled in. You can read and change all of it there, " +
-                        "and nothing is sent until you submit it. Without a GitHub account, copy it and send it another way.",
+                        "and nothing is sent until you submit it. No GitHub account? Copy it and whisper it to StrawWaffle in destiny.gg chat.",
                     color = Palette.TextDim,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 4.dp),

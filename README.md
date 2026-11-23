@@ -98,6 +98,12 @@ Google block sign-in there. Glorp signs in two other ways.
 Glorp keeps the login on the phone, encrypted with a key from Android's
 keystore.
 
+## Problems and ideas
+
+In Glorp, Menu → Report a problem writes a GitHub issue with the details
+filled in, or [open one here](https://github.com/StrawWaffle/glorp/issues/new/choose).
+No GitHub account? Whisper StrawWaffle in destiny.gg chat.
+
 ## Thanks
 
 - [rustlesearch.dev](https://rustlesearch.dev/), and Mitch's
