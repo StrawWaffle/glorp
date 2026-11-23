@@ -2,6 +2,7 @@ package io.github.strawwaffle.glorp.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -349,7 +350,7 @@ private fun EmoteButton(open: Boolean, onClick: () -> Unit) {
 
 /** An emote scaled down, never up, to fit [maxWidth] by [maxHeight] dp. */
 @Composable
-private fun FittedEmote(emote: Emote, maxWidth: Int, maxHeight: Int) {
+internal fun FittedEmote(emote: Emote, maxWidth: Int, maxHeight: Int) {
     val scale = minOf(1f, maxWidth.toFloat() / emote.width, maxHeight.toFloat() / emote.height)
     // Sent "at 0": a sprite rests on its last frame instead of playing.
     EmoteImage(emote, sentAt = 0, modifier = Modifier.size((emote.width * scale).dp, (emote.height * scale).dp))
@@ -364,12 +365,18 @@ private sealed interface PickerItem {
  * The emotes the user may send, by tier as chat-gui's menu groups them, with
  * those picked lately first. A lazy grid: only the rows on screen are drawn.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EmotePicker(emotes: Emotes, account: Account, state: ChatInputState, onPick: (Emote) -> Unit) {
-    val items = remember(emotes, account) {
+    val items = remember(emotes, account, state.favoriteEmotes) {
         val usable = emotes.all.filter { mayUse(it, account.features, account.subTier) }
         val recent = state.completer.recentEmotes(16).mapNotNull { emotes[it] }
+        val favorites = state.favoriteEmotes.mapNotNull { emotes[it] }.filter { mayUse(it, account.features, account.subTier) }
         buildList {
+            if (favorites.isNotEmpty()) {
+                add(PickerItem.Header("Favourites"))
+                favorites.forEach { add(PickerItem.Item(it, "favorite")) }
+            }
             if (recent.isNotEmpty()) {
                 add(PickerItem.Header("Recently used"))
                 recent.forEach { add(PickerItem.Item(it, "recent")) }
@@ -397,7 +404,12 @@ private fun EmotePicker(emotes: Emotes, account: Account, state: ChatInputState,
                     modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp),
                 )
                 is PickerItem.Item -> Box(
-                    Modifier.height(52.dp).clickable(onClickLabel = item.emote.prefix) { onPick(item.emote) },
+                    // A tap adds it; holding it opens its card, as right-clicking does on the site.
+                    Modifier.height(52.dp).combinedClickable(
+                        onClickLabel = item.emote.prefix,
+                        onLongClickLabel = "About ${item.emote.prefix}",
+                        onLongClick = { state.openEmote(item.emote.prefix) },
+                    ) { onPick(item.emote) },
                     contentAlignment = Alignment.Center,
                 ) { FittedEmote(item.emote, maxWidth = 60, maxHeight = 40) }
             }

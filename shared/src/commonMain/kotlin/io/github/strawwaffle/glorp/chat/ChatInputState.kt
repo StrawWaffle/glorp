@@ -37,6 +37,29 @@ class ChatInputState(
     var tappedLine by mutableStateOf<ChatLine?>(null)
         private set
 
+    /** An emote tapped in chat (or held in the picker), whose card is open; null when none. */
+    var tappedEmote by mutableStateOf<String?>(null)
+        private set
+
+    fun openEmote(prefix: String) {
+        tappedEmote = prefix
+    }
+
+    fun closeEmote() {
+        tappedEmote = null
+    }
+
+    /** The site's favourite emotes (`favoriteemotes`), first in the picker; kept with the account. */
+    val favoriteEmotes: List<String> get() = settings.list("favoriteemotes")
+
+    fun setFavorite(prefix: String, on: Boolean) {
+        val now = favoriteEmotes
+        settings.setList("favoriteemotes", if (on) (now - prefix) + prefix else now - prefix)
+    }
+
+    /** Puts [prefix] in the draft at the caret, as the site's emote card does, and the caret in the input. */
+    fun addEmote(prefix: String) = mention(prefix)
+
     /** Bumped to ask the input to take focus and show the keyboard. */
     var focusRequests by mutableIntStateOf(0)
         private set

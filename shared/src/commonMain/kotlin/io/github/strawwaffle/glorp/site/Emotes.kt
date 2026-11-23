@@ -65,12 +65,19 @@ data class Sprite(
     val totalMs: Long get() = if (iterations == Int.MAX_VALUE) Long.MAX_VALUE else durationMs * iterations
 }
 
+/** What the site says about an emote beyond its picture: who made it, and who may use it. */
+data class EmoteInfo(val creator: String?, val minimumSubTier: Int, val patreonOnly: Boolean)
+
 /** The emote list, keyed by the word that draws each one. */
 class Emotes private constructor(
     private val byPrefix: Map<String, Emote>,
     private val builder: Builder? = null,
+    private val infos: Map<String, EmoteInfo> = emptyMap(),
 ) {
     operator fun get(word: String): Emote? = byPrefix[word]
+
+    /** The emote's creator and requirement, as the site's emote card shows them. */
+    fun info(word: String): EmoteInfo? = infos[word]
 
     /**
      * The emotes of one line as they look there: the stylesheet changes some
@@ -91,7 +98,7 @@ class Emotes private constructor(
 
     /** The same emotes with the rules for how they look beside others. */
     private fun withNeighbours(context: EmoteContext): Emotes =
-        Emotes(byPrefix, builder?.let { Builder(it.own, it.images, it.keyframes, it.moving, context) })
+        Emotes(byPrefix, builder?.let { Builder(it.own, it.images, it.keyframes, it.moving, context) }, infos)
 
     /** What building variants needs: each emote's own rules and image, the keyframes and the context rules. */
     private class Builder(
@@ -136,6 +143,8 @@ class Emotes private constructor(
             val prefix: String = "",
             val twitch: Boolean = false,
             val minimumSubTier: Int = 0,
+            val creator: String? = null,
+            val patreonOnly: Boolean? = null,
             val image: List<Image> = emptyList(),
         )
 
@@ -163,6 +172,7 @@ class Emotes private constructor(
         ): Emotes {
             val map = LinkedHashMap<String, Emote>()
             val images = HashMap<String, Pair<Int, Int>>()
+            val infos = HashMap<String, EmoteInfo>()
             for (entry in chatJson.decodeFromString<List<Entry>>(json)) {
                 val image = entry.image.firstOrNull() ?: continue
                 val url = image.url ?: continue
@@ -171,8 +181,9 @@ class Emotes private constructor(
                 val decls = rules[entry.prefix].orEmpty()
                 images[entry.prefix] = image.width to image.height
                 map[entry.prefix] = build(entry.prefix, url, image.width, image.height, entry.minimumSubTier, decls, keyframes, moving)
+                infos[entry.prefix] = EmoteInfo(entry.creator?.trim()?.takeIf { it.isNotEmpty() }, entry.minimumSubTier, entry.patreonOnly == true)
             }
-            return Emotes(map, Builder(rules, images, keyframes, moving, context))
+            return Emotes(map, Builder(rules, images, keyframes, moving, context), infos)
         }
 
         /**

@@ -2,6 +2,7 @@ package io.github.strawwaffle.glorp.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -231,6 +232,10 @@ private fun ChatBody(
         input.tappedNick?.let { nick ->
             UserSheet(nick, input.tappedLine, flairs, account, input, userActions, onDismiss = input::closeUser)
         }
+        input.tappedEmote?.let { prefix ->
+            emotes[prefix]?.let { EmoteSheet(it, emotes.info(prefix), account, input, onDismiss = input::closeEmote) }
+                ?: LaunchedEffect(prefix) { input.closeEmote() }
+        }
         if (pinned != null && !pinned.dismissed) PinnedBar(pinned, flairs, emotes, me, openEmbed, tapNick, onShowPin)
         if (poll != null && !poll.dismissed) PollCard(poll, onVote, onClosePoll)
         val list = rememberLazyListState()
@@ -453,6 +458,22 @@ val LocalOpenLink = staticCompositionLocalOf<(String) -> Boolean> { { false } }
  */
 val LocalLinkCard = staticCompositionLocalOf<(url: String, messageText: String) -> Boolean> { { _, _ -> false } }
 
+/** Opens an emote's card (see [EmoteSheet]) when an emote in a message is tapped. */
+val LocalEmoteTap = staticCompositionLocalOf<(String) -> Unit> { {} }
+
+/** An emote in a message, which opens its card when tapped. */
+@Composable
+private fun TappableEmote(prefix: String, content: @Composable () -> Unit) {
+    val tap = LocalEmoteTap.current
+    Box(
+        Modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClickLabel = "About $prefix",
+        ) { tap(prefix) },
+    ) { content() }
+}
+
 /** Titles for YouTube and Rumble links; null where they aren't looked up (turned off, or no app around). */
 val LocalLinkTitles = staticCompositionLocalOf<LinkTitles?> { null }
 
@@ -640,7 +661,7 @@ private fun render(
                 if (emote != null) {
                     val id = "emote:${emote.prefix}:${emote.hashCode()}"
                     inline.getOrPut(id) {
-                        InlineTextContent(placeholder(emote.width, emote.height)) { EmoteImage(emote, sentAt = line.at) }
+                        InlineTextContent(placeholder(emote.width, emote.height)) { TappableEmote(emote.prefix) { EmoteImage(emote, sentAt = line.at) } }
                     }
                     appendInlineContent(id, emote.prefix)
                 } else {
@@ -756,7 +777,7 @@ private fun render(
                     val id = "emote:${emote.prefix}:${emote.hashCode()}"
                     inline.getOrPut(id) {
                         InlineTextContent(placeholder(emote.width, emote.height)) {
-                            EmoteImage(emote, sentAt = line.at)
+                            TappableEmote(emote.prefix) { EmoteImage(emote, sentAt = line.at) }
                         }
                     }
                     appendInlineContent(id, emote.prefix)

@@ -25,6 +25,7 @@ import io.github.strawwaffle.glorp.ui.LocalChatLook
 import io.github.strawwaffle.glorp.ui.LocalOpenLink
 import io.github.strawwaffle.glorp.ui.LocalLinkTitles
 import io.github.strawwaffle.glorp.ui.LocalLinkCard
+import io.github.strawwaffle.glorp.ui.LocalEmoteTap
 import io.github.strawwaffle.glorp.ui.LinkCard
 import io.github.strawwaffle.glorp.site.LinkFlag
 import io.github.strawwaffle.glorp.site.PreviewKind
@@ -205,6 +206,7 @@ fun GlorpApp(
         CompositionLocalProvider(
             LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it },
             LocalLinkTitles provides chat.linkTitles.takeIf { chat.input.options.linkTitles },
+            LocalEmoteTap provides chat.input::openEmote,
             LocalLinkCard provides { url, text ->
                 val kind = previewKind(url, settings.previewAllImages)
                 if (kind == null) false else { linkCard = LinkCardRequest(url, kind, linkFlag(text)); true }
