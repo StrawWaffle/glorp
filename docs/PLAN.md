@@ -266,7 +266,9 @@ vyneer's userscript (`dgg-chat-gui-scripts/dgg-utilities.user.js`, v1.9)
 was widely used; the site has since taken over its embeds list. Worth
 bringing to Glorp, in rough order:
 
-- **Nuke and mutelinks warnings.** A chip over the input while a nuke is on
+- **Nuke and mutelinks warnings** (done, 0.1.12; `chat/Warnings.kt`,
+  `site/VyneerTools.kt`, polled every 30 s while chat is open, a setting to
+  turn off). A line over the input while a nuke is on
   (its word or `/regex/`, mute or ban, how long), and while mutelinks is on
   (any link, or links naming someone). The input turns a warning colour when
   the draft would be caught, and sending asks "send anyway?" instead of
@@ -275,7 +277,7 @@ bringing to Glorp, in rough order:
   alone, polled cheaply); `/tools/providers` says which source to use for
   each (today nukes and mutelinks from vyneer.me, phrases native). A
   personal service: ask vyneer first, and poll only while chat is open.
-- **Banned phrases warning.** The same check against banned phrases
+- **Banned phrases warning** (done, with the above, from vyneer.me's list). The same check against banned phrases
   (`ADDPHRASE`/`REMOVEPHRASE` arrive on the socket; the full list from the
   provider), before the server refuses the message.
 - **Alert phrases.** Your own hard and soft warning words for the input.

@@ -216,6 +216,8 @@ fun GlorpApp(
                                 catchUp = it
                                 prefs.put(CATCH_UP, it.toString())
                             },
+                            warnings = chat.warnings,
+                            onWarnings = chat::warnAbout,
                         )
                     }
                 }

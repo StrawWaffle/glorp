@@ -61,6 +61,12 @@ class ChatInputState(
         focusRequests++
     }
 
+    /** Nukes, mutelinks and banned phrases the draft is checked against. */
+    val watch = ModWatch()
+
+    /** A draft whose warning was shown once: sending it again goes through. */
+    var armed by mutableStateOf<String?>(null)
+
     /** Who `/r` answers: the last whisperer, or the last one whispered. */
     var replyTo: String? = null
 

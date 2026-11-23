@@ -18,6 +18,10 @@ import io.github.strawwaffle.glorp.site.Emotes
 import io.github.strawwaffle.glorp.site.Flairs
 import io.github.strawwaffle.glorp.site.SessionCheck
 import io.github.strawwaffle.glorp.site.SiteSettings
+import io.github.strawwaffle.glorp.site.VyneerTools
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import io.github.strawwaffle.glorp.site.Site
 import io.github.strawwaffle.glorp.site.checkSession
 import kotlinx.coroutines.CompletableDeferred
@@ -236,6 +240,7 @@ class ChatViewModel(
 
     fun start() {
         wanted = true
+        watchMods()
         if (connection?.isActive == true) return
         connection = viewModelScope.launch {
             ready.await()
@@ -249,8 +254,36 @@ class ChatViewModel(
         }
     }
 
+    /** Whether nukes, mutelinks and banned phrases are fetched to warn the input (on unless turned off). */
+    var warnings by mutableStateOf(prefs.get(WARNINGS) != "false")
+        private set
+
+    private var watching: Job? = null
+
+    fun warnAbout(on: Boolean) {
+        warnings = on
+        prefs.put(WARNINGS, on.toString())
+        if (on && wanted) watchMods()
+        if (!on) {
+            watching?.cancel()
+            watching = null
+            input.watch.nukes = emptyList()
+            input.watch.phrases = emptyList()
+            input.watch.mutelinks = null
+        }
+    }
+
+    private val tools = VyneerTools(client)
+
+    private fun watchMods() {
+        if (!warnings || watching?.isActive == true) return
+        watching = viewModelScope.launch { tools.run(input.watch) }
+    }
+
     fun stop() {
         wanted = false
+        watching?.cancel()
+        watching = null
         connection?.cancel()
         connection = null
         socket = null
@@ -813,6 +846,7 @@ class ChatViewModel(
         val whisperErrors = setOf("privmsgbanned", "privmsgaccounttooyoung", "notfound", "throttled", "duplicate", "muted", "needlogin", "nochatting")
         const val POLL_GRACE_MS = 15_000L
         /** chat-gui's `chat.settings.synced`: the user this device's settings last synced for. */
+        const val WARNINGS = "warnings"
         const val SETTINGS_SYNCED = "settings.synced"
         /** chat-gui's `chat.settings.pending`: the user with changes here the account's copy lacks. */
         const val SETTINGS_PENDING = "settings.pending"

@@ -57,6 +57,8 @@ fun SettingsScreen(
     catchUp: Float,
     catchUpSpeeds: List<Float>,
     onCatchUp: (Float) -> Unit,
+    warnings: Boolean,
+    onWarnings: (Boolean) -> Unit,
 ) {
     LazyColumn(Modifier.fillMaxSize().background(Palette.Black)) {
         item {
@@ -78,6 +80,14 @@ fun SettingsScreen(
             }
         }
         item { SwitchRow("Show flair icons", null, !settings.hideFlairIcons) { settings.setBool("hideflairicons", !it) } }
+        item {
+            SwitchRow(
+                "Warn about nukes, mutelinks and banned phrases",
+                "Before a message would get you muted or banned. The lists come from vyneer.me (d.gg utilities), checked every 30 seconds while chat is open",
+                warnings,
+                onWarnings,
+            )
+        }
 
         item { SettingsHeading("Highlights and tags") }
         item { SwitchRow("Highlight messages that mention me", null, settings.highlightSelf) { settings.setBool("highlight", it) } }

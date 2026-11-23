@@ -13,7 +13,9 @@ or Destiny.
 
 - **Chat**: emotes (animated, combos), flairs, links, mentions, whispers with
   their own conversations, polls you can vote in, the pinned message, the
-  site's commands, and an input with emote, name and command suggestions.
+  site's commands, and an input with emote, name and command suggestions
+  that warns before a message would run into a nuke, mutelinks or a banned
+  phrase (lists from vyneer.me, as the d.gg utilities userscript used).
   Tags with notes, highlight words, timestamps, flair icons and the ignore
   and highlight lists follow your account's chat settings when you sign in
   with cookies.

@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.strawwaffle.glorp.chat.ChatInputState
+import io.github.strawwaffle.glorp.chat.ModWatch
 import io.github.strawwaffle.glorp.chat.Suggestion
 import io.github.strawwaffle.glorp.chat.complete
 import io.github.strawwaffle.glorp.chat.insertWord
@@ -140,9 +141,31 @@ fun ChatInput(
         if (next.length <= MAX_MESSAGE) state.setDraft(next, caret)
     }
 
-    val send = { onSend(draft.text) }
+    // A draft that would set off a nuke, mutelinks or a banned phrase says so,
+    // and the first Send only arms it; a second sends it anyway.
+    val watch = state.watch
+    val warning = remember(draft.text, watch.nukes, watch.phrases, watch.mutelinks) { watch.check(draft.text) }
+    val send = {
+        if (warning != null && state.armed != draft.text) {
+            state.armed = draft.text
+            false
+        } else {
+            state.armed = null
+            onSend(draft.text)
+        }
+    }
 
     Column(Modifier.fillMaxWidth().background(Palette.Navy)) {
+        if (warning != null) {
+            Text(
+                warning.text + if (state.armed == draft.text) " Send again to send it anyway." else " Sending asks again first.",
+                color = Palette.White,
+                fontSize = 13.sp,
+                modifier = Modifier.fillMaxWidth().background(WarningTint).padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        } else {
+            ModNotes(watch)
+        }
         when {
             suggestions.isNotEmpty() -> SuggestionStrip(suggestions, emotes, ::take)
             focused && draft.text.isEmpty() && state.history.recent.isNotEmpty() -> HistoryStrip(state.history.recent) {
@@ -190,7 +213,7 @@ fun ChatInput(
                             else -> false
                         }
                     }
-                    .background(Palette.Black, RoundedCornerShape(6.dp))
+                    .background(if (warning != null) WarningTint else Palette.Black, RoundedCornerShape(6.dp))
                     .padding(horizontal = 10.dp, vertical = 9.dp),
                 decorationBox = { field ->
                     Box {
@@ -275,6 +298,28 @@ private fun HistoryStrip(recent: List<String>, onPick: (String) -> Unit) {
             )
         }
     }
+}
+
+private val WarningTint = Color(0xFF5A1A12)
+
+/** What's running that could catch a message: nukes and mutelinks, one dim line. */
+@Composable
+private fun ModNotes(watch: ModWatch) {
+    val notes = buildList {
+        watch.mutelinks?.takeIf { it.active }?.let {
+            add(if (it.status == "all") "Mutelinks: any link, ${it.duration}" else "Mutelinks on, ${it.duration}")
+        }
+        for (nuke in watch.nukes) add("Nuked: ${nuke.word} (${nuke.type} ${nuke.duration})")
+    }
+    if (notes.isEmpty()) return
+    Text(
+        notes.joinToString(" · "),
+        color = Palette.Orange,
+        fontSize = 12.sp,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+    )
 }
 
 /** A plain drawn face: the button that swaps the keyboard for the emote picker. */
