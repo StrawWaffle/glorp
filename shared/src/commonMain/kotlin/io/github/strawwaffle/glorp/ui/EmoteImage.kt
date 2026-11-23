@@ -113,7 +113,8 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
             sprite.holdLast -> minOf(sprite.frames, sprite.sheetWidth / emote.width - 1)
             else -> 0
         }
-        val brightness = if (moving) pose(emote, at).brightness else 1f
+        val now = if (moving) pose(emote, at) else Pose.Rest
+        val brightness = now.brightness
         val filter = if (brightness == 1f) null
         else ColorFilter.colorMatrix(ColorMatrix().apply { setToScale(brightness, brightness, brightness, 1f) })
         val scale = size.height / emote.height
@@ -123,7 +124,8 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
         val base = if (playing) sprite?.startX ?: emote.offsetX else emote.offsetX
         val offset = (base + frame * emote.width) * scale
         clipRect {
-            translate(left = -offset) {
+            // A picture slid inside its box (GIGACHAD arriving) as well.
+            translate(left = -offset + now.bx * scale, top = now.by * scale) {
                 with(painter) { draw(Size(emote.sheetWidth * scale, emote.sheetHeight * scale), colorFilter = filter) }
             }
         }

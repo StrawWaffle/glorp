@@ -374,7 +374,8 @@ private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top
         if (pose.sx != 1f || pose.sy != 1f) scale(pose.sx, pose.sy, pivot)
     }) {
         clipRect(0f, 0f, w, h) {
-            translate(left = -offset) {
+            // A picture slid inside its box (GIGACHAD arriving) as well.
+            translate(left = -offset + pose.bx * scale, top = pose.by * scale) {
                 with(painter) { draw(Size(emote.sheetWidth * scale, emote.sheetHeight * scale), alpha = pose.opacity.coerceIn(0f, 1f), colorFilter = filter) }
             }
         }

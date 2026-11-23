@@ -272,9 +272,26 @@ private fun build(
         sheetWidth = sheetWidth.toInt().coerceAtLeast(1), sheetHeight = sheetHeight.toInt().coerceAtLeast(1), offsetX = offset.toInt(),
         // A motion whose keyframes this can't read moves nothing; kept, an endless
         // one would redraw the emote every frame for nothing (EatFresh's x5 combo).
-        motions = motions.filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.brightness != null } },
+        motions = motions.map { m -> m.slidingFrom(offset, shrink) }
+            .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.brightness != null || it.background != null } },
         originX = originX, originY = originY, rest = rest,
     )
+}
+
+/**
+ * This motion with its `background-position` keyframes made relative to
+ * where the emote's own rules put the picture ([offset] to the left, already
+ * shrunk), so the emote is drawn where it rests and slid from there
+ * (GIGACHAD arriving from the left). A stepped one is a sprite strip, which
+ * [Sprite] plays: its positions are dropped here.
+ */
+private fun Motion.slidingFrom(offset: Double, shrink: Double): Motion {
+    if (frames.none { it.background != null }) return this
+    return copy(frames = frames.map { f ->
+        val (x, y) = f.background ?: return@map f
+        val background = if (easing is Easing.Steps) null else ((x * shrink + offset).toFloat() to (y * shrink).toFloat())
+        KeyFrame(f.at, f.transform, f.opacity, f.brightness, background)
+    })
 }
 
 private fun cssMillis(text: String): Long? {

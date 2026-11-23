@@ -14,11 +14,15 @@ class CssParityTest {
         @keyframes nut { from { background-position: 0 0; } to { background-position: -480px 0; } }
         .emote.BLADE { background-image: url("b.png"); width: 72px; height: 32px; transform-origin: -36px 32px; }
         .emote.WIDE { background-image: url("w.png"); width: 64px; height: 32px; background-size: 64px; }
+        .emote.GIGACHAD { background-image: url("g.png"); width: 29px; height: 32px; }
+        @keyframes GIGACHAD-anim { 0% { background-position: -28px 10px; } 100% { background-position: 0px; } }
+        .emote.GIGACHAD { background-repeat: no-repeat; animation: GIGACHAD-anim 1.5s ease-out 1; }
     """.trimIndent()
 
     private val json = """[{"prefix":"buddy-nutcheck","image":[{"url":"https://cdn.example/n.png","width":528,"height":32}]},""" +
         """{"prefix":"BLADE","image":[{"url":"https://cdn.example/b.png","width":72,"height":32}]},""" +
-        """{"prefix":"WIDE","image":[{"url":"https://cdn.example/w.png","width":128,"height":32}]}]"""
+        """{"prefix":"WIDE","image":[{"url":"https://cdn.example/w.png","width":128,"height":32}]},""" +
+        """{"prefix":"GIGACHAD","image":[{"url":"https://cdn.example/g.png","width":29,"height":32}]}]"""
 
     private val emotes = Emotes.parse(json, css)
 
@@ -29,6 +33,18 @@ class CssParityTest {
         val nut = assertNotNull(emotes["buddy-nutcheck"])
         assertEquals(48, nut.width)
         assertEquals(10, assertNotNull(nut.sprite).frames)
+    }
+
+    @Test
+    fun slidesAPictureInsideItsBox() {
+        // GIGACHAD arrives from the left and below, and rests where its own rules put it.
+        val chad = assertNotNull(emotes["GIGACHAD"])
+        val motion = chad.motions.single()
+        val start = motion.apply(0, chad.rest)
+        near(start.bx, -28f); near(start.by, 10f)
+        val end = motion.apply(1_500, chad.rest)
+        near(end.bx, 0f); near(end.by, 0f)
+        assertEquals(false, chad.isWholePicture)
     }
 
     @Test

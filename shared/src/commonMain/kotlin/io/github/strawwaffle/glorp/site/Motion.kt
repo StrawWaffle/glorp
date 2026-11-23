@@ -7,7 +7,9 @@ import kotlin.math.floor
 /**
  * How an emote is moved, turned, scaled, faded or brightened at one moment:
  * what the stylesheet's `transform`, `opacity` and `filter: brightness()`
- * keyframes come to. Distances are CSS pixels.
+ * keyframes come to, and how far its picture is slid inside its box
+ * ([bx], [by]: `background-position` keyframes, from where the emote's own
+ * rules put it). Distances are CSS pixels.
  */
 data class Pose(
     val tx: Float = 0f,
@@ -17,6 +19,8 @@ data class Pose(
     val sy: Float = 1f,
     val opacity: Float = 1f,
     val brightness: Float = 1f,
+    val bx: Float = 0f,
+    val by: Float = 0f,
 ) {
     companion object {
         val Rest = Pose()
@@ -24,7 +28,14 @@ data class Pose(
 }
 
 /** One keyframe: where in the cycle (0 to 1) and what it sets; null for what it leaves alone. */
-class KeyFrame(val at: Float, val transform: Pose?, val opacity: Float?, val brightness: Float?)
+class KeyFrame(
+    val at: Float,
+    val transform: Pose?,
+    val opacity: Float?,
+    val brightness: Float?,
+    /** `background-position` in CSS pixels (x, y), as written; once in an emote's [Motion], relative to the emote's own. */
+    val background: Pair<Float, Float>? = null,
+)
 
 /** A timing function, as CSS has them. */
 sealed interface Easing {
@@ -116,6 +127,8 @@ data class Motion(
         }?.let { pose = pose.copy(tx = it.tx, ty = it.ty, rotate = it.rotate, sx = it.sx, sy = it.sy) }
         interpolate(p, { it.opacity }, 1f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(opacity = it) }
         interpolate(p, { it.brightness }, 1f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(brightness = it) }
+        interpolate(p, { it.background }, 0f to 0f) { a, b, f -> lerp(a.first, b.first, f) to lerp(a.second, b.second, f) }
+            ?.let { pose = pose.copy(bx = it.first, by = it.second) }
         return pose
     }
 
@@ -157,19 +170,34 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
             val transform = decls["transform"]?.let(::readTransform)
             val opacity = decls["opacity"]?.trim()?.let(::number)
             val brightness = decls["filter"]?.let(::readBrightness)
-            if (transform == null && opacity == null && brightness == null) continue
+            val background = decls["background-position"]?.let(::readBackgroundPosition)
+            if (transform == null && opacity == null && brightness == null && background == null) continue
             for (at in s.groupValues[1].split(',')) {
                 val offset = when (val word = at.trim().lowercase()) {
                     "from" -> 0f
                     "to" -> 1f
                     else -> word.removeSuffix("%").toFloatOrNull()?.div(100f)
                 } ?: continue
-                frames += KeyFrame(offset, transform, opacity, brightness)
+                frames += KeyFrame(offset, transform, opacity, brightness, background)
             }
         }
         if (frames.isNotEmpty()) out[match.groupValues[1]] = frames.sortedBy { it.at }
     }
     return out
+}
+
+/**
+ * A `background-position` in pixels; a lone value leaves the other centred,
+ * which for these pictures (as tall as their box) is 0. Null for keywords
+ * and percentages, which would need the picture's size.
+ */
+internal fun readBackgroundPosition(value: String): Pair<Float, Float>? {
+    val parts = value.trim().split(Regex("""\s+"""))
+    if (parts.isEmpty() || parts.size > 2) return null
+    fun px(word: String): Float? = if (word == "0") 0f else word.takeIf { it.endsWith("px") }?.removeSuffix("px")?.toFloatOrNull()
+    val x = px(parts[0]) ?: return null
+    val y = if (parts.size == 2) px(parts[1]) ?: return null else 0f
+    return x to y
 }
 
 private fun declarations(body: String): Map<String, String> {
