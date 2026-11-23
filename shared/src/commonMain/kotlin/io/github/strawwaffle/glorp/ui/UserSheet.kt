@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.ui
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -51,6 +53,8 @@ import io.github.strawwaffle.glorp.site.genderLabel
 /** What the name sheet can do beyond the input's own lists. */
 class UserActions(
     val lookUp: suspend (String) -> UserLookup,
+    /** What's already known about someone (looked up lately), to open their sheet with. */
+    val known: (String) -> UserLookup? = { null },
     /** Opens the chat log search for a name. */
     val recent: (String) -> Unit,
     val ignore: (String) -> Unit,
@@ -78,8 +82,9 @@ fun UserSheet(
     actions: UserActions,
     onDismiss: () -> Unit,
 ) {
-    val sheet = rememberModalBottomSheetState()
-    val lookup by produceState<UserLookup?>(null, nick) { value = actions.lookUp(nick) }
+    // Opened at its full height: the details filling in then don't push it up.
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val lookup by produceState(actions.known(nick), nick) { value = actions.lookUp(nick) }
     val found = (lookup as? UserLookup.Found)?.info
     val key = nick.lowercase()
     val me = account?.nick?.lowercase()
@@ -104,9 +109,16 @@ fun UserSheet(
                     fontSize = 18.sp,
                 )
             }
-            Column(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+            // The details grow into place rather than pushing everything down at once:
+            // lines held for them while they load, and any change in size eased.
+            Column(Modifier.animateContentSize().padding(horizontal = 20.dp, vertical = 6.dp)) {
                 when (lookup) {
-                    null -> Detail("Looking them up…")
+                    null -> repeat(3) { i ->
+                        Box(
+                            Modifier.padding(vertical = 5.dp).fillMaxWidth(listOf(0.55f, 0.4f, 0.3f)[i]).height(12.dp)
+                                .background(Palette.NavyLight, RoundedCornerShape(6.dp)),
+                        )
+                    }
                     UserLookup.NotFound -> Detail("No such user on the site.")
                     UserLookup.Failed -> Detail("Couldn't reach the site for their details.")
                     is UserLookup.Found -> Unit

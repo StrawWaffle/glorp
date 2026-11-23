@@ -77,6 +77,10 @@ class MainActivity : ComponentActivity() {
         val frames = if (BuildConfig.DEV_IMPORT) devFrames() else emptyList()
         // Dev builds: `--es notify-test mention|whisper|live` posts a sample notification, to try where tapping it goes.
         if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("notify-test")?.let(::postTestNotification)
+        // Dev builds: `--es expire-test 30`: the first player's address "expires" after 30 s.
+        if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("expire-test")?.toLongOrNull()?.let {
+            io.github.strawwaffle.glorp.video.Playback.expireTestMs = it * 1000
+        }
         // Dev builds: `--es crash-test 1` crashes a few seconds in, to try the crash report.
         if (BuildConfig.DEV_IMPORT && intent?.getStringExtra("crash-test") != null) {
             android.os.Handler(mainLooper).postDelayed({ error("Crash test from a dev build") }, 4_000)

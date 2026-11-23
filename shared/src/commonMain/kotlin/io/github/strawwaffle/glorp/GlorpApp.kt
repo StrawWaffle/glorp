@@ -236,6 +236,7 @@ fun GlorpApp(
             userActions = remember(chat) {
                 UserActions(
                     lookUp = chat::lookUp,
+                    known = chat::knownLookup,
                     recent = { communityArg = it; screen = "rustle" },
                     ignore = { chat.ignore(listOf(it)) },
                     unignore = chat::unignore,

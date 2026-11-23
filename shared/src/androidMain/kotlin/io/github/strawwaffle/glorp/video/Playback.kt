@@ -36,6 +36,10 @@ import androidx.media3.session.MediaSessionService
  */
 @OptIn(UnstableApi::class)
 object Playback {
+    private class Remembered(val key: String, val positionMs: Long, val at: Long)
+
+    private var lastRecording: Remembered? = null
+
     class Active(
         val url: String,
         val key: String?,
@@ -54,6 +58,14 @@ object Playback {
      * watching catch-up on real streams.
      */
     var logLive = false
+
+    /**
+     * Dev builds: the next player's downloads fail with HTTP 403 after this
+     * long, as an expired address does, to try looking a recording up again
+     * (`--es expire-test <seconds>`). Used once.
+     */
+    @Volatile
+    var expireTestMs: Long? = null
     private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
     private val logTick = object : Runnable {
         override fun run() {
@@ -89,17 +101,21 @@ object Playback {
             }
         }
         // The same recording at a new address (the old one expired): carry on from where it was.
-        val resumeAt = active?.takeIf { playable.key != null && it.key == playable.key && !playable.live }
-            ?.player?.currentPosition?.takeIf { it > 0 }
+        val resumeAt = if (playable.live || playable.key == null) null
+        else active?.takeIf { it.key == playable.key }?.player?.currentPosition?.takeIf { it > 0 }
+            ?: lastRecording?.takeIf { it.key == playable.key && android.os.SystemClock.elapsedRealtime() - it.at < 30 * 60_000 }?.positionMs
+        resumeAt?.let { io.github.strawwaffle.glorp.diag.AppLog.note("player", "looked up again; carrying on at ${it / 1000} s") }
         release(context)
         val app = context.applicationContext
         // AngelThump streams come from one of several edges; requests go to
         // the chosen one and fall over to its neighbours (see EdgeFailover).
         val edges = EdgeChoice(AngelThumpEdges.hostOf(playable.hlsUrl)?.takeIf(AngelThumpEdges::isEdge))
+        val expiresAt = expireTestMs?.let { android.os.SystemClock.elapsedRealtime() + it }
+        expireTestMs = null
         val dataSources = EdgeFailoverDataSource.Factory(DefaultDataSource.Factory(app), edges).let {
             // YouTube's recordings (a manifest of separate files) are read by byte range.
             if (playable.format == Playable.Format.Dash) YouTubeRangesDataSource.Factory(it, playable.headers) else it
-        }
+        }.let { if (expiresAt != null) ExpiringDataSource.Factory(it, expiresAt) else it }
         val player = ExoPlayer.Builder(app)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSources))
             // Pauses for calls and other apps' sound, as a video app should.
@@ -260,6 +276,11 @@ object Playback {
     fun release(context: Context) {
         val current = active ?: return
         active = null
+        // Where a recording was, for the same one played again soon: looked up
+        // again at a new address (the old one expired), or picked again.
+        if (current.key != null && !current.player.isCurrentMediaItemLive && current.player.currentPosition > 0) {
+            lastRecording = Remembered(current.key, current.player.currentPosition, android.os.SystemClock.elapsedRealtime())
+        }
         context.applicationContext.stopService(Intent(context.applicationContext, PlaybackService::class.java))
         current.session.release()
         current.controller.release()
@@ -298,5 +319,24 @@ class PlaybackService : MediaSessionService() {
         // stream, whose session this service never held.)
         sessions.toList().forEach(::removeSession)
         super.onDestroy()
+    }
+}
+
+/** Dev builds: refuses every request after [expiresAt] with HTTP 403, as an expired address is refused (see [Playback.expireTestMs]). */
+@OptIn(UnstableApi::class)
+private class ExpiringDataSource(private val upstream: androidx.media3.datasource.DataSource, private val expiresAt: Long) :
+    androidx.media3.datasource.DataSource by upstream {
+    override fun open(dataSpec: androidx.media3.datasource.DataSpec): Long {
+        if (android.os.SystemClock.elapsedRealtime() > expiresAt) {
+            throw androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException(
+                403, "Forbidden (expire test)", null, emptyMap(), dataSpec, ByteArray(0),
+            )
+        }
+        return upstream.open(dataSpec)
+    }
+
+    class Factory(private val upstream: androidx.media3.datasource.DataSource.Factory, private val expiresAt: Long) :
+        androidx.media3.datasource.DataSource.Factory {
+        override fun createDataSource(): androidx.media3.datasource.DataSource = ExpiringDataSource(upstream.createDataSource(), expiresAt)
     }
 }

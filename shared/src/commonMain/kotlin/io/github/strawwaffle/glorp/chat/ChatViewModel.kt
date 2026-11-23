@@ -605,8 +605,24 @@ class ChatViewModel(
     }
 
     /** The site's details about [nick], for the name sheet. */
-    suspend fun lookUp(nick: String): io.github.strawwaffle.glorp.site.UserLookup =
-        io.github.strawwaffle.glorp.site.lookUpUser(client, site, nick)
+    /** The site's details about [nick], kept a few minutes so their sheet opens with them at once next time. */
+    suspend fun lookUp(nick: String): io.github.strawwaffle.glorp.site.UserLookup {
+        val key = nick.lowercase()
+        val now = Clock.System.now().toEpochMilliseconds()
+        lookups[key]?.takeIf { now - it.second < 5 * 60_000 }?.let { return it.first }
+        val found = io.github.strawwaffle.glorp.site.lookUpUser(client, site, nick)
+        if (found !is io.github.strawwaffle.glorp.site.UserLookup.Failed) {
+            lookups[key] = found to now
+            while (lookups.size > 100) lookups.remove(lookups.keys.first())
+        }
+        return found
+    }
+
+    /** Peeks at what [lookUp] keeps, for a sheet to start from. */
+    fun knownLookup(nick: String): io.github.strawwaffle.glorp.site.UserLookup? =
+        lookups[nick.lowercase()]?.takeIf { Clock.System.now().toEpochMilliseconds() - it.second < 5 * 60_000 }?.first
+
+    private val lookups = LinkedHashMap<String, Pair<io.github.strawwaffle.glorp.site.UserLookup, Long>>()
 
     fun unignore(nick: String) {
         input.ignored.remove(listOf(nick))
