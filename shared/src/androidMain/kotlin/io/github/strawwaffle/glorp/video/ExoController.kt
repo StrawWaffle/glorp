@@ -33,8 +33,13 @@ class ExoController(private val player: ExoPlayer) : VideoController {
         override fun onPlaybackStateChanged(playbackState: Int) {
             _state.update { it.copy(buffering = playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_IDLE) }
             if (playbackState == Player.STATE_READY) {
-                retries = 0
+                // Retries count again only once it has played a while: a stream
+                // that keeps failing right after starting gives up in the end.
+                handler.removeCallbacks(steady)
+                handler.postDelayed(steady, 30_000)
                 _state.update { it.copy(failed = false) }
+            } else {
+                handler.removeCallbacks(steady)
             }
             watchLoading()
         }
@@ -82,6 +87,8 @@ class ExoController(private val player: ExoPlayer) : VideoController {
 
     private val handler = Handler(Looper.getMainLooper())
     private var retries = 0
+
+    private val steady = Runnable { retries = 0 }
 
     private val retry = Runnable {
         if (player.playbackState == Player.STATE_IDLE) player.prepare()

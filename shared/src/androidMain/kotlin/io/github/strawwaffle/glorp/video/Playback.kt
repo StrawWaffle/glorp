@@ -212,6 +212,8 @@ object Playback {
             soundOnly(current.player, true)
             appContext = context.applicationContext
             current.player.addListener(pausedOffScreen)
+            // Already stalled as the app was left: no change will come to arm the timer.
+            if (!current.player.isPlaying) handler.postDelayed(idleRelease, 5 * 60_000L)
             return
         }
         release(context)
@@ -235,7 +237,7 @@ object Playback {
     // five minutes: let the player, its decoder and the service go.
     private val idleRelease = Runnable {
         val current = active ?: return@Runnable
-        if (!current.player.isPlaying) appContext?.let(::release)
+        if (!meantToPlay(current.player)) appContext?.let(::release)
     }
     private val pausedOffScreen = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {

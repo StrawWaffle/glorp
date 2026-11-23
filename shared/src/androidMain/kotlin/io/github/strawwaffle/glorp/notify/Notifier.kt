@@ -69,7 +69,7 @@ object Notifier {
     fun permitted(context: Context): Boolean =
         Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    internal suspend fun check(context: Context) {
+    suspend fun check(context: Context) {
         val prefs = SharedChatPrefs(context)
         val options = NotifyOptions(prefs, ChatSettings(prefs))
         if (!options.any) return
@@ -78,10 +78,12 @@ object Notifier {
         val cookies = KeystoreSessionStore(context).load() as? Session.Cookies
         val client = createHttpClient()
         try {
-            val alerts = AlertCheck(client, Site.guess(origin), prefs, options, cookies, prefs.get(NotifyOptions.NICK), prefs.get(NotifyOptions.SERVER)).run()
+            val alerts = AlertCheck(client, Site.guess(origin), prefs, options, cookies, prefs.get(NotifyOptions.NICK), prefs.get(NotifyOptions.SERVER))
+                .run { found ->
+                    // While chat is connected it has already told of whispers and mentions; going live it never does.
+                    if (permitted(context)) found.filter { !liveChat || it.kind == Alert.Kind.Live }.forEach { post(context, it) }
+                }
             AppLog.note("notify", "background check: ${alerts.size} new")
-            // While chat is connected it has already told of whispers and mentions; going live it never does.
-            if (permitted(context)) alerts.filter { !liveChat || it.kind == Alert.Kind.Live }.forEach { post(context, it) }
         } finally {
             client.close()
         }
@@ -107,7 +109,6 @@ object Notifier {
             .setStyle(Notification.BigTextStyle().bigText(alert.text))
             .setContentIntent(tap)
             .setAutoCancel(true)
-            .setOnlyAlertOnce(true)
             .setCategory(if (alert.kind == Alert.Kind.Live) Notification.CATEGORY_EVENT else Notification.CATEGORY_MESSAGE)
             .build()
         manager.notify(alert.open.hashCode(), notification)
@@ -145,7 +146,13 @@ class AlertJob : JobService() {
 
     override fun onStartJob(params: JobParameters): Boolean {
         running = scope.launch {
-            runCatching { Notifier.check(applicationContext) }.onFailure { AppLog.note("notify", "background check failed", it) }
+            try {
+                Notifier.check(applicationContext)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLog.note("notify", "background check failed", e)
+            }
             jobFinished(params, false)
         }
         return true

@@ -276,7 +276,15 @@ class ChatViewModel(
             startLive()
             val chat = ChatSocket(client, site.chatSocketUrl, session?.cookieHeader)
             socket = chat
-            launch { chat.state.collect { _socketState.value = it } }
+            launch {
+                chat.state.collect {
+                    // Dropped: chat told of everything until now; the background check takes it from here.
+                    if (_socketState.value == SocketState.Connected && it != SocketState.Connected && _account.value != null) {
+                        io.github.strawwaffle.glorp.notify.AlertCheck.heardUntilNow(prefs)
+                    }
+                    _socketState.value = it
+                }
+            }
             // Frames are read off the main thread (a backlog or the user list
             // on connect is a lot of text); only applying them happens on it.
             val now = { Clock.System.now().toEpochMilliseconds() }
@@ -349,7 +357,7 @@ class ChatViewModel(
         stop()
         start()
         // Off screen (a sign-in finishing after the app was left): stay off screen.
-        if (background) stopWhenIdle(::nativePlaybackPlaying)
+        if (background) stopWhenIdle { canNotifyLive() && nativePlaybackPlaying() }
     }
 
     /** A login key being tried: chat's ME answer decides, then [onResult] hears. */
@@ -963,6 +971,13 @@ class ChatViewModel(
 
     private var backgroundWatch: Job? = null
 
+    /** Worth keeping chat connected off screen for: signed in, with whisper or mention notifications on. */
+    fun canNotifyLive(): Boolean {
+        if (_account.value == null) return false
+        val options = io.github.strawwaffle.glorp.notify.NotifyOptions(prefs, settings)
+        return options.whispers || options.mentions
+    }
+
     // The site's live socket: on screen only, not kept for background sound.
     private var liveJob: Job? = null
 
@@ -1039,6 +1054,9 @@ class ChatViewModel(
     }
 
     override fun onCleared() {
+        if (_account.value != null && _socketState.value == SocketState.Connected) {
+            io.github.strawwaffle.glorp.notify.AlertCheck.heardUntilNow(prefs)
+        }
         youtube.close()
         client.close()
     }

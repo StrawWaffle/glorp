@@ -21,6 +21,7 @@ import io.github.strawwaffle.glorp.chat.SharedChatPrefs
 import io.github.strawwaffle.glorp.ui.PictureInPicture
 import io.github.strawwaffle.glorp.update.androidUpdates
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.Intent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -60,9 +61,17 @@ class MainActivity : ComponentActivity() {
         override fun show(alert: Alert) {
             if (permitted) Notifier.post(applicationContext, alert)
         }
-        override fun setLive(connected: Boolean) {
+        override fun setLive(connected: Boolean, catchUp: Boolean) {
             if (Notifier.liveChat != connected) AppLog.note("notify", if (connected) "chat live: the background check stays quiet" else "chat closed: the background check notifies")
-            Notifier.liveChat = connected
+            if (!connected || !catchUp) {
+                Notifier.liveChat = connected
+                return
+            }
+            // Back after a drop with the app off screen: look for what came meanwhile, then go quiet.
+            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { Notifier.check(applicationContext) }
+                Notifier.liveChat = true
+            }
         }
     }
 

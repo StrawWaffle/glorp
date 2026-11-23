@@ -38,8 +38,11 @@ interface NotifyControls {
     fun openSystemSettings()
     /** Shows [alert] now, as the background check would (a whisper or mention heard live). */
     fun show(alert: Alert) {}
-    /** Whether chat is connected: while it is, it notifies as things arrive and the background check stays quiet. */
-    fun setLive(connected: Boolean) {}
+    /**
+     * Whether chat is connected: while it is, it notifies as things arrive and the background check stays quiet.
+     * [catchUp]: connected again off screen, so first look for what came while it was down.
+     */
+    fun setLive(connected: Boolean, catchUp: Boolean = false) {}
 }
 
 /** Where a tapped notification asked the app to go (an [Alert.open]), until the app takes it. */
@@ -100,13 +103,19 @@ class AlertCheck(
     /** Glorp's mentions service (server/), which needs no login; null to use the site's list. */
     private val server: String? = null,
 ) {
-    suspend fun run(): List<Alert> = buildList {
-        if (options.live) live()?.let(::add)
-        if (cookies != null && options.whispers) addAll(whispers(cookies))
+    /**
+     * Looks at each kind in turn. [onFound] gets each kind's alerts as soon as
+     * they're found (and their marker moved on), so a check cut short by
+     * Android still posts what it already found.
+     */
+    suspend fun run(onFound: (List<Alert>) -> Unit = {}): List<Alert> = buildList {
+        fun found(alerts: List<Alert>) { if (alerts.isNotEmpty()) { addAll(alerts); onFound(alerts) } }
+        if (options.live) found(listOfNotNull(live()))
+        if (cookies != null && options.whispers) found(whispers(cookies))
         if (nick != null && options.mentions) {
             when {
-                server != null -> addAll(serverMentions(server, nick))
-                cookies != null -> addAll(mentions(nick))
+                server != null -> found(serverMentions(server, nick))
+                cookies != null -> found(mentions(nick))
             }
         }
     }

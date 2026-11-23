@@ -135,7 +135,7 @@ fun GlorpApp(
             chat.start()
             // A stream playing on with the screen off keeps chat connected,
             // so whispers and mentions still notify at once.
-            onStopOrDispose { chat.stopWhenIdle(::nativePlaybackPlaying) }
+            onStopOrDispose { chat.stopWhenIdle { chat.canNotifyLive() && nativePlaybackPlaying() } }
         }
         val lines by chat.lines.collectAsStateWithLifecycle()
         val flairs by chat.flairs.collectAsStateWithLifecycle()
@@ -226,7 +226,15 @@ fun GlorpApp(
         // Followed off screen too: the background check must speak up again once chat closes.
         DisposableEffect(chat, notify) {
             val job = CoroutineScope(Dispatchers.Main).launch {
-                chat.socketState.collect { notify?.setLive(it == SocketState.Connected) }
+                var was = false
+                chat.socketState.collect {
+                    val now = it == SocketState.Connected
+                    if (now != was) {
+                        val offScreen = !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+                        notify?.setLive(now, catchUp = now && offScreen)
+                    }
+                    was = now
+                }
             }
             onDispose { job.cancel(); notify?.setLive(false) }
         }
