@@ -447,6 +447,12 @@ val LocalChatLook = staticCompositionLocalOf { ChatLook() }
 /** Links the app opens itself (rustlesearch.dev searches); true when it took the link, false for the browser. */
 val LocalOpenLink = staticCompositionLocalOf<(String) -> Boolean> { { false } }
 
+/**
+ * Shows a link's preview card (see [LinkCard]) for a link tapped in a message
+ * with the given text; false when the link has no preview and should just open.
+ */
+val LocalLinkCard = staticCompositionLocalOf<(url: String, messageText: String) -> Boolean> { { _, _ -> false } }
+
 /** Titles for YouTube and Rumble links; null where they aren't looked up (turned off, or no app around). */
 val LocalLinkTitles = staticCompositionLocalOf<LinkTitles?> { null }
 
@@ -490,6 +496,7 @@ internal fun ChatRow(
     }
     val uri = LocalUriHandler.current
     val openLink = LocalOpenLink.current
+    val linkCard = LocalLinkCard.current
     // A press held long enough to open the sheet isn't also a tap on the
     // name or link under it, which would fire when the finger lifts.
     val gate = remember { HoldGate() }
@@ -511,7 +518,7 @@ internal fun ChatRow(
             onReveal = { revealed = true },
             onEmbed = { if (gate.open) onEmbed(it) },
             onNick = { if (gate.open) onNick(it) },
-            onUrl = { if (gate.open && !openLink(it)) runCatching { uri.openUri(it) } },
+            onUrl = { if (gate.open && !openLink(it) && !linkCard(it, line.text)) runCatching { uri.openUri(it) } },
         )
     }
     // A tagged user's lines get a bar of their colour down the left, as chat-gui draws them.

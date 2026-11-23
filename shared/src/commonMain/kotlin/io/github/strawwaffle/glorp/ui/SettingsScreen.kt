@@ -148,6 +148,14 @@ fun SettingsScreen(
             )
         }
         item {
+            SwitchRow(
+                "Preview pictures from any site",
+                "Tapping a picture's link shows it first, from any site rather than only imgur, catbox and the like. " +
+                    "The picture's site sees your IP address, as when you open it",
+                settings.previewAllImages,
+            ) { settings.setBool("previewallimages", it) }
+        }
+        item {
             Choices(
                 "Messages kept",
                 "How far back you can scroll in chat (the site's maxlines, now ${settings.maxLines}). More uses a little more memory",

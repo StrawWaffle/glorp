@@ -25,7 +25,7 @@ import kotlinx.serialization.json.jsonObject
  * two at a time; the last few hundred are remembered.
  */
 class LinkTitles(private val client: HttpClient, private val scope: CoroutineScope) {
-    data class Title(val title: String, val channel: String?, val platform: String)
+    data class Title(val title: String, val channel: String?, val platform: String, val thumbnail: String? = null)
 
     // Null: asked, and there's nothing to show (gone, private, offline).
     private val known = mutableStateMapOf<String, Title?>()
@@ -34,6 +34,19 @@ class LinkTitles(private val client: HttpClient, private val scope: CoroutineSco
 
     /** The title for [url], once known; reading it redraws when it arrives. */
     fun titleOf(url: String): Title? = mediaOf(url)?.let { known[it.key] }
+
+    /** [url]'s title, looked up now if it isn't known (for a preview, opened by a tap). */
+    suspend fun load(url: String): Title? {
+        val media = mediaOf(url) ?: return null
+        if (media.key in known) return known[media.key]
+        val title = gate.withPermit { fetch(media) }
+        known[media.key] = title
+        if (media.key !in order) {
+            order.addLast(media.key)
+            while (order.size > KEEP) known.remove(order.removeFirst())
+        }
+        return title
+    }
 
     /** Looks up [url]'s title unless that's been done. */
     fun request(url: String) {
@@ -86,5 +99,10 @@ internal fun mediaOf(url: String): Media? {
 internal fun parseOembed(body: String, platform: String): LinkTitles.Title? = runCatching {
     val o = chatJson.parseToJsonElement(body).jsonObject
     val title = (o["title"] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    LinkTitles.Title(title, (o["author_name"] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }, platform)
+    LinkTitles.Title(
+        title,
+        (o["author_name"] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() },
+        platform,
+        (o["thumbnail_url"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.startsWith("https://") },
+    )
 }.getOrNull()

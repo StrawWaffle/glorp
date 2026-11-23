@@ -52,6 +52,7 @@ class ChatSettings(private val prefs: ChatPrefs) {
     val ignoreMentions: Boolean get() = bool("ignorementions")
     val hideNsfw: Boolean get() = bool("hidensfw")
     val hideNsfl: Boolean get() = bool("hidensfl")
+    val previewAllImages: Boolean get() = bool("previewallimages")
 
     /**
      * Whether a muted or banned user's earlier messages hide behind

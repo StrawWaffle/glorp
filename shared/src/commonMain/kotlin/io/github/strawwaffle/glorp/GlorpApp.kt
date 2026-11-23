@@ -24,6 +24,13 @@ import io.github.strawwaffle.glorp.ui.ChatLook
 import io.github.strawwaffle.glorp.ui.LocalChatLook
 import io.github.strawwaffle.glorp.ui.LocalOpenLink
 import io.github.strawwaffle.glorp.ui.LocalLinkTitles
+import io.github.strawwaffle.glorp.ui.LocalLinkCard
+import io.github.strawwaffle.glorp.ui.LinkCard
+import io.github.strawwaffle.glorp.site.LinkFlag
+import io.github.strawwaffle.glorp.site.PreviewKind
+import io.github.strawwaffle.glorp.site.linkFlag
+import io.github.strawwaffle.glorp.site.loadLinkPreview
+import io.github.strawwaffle.glorp.site.previewKind
 import io.github.strawwaffle.glorp.notify.AlertCheck
 import io.github.strawwaffle.glorp.notify.NotifyControls
 import io.github.strawwaffle.glorp.notify.NotifyOptions
@@ -174,6 +181,18 @@ fun GlorpApp(
                 rustleLinkOf(target) != null -> { communityArg = target; screen = "rustle" }
             }
         }
+        // A tapped link with a preview: its card, over whatever is open.
+        var linkCard by remember { mutableStateOf<LinkCardRequest?>(null) }
+        linkCard?.let { card ->
+            LinkCard(
+                url = card.url,
+                kind = card.kind,
+                flag = card.flag,
+                load = { loadLinkPreview(chat.http, chat.linkTitles, card.url, card.kind) },
+                onWatch = { chat.watch(it); playerShown = true; screen = "chat" },
+                onDismiss = { linkCard = null },
+            )
+        }
         // After a crash, the next start offers to report it, once.
         var crashAsked by rememberSaveable { mutableStateOf(false) }
         val crashed = remember(diagnostics) { diagnostics?.lastCrash() != null }
@@ -186,6 +205,10 @@ fun GlorpApp(
         CompositionLocalProvider(
             LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it },
             LocalLinkTitles provides chat.linkTitles.takeIf { chat.input.options.linkTitles },
+            LocalLinkCard provides { url, text ->
+                val kind = previewKind(url, settings.previewAllImages)
+                if (kind == null) false else { linkCard = LinkCardRequest(url, kind, linkFlag(text)); true }
+            },
             // rustlesearch.dev links open the app's own log search on that query.
             LocalOpenLink provides { url ->
                 if (rustleLinkOf(url) == null) false
@@ -385,6 +408,8 @@ fun GlorpApp(
         }
     } }
 }
+
+private class LinkCardRequest(val url: String, val kind: PreviewKind, val flag: LinkFlag?)
 
 private const val BACKGROUND_AUDIO = "background-audio"
 private const val CATCH_UP = "catch-up"
