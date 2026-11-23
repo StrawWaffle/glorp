@@ -23,7 +23,11 @@ import kotlin.random.Random
 import kotlin.time.Clock
 
 /** Glorp's app on destiny.gg (profile → developer), for "Sign in with destiny.gg". */
-class AppClient(val id: String, val secret: String) {
+class AppClient(
+    val id: String,
+    /** The SHA-256 (hex) of the app's secret: the site keeps only that, and checks against it. */
+    val secretHash: String,
+) {
     companion object {
         /** Registered with the app on the site; the site checks the start of it. */
         const val REDIRECT = "io.github.strawwaffle.glorp://oauth"
@@ -38,9 +42,10 @@ class AppClient(val id: String, val secret: String) {
  * lasts an hour and is renewed before chat connects.
  *
  * The site's check (OAuthController::tokenExchange) is
- * `base64(sha256hex(code_verifier + client_secret))`, so the app holds the
- * secret; the redirect address, which the site insists on, is what ties the
- * code to this app.
+ * `base64(sha256hex(code_verifier + stored secret))`, and what it stores is
+ * the secret's own SHA-256 (ProfileController), as its OAUTH.md says. So the
+ * app holds that hash, never the secret; the redirect address, which the site
+ * insists on, is what ties the code to this app.
  */
 class AppSignIn(
     private val client: HttpClient,
@@ -64,7 +69,7 @@ class AppSignIn(
             "client_id" to app.id,
             "redirect_uri" to AppClient.REDIRECT,
             "state" to state,
-            "code_challenge" to codeChallenge(verifier, app.secret),
+            "code_challenge" to codeChallenge(verifier, app.secretHash),
             "code_challenge_method" to "S256",
         ).joinToString("&") { (k, v) -> "$k=${v.encodeURLParameter()}" }
         return "${site.origin}/oauth/authorize?$query"
@@ -120,9 +125,9 @@ class AppSignIn(
 fun needsRenewal(key: Session.LoginKey, now: Long = Clock.System.now().toEpochMilliseconds()): Boolean =
     key.renewable && (key.expiresAt ?: 0) - now < 5 * 60_000
 
-/** The site's challenge: base64 of the hex SHA-256 of the verifier and the secret. */
-internal fun codeChallenge(verifier: String, secret: String): String =
-    (verifier + secret).encodeUtf8().sha256().hex().encodeUtf8().base64()
+/** The site's challenge: base64 of the hex SHA-256 of the verifier and the secret's hash. */
+internal fun codeChallenge(verifier: String, secretHash: String): String =
+    (verifier + secretHash).encodeUtf8().sha256().hex().encodeUtf8().base64()
 
 private const val ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 

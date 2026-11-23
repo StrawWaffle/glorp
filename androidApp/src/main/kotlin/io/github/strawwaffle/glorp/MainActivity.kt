@@ -105,8 +105,8 @@ class MainActivity : ComponentActivity() {
                 ),
                 notify = notify,
                 diagnostics = Crashes.diagnostics(applicationContext, BuildConfig.VERSION_NAME),
-                appClient = BuildConfig.DGG_CLIENT_ID.takeIf { it.isNotEmpty() && BuildConfig.DGG_CLIENT_SECRET.isNotEmpty() }
-                    ?.let { AppClient(it, BuildConfig.DGG_CLIENT_SECRET) },
+                appClient = BuildConfig.DGG_CLIENT_ID.takeIf { it.isNotEmpty() && BuildConfig.DGG_CLIENT_SECRET_SHA256.isNotEmpty() }
+                    ?.let { AppClient(it, BuildConfig.DGG_CLIENT_SECRET_SHA256) },
                 scanCode = ::scanCode,
             )
         }

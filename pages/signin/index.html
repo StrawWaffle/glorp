@@ -4,67 +4,92 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Nothing typed here can leave the page: no requests are allowed at all. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex">
 <title>Glorp sign-in</title>
+<link rel="icon" href="../glorp.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
-  <h1>Sign in to Glorp from this computer</h1>
-  <p>
-    Glorp needs destiny.gg's login cookies for the parts of the site a login key can't open:
-    settings that follow your account, whisper history, notifications, <code>/stalk</code> and what you're watching.
-    destiny.gg keeps those cookies away from web pages, so you copy them from your browser here,
-    and this page turns them into a code for the app to scan.
-  </p>
-  <p class="quiet">
-    This page sends nothing anywhere: it's one file, it isn't allowed to make requests, and its code is
-    <a href="https://github.com/StrawWaffle/glorp/tree/main/pages/signin">on GitHub</a>.
-  </p>
+  <header>
+    <img src="../glorp.png" alt="Glorp, a green furry alien with antennae">
+    <h1>Sign in to Glorp from this computer</h1>
+  </header>
 
-  <ol>
-    <li>
-      <p>Sign in to <a id="site-link" href="https://www.destiny.gg/login" target="_blank" rel="noopener"><span class="site-name">destiny.gg</span></a> in this browser, with <strong>Remember me</strong> ticked.</p>
-    </li>
-    <li>
-      <p>On a <span class="site-name">destiny.gg</span> tab, open the developer tools: <kbd>F12</kbd>, or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> (<kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>I</kbd> on a Mac).</p>
-    </li>
-    <li>
-      <p>Find the site's cookies:</p>
-      <ul>
-        <li>Chrome, Edge, Brave: <b>Application</b> tab → <b>Storage</b> → <b>Cookies</b> → <code class="site-origin">https://www.destiny.gg</code></li>
-        <li>Firefox: <b>Storage</b> tab → <b>Cookies</b> → <code class="site-origin">https://www.destiny.gg</code></li>
-        <li>Safari: turn on <b>Show features for web developers</b> in Settings → Advanced, then <b>Develop</b> → <b>Show Web Inspector</b> → <b>Storage</b> → <b>Cookies</b></li>
-      </ul>
-    </li>
-    <li>
-      <p>Copy the <b>Value</b> of each of these into the boxes. Double-click a value to select all of it.</p>
-      <form id="form" autocomplete="off">
-        <label for="sid">sid</label>
-        <input id="sid" type="password" spellcheck="false" autocapitalize="off">
-        <label for="rememberme">rememberme</label>
-        <input id="rememberme" type="password" spellcheck="false" autocapitalize="off">
-        <p class="quiet">Without rememberme, the app is signed out again when this browser session ends.</p>
-        <p id="problem" class="problem" hidden></p>
-        <button id="show" type="submit">Show the code</button>
-      </form>
-    </li>
-    <li>
-      <p>In Glorp: menu → <b>Sign in</b> → <b>Sign in from a computer</b> → <b>Scan the code</b>.</p>
-    </li>
-  </ol>
-
-  <section id="result" hidden>
-    <p class="warning">This code is your destiny.gg login. Anyone who scans it is signed in as you, so hide it once the app has it.</p>
-    <div id="qr" aria-label="Sign-in code"></div>
-    <div class="actions">
-      <button id="hide" type="button">Hide it</button>
-      <button id="copy" type="button" class="plain">Copy it as text</button>
-    </div>
-    <p class="quiet">The text works too: paste it into the box under the scan button, for a phone without a camera scanner.</p>
+  <section class="panel">
+    <p>
+      Glorp needs destiny.gg's login cookies for the parts of the site a login key can't open:
+      settings that follow your account, whisper history, notifications, <code>/stalk</code> and what you're watching.
+      destiny.gg keeps those cookies away from web pages, so you copy them from your browser here,
+      and this page turns them into a code for the app to scan.
+    </p>
+    <p class="quiet">
+      This page sends nothing anywhere: it isn't allowed to make requests, it stores nothing, and its code is
+      <a href="https://github.com/StrawWaffle/glorp/tree/main/pages/signin">on GitHub</a>.
+    </p>
   </section>
+
+  <section class="panel">
+    <ol class="steps">
+      <li>
+        <p>Sign in to <a id="site-link" href="https://www.destiny.gg/login" target="_blank" rel="noopener"><span class="site-name">destiny.gg</span></a> in this browser, with <strong>Remember me</strong> ticked.</p>
+      </li>
+      <li>
+        <p>On a <span class="site-name">destiny.gg</span> tab, open the developer tools: <kbd>F12</kbd>, or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> (<kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>I</kbd> on a Mac).</p>
+      </li>
+      <li>
+        <p>Find the site's cookies:</p>
+        <ul>
+          <li>Chrome, Edge, Brave: <b>Application</b> tab → <b>Storage</b> → <b>Cookies</b> → <code class="site-origin">https://www.destiny.gg</code></li>
+          <li>Firefox: <b>Storage</b> tab → <b>Cookies</b> → <code class="site-origin">https://www.destiny.gg</code></li>
+          <li>Safari: turn on <b>Show features for web developers</b> in Settings → Advanced, then <b>Develop</b> → <b>Show Web Inspector</b> → <b>Storage</b> → <b>Cookies</b></li>
+        </ul>
+      </li>
+      <li>
+        <p>Copy the <b>Value</b> of each of these into the boxes. Double-click a value to select all of it.</p>
+        <form id="form" autocomplete="off">
+          <label for="sid">sid</label>
+          <input id="sid" type="password" spellcheck="false" autocapitalize="off">
+          <label for="rememberme">rememberme</label>
+          <input id="rememberme" type="password" spellcheck="false" autocapitalize="off">
+          <p class="quiet">Without rememberme, the app is signed out again when this browser session ends.</p>
+          <p id="problem" class="problem" hidden></p>
+          <button id="show" type="submit" class="primary">Make the code</button>
+        </form>
+      </li>
+      <li>
+        <p>In Glorp: menu → <b>Sign in</b> → <b>Sign in from a computer</b> → <b>Scan the code</b>.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section id="result" class="panel" hidden>
+    <div id="confirm">
+      <h2>Before the code shows</h2>
+      <p class="warning">
+        The code is your destiny.gg login. Anyone who scans it, or sees it on a stream or a shared screen,
+        is signed in as you until you sign out on the site.
+      </p>
+      <label class="check"><input id="ack" type="checkbox"> Nobody else can see this screen, and I'm not streaming or sharing it.</label>
+      <div class="actions">
+        <button id="reveal" type="button" class="primary" disabled>Show the code</button>
+        <button id="cancel" type="button">Never mind</button>
+      </div>
+    </div>
+    <div id="shown" hidden>
+      <h2>Your sign-in code</h2>
+      <div id="qr" aria-label="Sign-in code"></div>
+      <div class="actions">
+        <button id="hide" type="button" class="primary">Hide it</button>
+        <button id="copy" type="button">Copy it as text</button>
+      </div>
+      <p class="quiet">Scan it in Glorp, then hide it. The text works too: paste it into the box under the scan button. It hides by itself if you switch tabs.</p>
+    </div>
+  </section>
+
+  <footer>Set in Nunito and Gaegu, under the SIL Open Font License.</footer>
 </main>
 <script src="qrcode.js"></script>
 <script src="signin.js"></script>

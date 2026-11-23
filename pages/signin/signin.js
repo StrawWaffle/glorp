@@ -18,6 +18,10 @@
   var rememberme = document.getElementById("rememberme");
   var problem = document.getElementById("problem");
   var result = document.getElementById("result");
+  var confirm = document.getElementById("confirm");
+  var shown = document.getElementById("shown");
+  var ack = document.getElementById("ack");
+  var reveal = document.getElementById("reveal");
   var qr = document.getElementById("qr");
   var copy = document.getElementById("copy");
   var code = null;
@@ -31,33 +35,51 @@
     return /[\s;:]/.test(value);
   }
 
+  // Back to before: no code anywhere on the page, and the warning to agree to again.
   function hide() {
     code = null;
     qr.textContent = "";
+    shown.hidden = true;
+    confirm.hidden = false;
+    ack.checked = false;
+    reveal.disabled = true;
     result.hidden = true;
   }
 
+  // The code is made only once the warning is agreed to; first the warning shows.
   form.addEventListener("submit", function (event) {
     event.preventDefault();
+    hide();
     var s = clean(sid.value, "sid");
     var r = clean(rememberme.value, "rememberme");
     problem.hidden = true;
     if (!s || fails(s) || fails(r)) {
       problem.textContent = !s ? "Copy the value of sid first." : "That doesn't look like a cookie's value: copy just the Value column.";
       problem.hidden = false;
-      hide();
       return;
     }
+    result.hidden = false;
+    result.scrollIntoView({ block: "center" });
+    ack.focus();
+  });
+
+  ack.addEventListener("change", function () { reveal.disabled = !ack.checked; });
+
+  reveal.addEventListener("click", function () {
+    if (!ack.checked) return;
+    var s = clean(sid.value, "sid");
+    var r = clean(rememberme.value, "rememberme");
     code = "glorp-signin:1:" + site + ":" + s + ":" + r;
     var q = qrcode(0, "M");
     q.addData(code);
     q.make();
     qr.innerHTML = q.createSvgTag({ cellSize: 6, margin: 4, scalable: true });
     copy.textContent = "Copy it as text";
-    result.hidden = false;
-    result.scrollIntoView({ block: "center" });
+    confirm.hidden = true;
+    shown.hidden = false;
   });
 
+  document.getElementById("cancel").addEventListener("click", hide);
   document.getElementById("hide").addEventListener("click", hide);
 
   copy.addEventListener("click", function () {

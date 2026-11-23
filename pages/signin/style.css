@@ -1,124 +1,265 @@
+/*
+ * Glorp's pages: soft rounded panels and chunky buttons that sit on a solid
+ * shadow and press down when clicked, Nunito for text and Gaegu's
+ * handwriting for headings, in Glorp's own colours: the lime of his fur on
+ * near-black, with faint Glorp silhouettes behind everything.
+ */
+
+@font-face {
+  font-family: "Nunito";
+  src: url("../fonts/nunito-latin-wght-normal.woff2") format("woff2");
+  font-weight: 200 1000;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Gaegu";
+  src: url("../fonts/gaegu-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Gaegu";
+  src: url("../fonts/gaegu-latin-700-normal.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
-  --bg: #111113;
-  --surface: #1b1b1f;
-  --border: #2c2c32;
-  --text: #edeef0;
-  --dim: #9ea3ad;
-  --accent: #8bd450;
-  --link: #4aa8ff;
-  --warn: #f3b122;
+  --bg: #0a0f08;
+  --panel: #131b10;
+  --panel-border: #26361d;
+  --panel-shadow: #040603;
+  --text: #eef6e4;
+  --muted: #9eb38c;
+  --primary: #b7fa44;
+  --primary-shadow: #6fae1f;
+  --primary-text: #13240a;
+  --button: #1b2716;
+  --button-shadow: #070b05;
+  --field: #0c1209;
+  --link: #b7fa44;
+  --warn: #ffc94d;
+  --silhouette: 0.07;
+  --silhouette-filter: invert(1);
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #faf8f2;
-    --surface: #ffffff;
-    --border: #ddd8c8;
-    --text: #2b2620;
-    --dim: #6f6656;
-    --accent: #3d7a1c;
-    --link: #1f6fbf;
+    --bg: #eef6e2;
+    --panel: #fbfef5;
+    --panel-border: #d3e5bb;
+    --panel-shadow: #bfd6a2;
+    --text: #1c2a12;
+    --muted: #5d7249;
+    --primary: #b7fa44;
+    --primary-shadow: #78b52a;
+    --primary-text: #13240a;
+    --button: #f4f9ea;
+    --button-shadow: #d3e5bb;
+    --field: #ffffff;
+    --link: #3f7d12;
     --warn: #9a5b00;
+    --silhouette: 0.08;
+    --silhouette-filter: none;
     color-scheme: light;
   }
 }
 
 * { box-sizing: border-box; }
 
+html { background: var(--bg); }
+
 body {
   margin: 0;
-  background: var(--bg);
   color: var(--text);
-  font: 16px/1.55 system-ui, -apple-system, sans-serif;
+  font: 16px/1.6 "Nunito", ui-rounded, system-ui, sans-serif;
+}
+
+/* Glorps drifting faintly behind the page. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: url("../glorp-scatter.png") 0 0 / 300px 300px repeat;
+  opacity: var(--silhouette);
+  filter: var(--silhouette-filter);
+  pointer-events: none;
 }
 
 main {
   max-width: 680px;
   margin: 0 auto;
-  padding: 32px 16px 48px;
+  padding: 28px 16px 56px;
 }
 
-h1 {
-  font-size: 24px;
-  line-height: 1.25;
-  margin: 0 0 16px;
+header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
 }
 
-a { color: var(--link); }
+header img { width: 64px; height: auto; flex: none; }
+
+h1, h2, .hand {
+  font-family: "Gaegu", "Nunito", cursive;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+h1 { font-size: 36px; margin: 0; }
+h2 { font-size: 26px; margin: 0 0 8px; }
+
+a { color: var(--link); font-weight: 700; }
 
 code, kbd {
-  font: 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0 4px;
+  font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--field);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 0 5px;
 }
 
-.quiet { color: var(--dim); font-size: 14px; }
+.quiet { color: var(--muted); font-size: 14px; }
 
-ol { padding-left: 22px; }
-ol > li { margin: 0 0 18px; }
-ol > li::marker { color: var(--accent); font-weight: 700; }
-ul { padding-left: 20px; }
-ul li { margin: 4px 0; }
-li > p { margin: 0 0 8px; }
+/* A soft panel on its shadow. */
+.panel {
+  background: var(--panel);
+  border: 2px solid var(--panel-border);
+  border-radius: 22px;
+  box-shadow: 0 5px 0 var(--panel-shadow);
+  padding: 18px 20px;
+  margin: 0 0 20px;
+}
+
+.panel > :first-child { margin-top: 0; }
+.panel > :last-child { margin-bottom: 0; }
+
+ol.steps {
+  list-style: none;
+  counter-reset: step;
+  padding: 0;
+  margin: 0;
+}
+
+ol.steps > li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 44px;
+  margin: 0 0 18px;
+}
+
+ol.steps > li:last-child { margin-bottom: 0; }
+
+ol.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: -4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font: 700 22px/1 "Gaegu", "Nunito", cursive;
+  color: var(--primary-text);
+  background: var(--primary);
+  box-shadow: 0 3px 0 var(--primary-shadow);
+}
+
+ol.steps p { margin: 0 0 8px; }
+ol.steps ul { padding-left: 18px; margin: 4px 0 0; }
+ol.steps ul li { margin: 4px 0; }
 
 form {
   display: grid;
   gap: 6px;
   max-width: 460px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
-label { font-weight: 600; font-size: 14px; }
+label { font-weight: 800; font-size: 14px; }
 
 input {
   font: 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px;
+  background: var(--field);
+  border: 2px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 9px 12px;
   margin-bottom: 6px;
 }
 
-input:focus { outline: 2px solid var(--link); outline-offset: 0; }
+input:focus { outline: none; border-color: var(--primary-shadow); }
 
+/* A chunky button on its shadow; it presses down when clicked. */
 button {
-  font: inherit;
-  font-weight: 600;
-  color: #111113;
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  padding: 8px 14px;
-  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
   justify-self: start;
-}
-
-button.plain {
+  gap: 8px;
+  font: 800 16px/1.2 "Nunito", ui-rounded, system-ui, sans-serif;
   color: var(--text);
-  background: transparent;
-  border-color: var(--border);
+  background: var(--button);
+  border: 2px solid var(--panel-border);
+  border-radius: 9999px;
+  padding: 9px 18px;
+  box-shadow: 0 4px 0 var(--button-shadow);
+  cursor: pointer;
+  transition: translate 80ms ease, box-shadow 80ms ease, background-color 150ms ease;
 }
 
-.problem { color: var(--warn); margin: 0; }
+button:active { translate: 0 3px; box-shadow: 0 1px 0 var(--button-shadow); }
+button:focus-visible { outline: 3px solid var(--primary-shadow); outline-offset: 2px; }
 
-#result {
-  border-top: 1px solid var(--border);
-  padding-top: 20px;
+button.primary {
+  color: var(--primary-text);
+  background: var(--primary);
+  border-color: var(--primary-shadow);
+  box-shadow: 0 4px 0 var(--primary-shadow);
 }
 
-.warning { color: var(--warn); }
+button.primary:hover { background: color-mix(in oklab, var(--primary), var(--primary-shadow) 25%); }
+button.primary:active { box-shadow: 0 1px 0 var(--primary-shadow); }
+
+.problem { color: var(--warn); font-weight: 700; margin: 0; }
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  padding: 0;
+  flex: none;
+  accent-color: var(--primary-shadow);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  translate: none;
+}
+.warning { color: var(--warn); font-weight: 700; margin-top: 0; }
 
 /* Dark on white in every theme, as scanners expect. */
 #qr {
   width: min(320px, 100%);
   background: #ffffff;
-  border-radius: 6px;
+  border-radius: 16px;
+  padding: 6px;
 }
 
 #qr svg { display: block; width: 100%; height: auto; }
 
-.actions { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+.actions { display: flex; gap: 10px; margin: 16px 0 10px; flex-wrap: wrap; }
+
+footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 8px; }
