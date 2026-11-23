@@ -1,0 +1,32 @@
+# Glorp's mentions service (server/, see server/README.md). Everything else in
+# this repo is the Android app, which isn't deployed. A deploy runs
+# `docker compose up -d --build` here; settings come from the environment
+# (see .env.example).
+services:
+  glorp-mentions:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: glorp-mentions:latest
+    restart: unless-stopped
+    environment:
+      KEEP: ${KEEP:-2h}
+      CHAT_URL: ${CHAT_URL:-wss://chat.destiny.gg/ws}
+    ports:
+      # Plain HTTP: put HTTPS in front of it.
+      - "${GLORP_MENTIONS_PORT:-8087}:8080"
+    mem_limit: 128m
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "/glorp-mentions", "-check"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

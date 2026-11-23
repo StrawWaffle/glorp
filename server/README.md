@@ -16,22 +16,23 @@ connected, which is also Docker's health check.
 
 ## Running it
 
+From the repo root (`compose.yaml` there builds this folder):
+
     docker compose up -d --build
 
-from this folder. It listens on `127.0.0.1:8087`; put HTTPS in front with a
-reverse proxy (any path prefix is fine: the app is given the full base URL).
-Settings, as environment variables: `KEEP` (how long chat is kept, default
-`2h`), `LISTEN` (default `:8080` inside the container), `CHAT_URL`.
+- **Port:** host port `8087` (set `GLORP_MENTIONS_PORT` to change it), plain
+  HTTP to the container's 8080, serving `/mentions` and `/health`. It needs
+  HTTPS in front: the app only talks to it over HTTPS.
+- **Settings:** environment variables, all optional; see `.env.example` at the
+  repo root (`GLORP_MENTIONS_PORT`, `KEEP`, `CHAT_URL`). No secrets.
+- **Data:** none kept; no volumes. A restart starts with chat's backlog and
+  fills up again.
+- **Nothing to do by hand.** It shuts down cleanly on SIGTERM.
+- **Resources:** about 11 MB of memory (limited to 128 MB); the build is a
+  small Go program on `golang:1.27-alpine`, and the image is distroless.
 
-### With Komodo, updating itself from GitHub
-
-A Stack from the git repo:
-
-- Repo `StrawWaffle/glorp`, branch `main`, run directory `server`, file
-  `compose.yaml`.
-- Poll for updates (or a GitHub webhook) and redeploy when it changes; the
-  compose file builds the image from this folder, so a new commit is a new
-  build. Only changes under `server/` change the image.
+A deploy that rebuilds on every push to `main` rebuilds this too; Docker's
+cache keeps that cheap when `server/` hasn't changed.
 
 ## Testing
 

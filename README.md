@@ -69,3 +69,9 @@ Glorp's own code: [PolyForm Noncommercial 1.0.0](LICENSE.md), free to use,
 change and share for anything non-commercial. The `grayjay/` module holds
 code adapted from Grayjay and is under FUTO's
 [Source First License 1.1](grayjay/LICENSE.md).
+
+## Mentions service
+
+`compose.yaml` at the root runs `server/`: a small service that watches
+destiny.gg chat so the app can notify mentions without the site's login.
+See [server/README.md](server/README.md) and `.env.example`.
