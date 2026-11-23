@@ -338,7 +338,7 @@ fun SettingsScreen(
         item {
             SwitchRow(
                 "Keep playing with the screen off",
-                "Kick, Twitch and YouTube live keep their sound when you lock the phone",
+                "Streams and recordings played in Glorp's own player keep their sound when you lock the phone",
                 backgroundAudio,
                 onBackgroundAudio,
             )
