@@ -15,7 +15,9 @@ with memory and battery throughout.
 - **Media3/ExoPlayer** on Android and **AVPlayer** on iOS for video, behind one
   shared player interface. Both use the hardware decoder and bring picture in
   picture.
-- **Coil 3** (when emotes arrive) for images, with a bounded memory cache.
+- **Coil 3** for images, with a bounded memory cache. AVIF goes through
+  **libavif** (`org.aomedia.avif.android`, about 0.4 MB on arm64): Android's
+  own decoder refuses wide sprite strips such as BINGQILIN's 6390 px.
 
 ## What the site offers (read from omniliberal.dev, 2026-11-22)
 

@@ -41,6 +41,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.coil.gif)
+            implementation(libs.avif)
             implementation(libs.media3.exoplayer)
             implementation(libs.media3.hls)
             implementation(libs.media3.dash)

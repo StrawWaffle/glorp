@@ -105,7 +105,11 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
         val filter = if (brightness == 1f) null
         else ColorFilter.colorMatrix(ColorMatrix().apply { setToScale(brightness, brightness, brightness, 1f) })
         val scale = size.height / emote.height
-        val offset = (emote.offsetX + frame * emote.width) * scale
+        // While the strip plays, its keyframes place it (from their start);
+        // at rest, the emote's own background-position does.
+        val playing = sprite != null && at < sprite.totalMs
+        val base = if (playing) sprite?.startX ?: emote.offsetX else emote.offsetX
+        val offset = (base + frame * emote.width) * scale
         clipRect {
             translate(left = -offset) {
                 with(painter) { draw(Size(emote.sheetWidth * scale, emote.sheetHeight * scale), colorFilter = filter) }

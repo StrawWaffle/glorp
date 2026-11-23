@@ -56,6 +56,8 @@ data class Sprite(
     val iterations: Int,
     /** `forwards`: stays on the last frame instead of going back to the first. */
     val holdLast: Boolean,
+    /** Where the strip starts while it plays, in px from the picture's left; null for where it rests. */
+    val startX: Int? = null,
 ) {
     val totalMs: Long get() = if (iterations == Int.MAX_VALUE) Long.MAX_VALUE else durationMs * iterations
 }
@@ -88,7 +90,7 @@ class Emotes private constructor(
     private class Builder(
         val own: Map<String, Map<String, List<String>>>,
         val images: Map<String, Pair<Int, Int>>,
-        val keyframes: Map<String, Int>,
+        val keyframes: Map<String, StripKeyframes>,
         val moving: Map<String, List<KeyFrame>>,
         val context: EmoteContext,
     ) {
@@ -188,7 +190,7 @@ private fun build(
     imageHeight: Int,
     minimumSubTier: Int,
     decls: Decls,
-    keyframes: Map<String, Int>,
+    keyframes: Map<String, StripKeyframes>,
     moving: Map<String, List<KeyFrame>>,
 ): Emote {
     var width = decls.px("width") ?: imageWidth.toDouble()
@@ -202,7 +204,8 @@ private fun build(
     val shrink = minOf(1.0, MAX_HEIGHT / height, MAX_WIDTH / width)
     width *= shrink; height *= shrink; sheetWidth *= shrink; sheetHeight *= shrink; offset *= shrink
     val animation = decls.value("animation")?.let { listOf(it) }
-    var sprite = animation?.let { spriteOf(it, sheetWidth.toInt(), width.toInt(), keyframes) }
+    var sprite = animation?.let { spriteOf(it, sheetWidth.toInt(), width.toInt(), keyframes) { token -> decls.resolvePx(token) } }
+        ?.let { sp -> sp.copy(startX = sp.startX?.let { (it * shrink).toInt() }) }
     var motions = animation?.let { motionsOf(topLevelParts(it.last()), moving) }.orEmpty()
     // Longhands after the shorthand change every animation in it (`.emote.SOY + .emote.Clap`).
     decls.value("animation-duration")?.let(::cssMillis)?.takeIf { it > 0 }?.let { ms ->
@@ -290,17 +293,39 @@ private fun baseRules(css: String): Map<String, Decls> {
     return out
 }
 
-/** For each `@keyframes`, the furthest `background-position` it moves to, in px. */
-private fun keyframeOffsets(css: String): Map<String, Int> {
-    val out = HashMap<String, Int>()
+/**
+ * A `@keyframes` that moves a strip: its `background-position` values as
+ * written (`-2880px`, or `var(--end)` for each emote to fill in), and the one
+ * at `0%`/`from`, if it says where the strip starts.
+ */
+data class StripKeyframes(val positions: List<String>, val start: String?)
+
+/** For each `@keyframes`, the `background-position` values it moves through. */
+private fun keyframeOffsets(css: String): Map<String, StripKeyframes> {
+    val out = HashMap<String, StripKeyframes>()
     val clean = css.replace(Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL), "")
     val block = Regex("""@keyframes\s+([\w-]+)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}""")
+    val step = Regex("""([^{}]+)\{([^{}]*)\}""")
+    val position = Regex("""background-position:\s*([^;}\s]+(?:\([^)]*\))?)""")
     for (match in block.findAll(clean)) {
-        val positions = Regex("""background-position:\s*(-?\d+)px""").findAll(match.groupValues[2])
-            .map { kotlin.math.abs(it.groupValues[1].toInt()) }.toList()
-        if (positions.isNotEmpty()) out[match.groupValues[1]] = positions.max()
+        val positions = ArrayList<String>()
+        var start: String? = null
+        for (s in step.findAll(match.groupValues[2])) {
+            val value = position.find(s.groupValues[2])?.groupValues?.get(1) ?: continue
+            positions += value
+            val selectors = s.groupValues[1].split(',').map { it.trim() }
+            if ("0%" in selectors || "from" in selectors) start = value
+        }
+        if (positions.isNotEmpty()) out[match.groupValues[1]] = StripKeyframes(positions, start)
     }
     return out
+}
+
+/** A length as the emote's rules give it: `-2880px`, or `var(--end)` filled in from them. */
+private fun Decls.resolvePx(token: String): Double? {
+    var v = token
+    repeat(3) { v = varRegex.replace(v) { m -> this[m.groupValues[1]]?.lastOrNull() ?: m.groupValues[2] } }
+    return pxRegex.find(v.trim())?.groupValues?.get(1)?.toDouble()
 }
 
 /** Splits a list of animations on the commas between them, not those inside `calc(…)`. */
@@ -328,10 +353,20 @@ private val timeRegex = Regex("""(\d*\.?\d+)(ms|s)\b""")
  * Reads an `animation` shorthand that steps a background through a strip, such
  * as `Askers-anim calc(3.5s / var(--animation-speed, 1)) steps(99) 4`.
  */
-private fun spriteOf(values: List<String>, sheetWidth: Int, frameWidth: Int, keyframes: Map<String, Int>): Sprite? {
+private fun spriteOf(
+    values: List<String>,
+    sheetWidth: Int,
+    frameWidth: Int,
+    keyframes: Map<String, StripKeyframes>,
+    resolve: (String) -> Double?,
+): Sprite? {
     for (part in topLevelParts(values.last())) {
         val steps = Regex("""steps\((\d+)""").find(part)?.groupValues?.get(1)?.toInt() ?: continue
         val name = part.trim().split(Regex("""\s+""")).firstOrNull { it in keyframes } ?: continue
+        val strip = keyframes.getValue(name)
+        // Keyframes written with variables only move a strip once this emote fills them in.
+        if (strip.positions.none { resolve(it) != null }) continue
+        val startX = strip.start?.let(resolve)?.let { kotlin.math.abs(it).toInt() }
         if (frameWidth <= 0 || sheetWidth <= frameWidth || steps <= 0) continue
         val time = timeRegex.find(part) ?: continue
         val durationMs = time.groupValues[1].toDouble().let { if (time.groupValues[2] == "s") it * 1000 else it }.toLong()
@@ -343,7 +378,7 @@ private fun spriteOf(values: List<String>, sheetWidth: Int, frameWidth: Int, key
             "infinite" in rest -> Int.MAX_VALUE
             else -> Regex("""(?:^|\s)(\d+)(?:\s|$)""").find(rest)?.groupValues?.get(1)?.toInt() ?: 1
         }
-        return Sprite(sheetWidth, steps, durationMs.coerceAtLeast(1), iterations, "forwards" in rest || "both" in rest)
+        return Sprite(sheetWidth, steps, durationMs.coerceAtLeast(1), iterations, "forwards" in rest || "both" in rest, startX)
     }
     return null
 }
