@@ -61,6 +61,7 @@ class MainActivity : ComponentActivity() {
             if (permitted) Notifier.post(applicationContext, alert)
         }
         override fun setLive(connected: Boolean) {
+            if (Notifier.liveChat != connected) AppLog.note("notify", if (connected) "chat live: the background check stays quiet" else "chat closed: the background check notifies")
             Notifier.liveChat = connected
         }
     }
@@ -157,6 +158,15 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         takeOpenRequest(intent)
+    }
+
+    override fun onStop() {
+        // Stopped while still in picture in picture, with the screen on: the
+        // window was swiped away. That means stop, sound included. (Locking
+        // the phone also stops the activity; then the sound plays on.)
+        val screenOn = getSystemService(android.os.PowerManager::class.java)?.isInteractive != false
+        if (isInPictureInPictureMode && screenOn) io.github.strawwaffle.glorp.video.Playback.release(this)
+        super.onStop()
     }
 
     override fun onDestroy() {

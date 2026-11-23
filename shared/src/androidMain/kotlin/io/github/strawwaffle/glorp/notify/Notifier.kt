@@ -55,7 +55,7 @@ object Notifier {
         }
         val interval = options.intervalMinutes * 60_000L
         val current = jobs.getPendingJob(JOB_ID)
-        if (current != null && current.intervalMillis == interval) return
+        if (current != null && current.intervalMillis == interval && current.isRequireBatteryNotLow) return
         jobs.schedule(
             JobInfo.Builder(JOB_ID, ComponentName(context, AlertJob::class.java))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
@@ -80,7 +80,8 @@ object Notifier {
         try {
             val alerts = AlertCheck(client, Site.guess(origin), prefs, options, cookies, prefs.get(NotifyOptions.NICK), prefs.get(NotifyOptions.SERVER)).run()
             AppLog.note("notify", "background check: ${alerts.size} new")
-            if (!liveChat && permitted(context)) alerts.forEach { post(context, it) }
+            // While chat is connected it has already told of whispers and mentions; going live it never does.
+            if (permitted(context)) alerts.filter { !liveChat || it.kind == Alert.Kind.Live }.forEach { post(context, it) }
         } finally {
             client.close()
         }
@@ -106,6 +107,7 @@ object Notifier {
             .setStyle(Notification.BigTextStyle().bigText(alert.text))
             .setContentIntent(tap)
             .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
             .setCategory(if (alert.kind == Alert.Kind.Live) Notification.CATEGORY_EVENT else Notification.CATEGORY_MESSAGE)
             .build()
         manager.notify(alert.open.hashCode(), notification)

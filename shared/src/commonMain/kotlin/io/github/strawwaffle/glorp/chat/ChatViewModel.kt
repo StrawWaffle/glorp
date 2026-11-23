@@ -16,6 +16,7 @@ import io.github.strawwaffle.glorp.site.with
 import io.github.strawwaffle.glorp.video.Resolution
 import io.github.strawwaffle.glorp.video.Resolver
 import io.github.strawwaffle.glorp.video.YouTubePlugin
+import io.github.strawwaffle.glorp.video.nativePlaybackPlaying
 import io.github.strawwaffle.glorp.net.createPluginHttpClient
 import io.github.strawwaffle.glorp.site.Emotes
 import io.github.strawwaffle.glorp.site.Flairs
@@ -267,15 +268,12 @@ class ChatViewModel(
         _lines.value = log.snapshot()
         wanted = true
         watchMods()
-        if (connection?.isActive == true) return
+        if (connection?.isActive == true) { startLive(); return }
         connection = viewModelScope.launch {
             ready.await()
             // Chat and the live feed connect while the emote list loads; the
             // event loop waits for the list before it groups the backlog.
-            launch {
-                LiveSocket(client, site, (session as? Session.Cookies)?.cookieHeader, reportedWatching)
-                    .run { update -> _live.value = _live.value.with(update) }
-            }
+            startLive()
             val chat = ChatSocket(client, site.chatSocketUrl, session?.cookieHeader)
             socket = chat
             launch { chat.state.collect { _socketState.value = it } }
@@ -331,7 +329,12 @@ class ChatViewModel(
 
     fun stop() {
         AppLog.note("chat", "closed: the app left the screen")
+        if (_account.value != null && _socketState.value == SocketState.Connected) {
+            io.github.strawwaffle.glorp.notify.AlertCheck.heardUntilNow(prefs)
+        }
         wanted = false
+        liveJob?.cancel()
+        liveJob = null
         watching?.cancel()
         watching = null
         connection?.cancel()
@@ -342,8 +345,11 @@ class ChatViewModel(
 
     private fun reconnect() {
         if (!wanted) return
+        val background = inBackground
         stop()
         start()
+        // Off screen (a sign-in finishing after the app was left): stay off screen.
+        if (background) stopWhenIdle(::nativePlaybackPlaying)
     }
 
     /** A login key being tried: chat's ME answer decides, then [onResult] hears. */
@@ -957,6 +963,18 @@ class ChatViewModel(
 
     private var backgroundWatch: Job? = null
 
+    // The site's live socket: on screen only, not kept for background sound.
+    private var liveJob: Job? = null
+
+    private fun startLive() {
+        if (liveJob?.isActive == true) return
+        liveJob = viewModelScope.launch {
+            ready.await()
+            LiveSocket(client, site, (session as? Session.Cookies)?.cookieHeader, reportedWatching)
+                .run { update -> _live.value = _live.value.with(update) }
+        }
+    }
+
     /** Off screen: chat still reads what arrives (for notifications) but draws nothing. */
     @Volatile
     private var inBackground = false
@@ -970,6 +988,8 @@ class ChatViewModel(
         inBackground = true
         watching?.cancel()
         watching = null
+        liveJob?.cancel()
+        liveJob = null
         backgroundWatch?.cancel()
         backgroundWatch = viewModelScope.launch {
             // Give the player a moment to decide whether it plays on.

@@ -43,6 +43,10 @@ import io.github.strawwaffle.glorp.video.nativePlaybackPlaying
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberUpdatedState
 import io.github.strawwaffle.glorp.ui.SettingsScreen
 import io.github.strawwaffle.glorp.ui.UserActions
@@ -219,8 +223,13 @@ fun GlorpApp(
         // a notification, if that kind is turned on.
         val lifecycle = LocalLifecycleOwner.current.lifecycle
         var banner by remember { mutableStateOf<ChatViewModel.LiveAlert?>(null) }
-        val socketNow by chat.socketState.collectAsStateWithLifecycle()
-        LaunchedEffect(notify, socketNow) { notify?.setLive(socketNow == SocketState.Connected) }
+        // Followed off screen too: the background check must speak up again once chat closes.
+        DisposableEffect(chat, notify) {
+            val job = CoroutineScope(Dispatchers.Main).launch {
+                chat.socketState.collect { notify?.setLive(it == SocketState.Connected) }
+            }
+            onDispose { job.cancel(); notify?.setLive(false) }
+        }
         val fullscreenNow by rememberUpdatedState(fullscreen)
         LaunchedEffect(chat) {
             chat.liveAlerts.collect { heard ->

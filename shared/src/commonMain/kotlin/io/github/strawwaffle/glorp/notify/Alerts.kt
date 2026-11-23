@@ -198,6 +198,17 @@ class AlertCheck(
         /** Prefix of a whisper notification's target; the nick follows. */
         const val OPEN_WHISPER = "glorp:whisper:"
 
+        /**
+         * Chat was connected until now and told of whispers and mentions as they came:
+         * the background check starts from here, so nothing is told twice.
+         */
+        fun heardUntilNow(prefs: ChatPrefs) {
+            val ms = kotlin.time.Clock.System.now().toEpochMilliseconds()
+            prefs.put(WHISPERS_SEEN, ms.toString())
+            prefs.put(MENTIONS_SEEN, (ms / 1000).toString())
+            prefs.put(SERVER_SEEN, ms.toString())
+        }
+
         private const val LIVE_SEEN = "notify.live.seen"
         private const val WHISPERS_SEEN = "notify.whispers.seen"
         private const val MENTIONS_SEEN = "notify.mentions.seen"

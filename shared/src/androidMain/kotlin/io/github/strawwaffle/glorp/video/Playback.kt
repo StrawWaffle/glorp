@@ -98,6 +98,7 @@ object Playback {
                 // Back on screen: pictures again, and the player stays.
                 soundOnly(it.player, false)
                 handler.removeCallbacks(idleRelease)
+                it.player.removeListener(pausedOffScreen)
                 // Back on screen, or looked up again, after it failed: start again.
                 if (it.controller.state.value.failed) it.controller.restart()
                 return it.also { start(context, background) }
@@ -206,7 +207,7 @@ object Playback {
      */
     fun detach(context: Context, keepPlaying: Boolean) {
         val current = active ?: return
-        if (keepPlaying && current.player.isPlaying) {
+        if (keepPlaying && meantToPlay(current.player)) {
             // Only the sound goes on: no video to decode with nothing to show it.
             soundOnly(current.player, true)
             appContext = context.applicationContext
@@ -216,10 +217,16 @@ object Playback {
         release(context)
     }
 
+    // With no picture, take the smallest stream too: where sound and video
+    // come together (Kick, Twitch, AngelThump) that's what gets downloaded.
     private fun soundOnly(player: ExoPlayer, on: Boolean) {
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, on).build()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, on).setForceLowestBitrate(on).build()
     }
+
+    /** Playing, or about to: a moment of buffering or a passing interruption doesn't count as stopped. */
+    fun meantToPlay(player: Player): Boolean =
+        player.playWhenReady && (player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_READY)
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var appContext: Context? = null
