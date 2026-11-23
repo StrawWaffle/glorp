@@ -1,6 +1,8 @@
 package io.github.strawwaffle.glorp.community
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,6 +24,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
@@ -96,9 +99,12 @@ fun RustleSearchScreen(env: CommunityEnv) {
     val keyboard = LocalSoftwareKeyboardController.current
     val list = rememberLazyListState()
 
+    // The form folds to one line once a search has run, leaving the room to the results.
+    var editing by remember { mutableStateOf(link == null && env.argument.isNullOrBlank()) }
     fun send() {
         keyboard?.hide()
         search.search(RustleQuery(username, words, channel, start, end))
+        if (search.query != null && search.error == null) editing = false
     }
     fun searchUser(nick: String) {
         username = nick
@@ -127,39 +133,64 @@ fun RustleSearchScreen(env: CommunityEnv) {
             }
             TextButton(onClick = env.onClose) { Text("Close", color = Palette.TextDim) }
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Field(username, { username = it }, "Name", Modifier.weight(1f), ::send)
-            Field(words, { words = it }, "Words (a|b for either)", Modifier.weight(1.4f), ::send)
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            ChannelPicker(channel, search) { channel = it }
-            TextButton(onClick = { local = !local }) {
-                Text(if (local) "Local time" else "UTC", color = Palette.Blue, fontSize = 13.sp)
+        if (!editing && search.query != null) {
+            val dates = when {
+                start == null -> "any date"
+                start == end -> "on $start"
+                else -> "$start to ${end ?: "today"}"
             }
-            Box(Modifier.weight(1f))
-            Button(onClick = ::send, enabled = !search.loading, modifier = Modifier.padding(end = 8.dp)) { Text("Search") }
-        }
-        // The site's quick ranges, and any other by picking the days.
-        val now = remember { Clock.System.now().toEpochMilliseconds() }
-        val ranges = remember(now) { DateRange.entries.associateWith { dateRange(it, now) } }
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            for ((range, dates) in ranges) {
-                Chip(range.name, start == dates.first && end == dates.second) { start = dates.first; end = dates.second }
+            Row(
+                Modifier.fillMaxWidth().clickable { editing = true }.background(Palette.Navy)
+                    .padding(start = 16.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    listOfNotNull(username.trim().ifBlank { null }, words.trim().ifBlank { null }?.let { "\"$it\"" }, channel, dates)
+                        .joinToString(" · "),
+                    color = Palette.White,
+                    fontSize = 13.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { local = !local }) { Text(if (local) "Local time" else "UTC", color = Palette.Blue, fontSize = 13.sp) }
+                TextButton(onClick = { editing = true }) { Text("Edit", color = Palette.Blue, fontSize = 13.sp) }
             }
-            Chip("All", start == null) { start = null; end = null }
-            Chip("Dates…", start != null && ranges.values.none { it.first == start && it.second == end }) { picking = true }
-        }
-        start?.let { from ->
-            Text(
-                if (from == end) "On $from (UTC)" else "From $from to ${end ?: "today"} (UTC)",
-                color = Palette.TextDim,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(start = 16.dp, top = 4.dp),
-            )
+        } else {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Field(username, { username = it }, "Name", Modifier.weight(1f), ::send)
+                Field(words, { words = it }, "Words (a|b for either)", Modifier.weight(1.4f), ::send)
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                ChannelPicker(channel, search) { channel = it }
+                TextButton(onClick = { local = !local }) {
+                    Text(if (local) "Local time" else "UTC", color = Palette.Blue, fontSize = 13.sp)
+                }
+                Box(Modifier.weight(1f))
+                Button(onClick = ::send, enabled = !search.loading, modifier = Modifier.padding(end = 8.dp)) { Text("Search") }
+            }
+            // The site's quick ranges, and any other by picking the days.
+            val now = remember { Clock.System.now().toEpochMilliseconds() }
+            val ranges = remember(now) { DateRange.entries.associateWith { dateRange(it, now) } }
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                for ((range, dates) in ranges) {
+                    Chip(range.name, start == dates.first && end == dates.second) { start = dates.first; end = dates.second }
+                }
+                Chip("All", start == null) { start = null; end = null }
+                Chip("Dates…", start != null && ranges.values.none { it.first == start && it.second == end }) { picking = true }
+            }
+            start?.let { from ->
+                Text(
+                    if (from == end) "On $from (UTC)" else "From $from to ${end ?: "today"} (UTC)",
+                    color = Palette.TextDim,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp),
+                )
+            }
         }
         Status(search)
         Results(env, search, list, local, ::searchUser)
@@ -381,7 +412,7 @@ private fun Status(search: SearchState) {
 
 /** A result as shown: a day heading or a chat line. */
 private sealed interface Item {
-    data class Day(val date: String) : Item
+    data class Day(val label: String) : Item
     data class Line(val message: LogMessage, val line: ChatLine, val continued: Boolean, val time: String) : Item
 }
 
@@ -408,23 +439,56 @@ private fun Chip(label: String, picked: Boolean, onClick: () -> Unit) {
 /** As chat draws a log line: no flairs are logged, and every emote shows, as the sender's tier isn't known. */
 private fun chatLine(nick: String, text: String, at: Long) = ChatLine.user(nick, emptyList(), text, at, subTier = Int.MAX_VALUE)
 
+/**
+ * The results split by day: a short heading for each day, kept at the top
+ * while its messages scroll, and only the time on each message. Results are
+ * often far apart, so chat's runs of one sender (the name left out after the
+ * first) aren't used here.
+ */
 private fun items(results: List<LogMessage>, local: Boolean): List<Item> {
     val out = ArrayList<Item>(results.size + 8)
     var day: String? = null
-    var previous: ChatLine? = null
     for (message in results) {
         val stamp = stamp(message.at, local)
         val date = stamp.take(10)
         if (date != day) {
-            out += Item.Day(date)
+            out += Item.Day(dayLabel(date))
             day = date
-            previous = null
         }
-        val line = chatLine(message.username, message.text, message.at)
-        out += Item.Line(message, line, previous != null && continues(previous, line), stamp.substring(11, 16))
-        previous = line
+        out += Item.Line(message, chatLine(message.username, message.text, message.at), continued = false, time = stamp.substring(11, 16))
     }
     return out
+}
+
+@Composable
+private fun DayDivider(label: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HorizontalDivider(Modifier.weight(1f), color = Palette.Navy)
+        Text(
+            label,
+            color = Palette.TextDim,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 10.dp)
+                .background(Palette.Navy, RoundedCornerShape(10.dp))
+                .padding(horizontal = 10.dp, vertical = 3.dp),
+        )
+        HorizontalDivider(Modifier.weight(1f), color = Palette.Navy)
+    }
+}
+
+private val weekdays = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+private val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+/** `2026-11-23` as "Mon 23 Nov 2026". */
+internal fun dayLabel(date: String): String {
+    val (y, m, d) = date.split('-').map { it.toInt() }
+    val days = Instant.parse("${date}T00:00:00Z").toEpochMilliseconds() / 86_400_000L
+    // 1 January 1970 was a Thursday.
+    val weekday = weekdays[((days + 3) % 7 + 7).toInt() % 7]
+    return "$weekday $d ${monthNames[m - 1]} $y"
 }
 
 @Composable
@@ -453,16 +517,13 @@ private fun Results(env: CommunityEnv, search: SearchState, list: LazyListState,
     }
     if (search.results.isEmpty()) return
     LazyColumn(Modifier.fillMaxSize(), state = list) {
-        itemsIndexed(shown, key = { i, _ -> i }, contentType = { _, item -> item::class }) { _, item ->
+        shown.forEachIndexed { i, item ->
             when (item) {
-                is Item.Day -> Text(
-                    item.date,
-                    color = Palette.TextDim,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 2.dp),
-                )
-                is Item.Line -> LogRow(env, item.line, item.continued, item.time, false, me, mention, onNick) { search.open(item.message) }
+                // The day between the sections, in the middle as messaging apps put it.
+                is Item.Day -> item(key = "day$i", contentType = "day") { DayDivider(item.label) }
+                is Item.Line -> item(key = i, contentType = "line") {
+                    LogRow(env, item.line, item.continued, item.time, false, me, mention, onNick) { search.open(item.message) }
+                }
             }
         }
         item(key = "end") {
@@ -492,16 +553,17 @@ private fun LogRow(
     me: String?,
     mention: Regex?,
     onNick: (String) -> Unit,
+    stampWidth: Dp = 36.dp,
     onTap: (() -> Unit)?,
 ) {
     Row(
         Modifier.fillMaxWidth()
             .then(if (marked) Modifier.background(Palette.Orange.copy(alpha = 0.14f)) else Modifier)
             .then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier),
-        verticalAlignment = Alignment.Top,
     ) {
-        Text(time, color = Palette.TextDim, fontSize = 11.sp, modifier = Modifier.padding(start = 10.dp, top = 4.dp).width(36.dp))
-        Box(Modifier.weight(1f)) {
+        // On the line's first baseline, beside its text rather than above an emote's middle.
+        Text(time, color = Palette.TextDim, fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(start = 10.dp).width(stampWidth).alignByBaseline())
+        Box(Modifier.weight(1f).alignByBaseline()) {
             ChatRow(line, continued, env.flairs, env.emotes, me, mention, false, env.onWatch, onNick)
         }
     }
@@ -549,7 +611,7 @@ private fun ContextSheet(
                     LazyColumn(Modifier.fillMaxSize(), state = list) {
                         itemsIndexed(lines, key = { i, _ -> i }) { i, (line, time) ->
                             val continued = i > 0 && continues(lines[i - 1].first, line)
-                            LogRow(env, line, continued, time, i == surrounds.matched, me, mention, onNick, null)
+                            LogRow(env, line, continued, time, i == surrounds.matched, me, mention, onNick, onTap = null)
                         }
                     }
                 }

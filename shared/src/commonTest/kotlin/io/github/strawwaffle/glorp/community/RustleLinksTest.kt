@@ -48,4 +48,12 @@ class RustleLinksTest {
         // 31 March less a month is the end of February.
         assertEquals("2028-02-29", dateRange(DateRange.Month, 1838073600000).first)
     }
+
+    @Test
+    fun dayLabels() {
+        assertEquals("Mon 23 Nov 2026", dayLabel("2026-11-23"))
+        assertEquals("Thu 1 Jan 1970", dayLabel("1970-01-01"))
+        assertEquals("Tue 29 Feb 2028", dayLabel("2028-02-29"))
+        assertEquals("Wed 31 Dec 1969", dayLabel("1969-12-31"))
+    }
 }
