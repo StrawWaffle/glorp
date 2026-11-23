@@ -38,6 +38,12 @@ import io.github.strawwaffle.glorp.notify.NotifyOptions
 import io.github.strawwaffle.glorp.notify.OpenRequests
 import io.github.strawwaffle.glorp.community.rustleLinkOf
 import io.github.strawwaffle.glorp.ui.PlayerBar
+import io.github.strawwaffle.glorp.ui.WhisperBanner
+import io.github.strawwaffle.glorp.video.nativePlaybackPlaying
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.rememberUpdatedState
 import io.github.strawwaffle.glorp.ui.SettingsScreen
 import io.github.strawwaffle.glorp.ui.UserActions
 import io.github.strawwaffle.glorp.ui.Fullscreen
@@ -123,7 +129,9 @@ fun GlorpApp(
         // connect fills the gap.
         LifecycleStartEffect(chat) {
             chat.start()
-            onStopOrDispose { chat.stop() }
+            // A stream playing on with the screen off keeps chat connected,
+            // so whispers and mentions still notify at once.
+            onStopOrDispose { chat.stopWhenIdle(::nativePlaybackPlaying) }
         }
         val lines by chat.lines.collectAsStateWithLifecycle()
         val flairs by chat.flairs.collectAsStateWithLifecycle()
@@ -178,6 +186,7 @@ fun GlorpApp(
             OpenRequests.pending.value = null
             when {
                 target == AlertCheck.OPEN_LIVE -> { chat.watch(null); playerShown = true; screen = "chat" }
+                target == AlertCheck.OPEN_CHAT -> { fullscreenWanted = false; screen = "chat" }
                 target.startsWith(AlertCheck.OPEN_WHISPER) -> { communityArg = target.removePrefix(AlertCheck.OPEN_WHISPER); screen = "whispers" }
                 rustleLinkOf(target) != null -> { communityArg = target; screen = "rustle" }
             }
@@ -203,6 +212,29 @@ fun GlorpApp(
                 onDismiss = { crashAsked = true; diagnostics.clearCrash() },
             )
         }
+        // Whispers and mentions heard live. In the app, a whisper shows as a
+        // banner under the bar (nothing for the conversation already open; a
+        // mention is already highlighted in chat). Anywhere else, picture in
+        // picture, full screen or a stream playing with the screen off, it's
+        // a notification, if that kind is turned on.
+        val lifecycle = LocalLifecycleOwner.current.lifecycle
+        var banner by remember { mutableStateOf<ChatViewModel.LiveAlert?>(null) }
+        val socketNow by chat.socketState.collectAsStateWithLifecycle()
+        LaunchedEffect(notify, socketNow) { notify?.setLive(socketNow == SocketState.Connected) }
+        val fullscreenNow by rememberUpdatedState(fullscreen)
+        LaunchedEffect(chat) {
+            chat.liveAlerts.collect { heard ->
+                val inApp = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && !fullscreenNow
+                val whisper = heard.alert.kind == io.github.strawwaffle.glorp.notify.Alert.Kind.Whisper
+                when {
+                    inApp && whisper && screen == "whispers" && chat.inbox.value.open == heard.nick.lowercase() -> Unit
+                    inApp && whisper -> banner = heard
+                    inApp -> Unit
+                    heard.notify -> notify?.show(heard.alert)
+                }
+            }
+        }
+        LaunchedEffect(banner) { if (banner != null) { delay(6_000); banner = null } }
         CompositionLocalProvider(
             LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it },
             LocalLinkTitles provides chat.linkTitles.takeIf { chat.input.options.linkTitles },
@@ -278,6 +310,9 @@ fun GlorpApp(
                     otherStreams = chat.input.options.otherStreams,
                     onOtherStreams = chat.input.options::treatOtherStreams,
                 )
+                banner?.let { heard ->
+                    WhisperBanner(heard.nick, heard.text, onOpen = { banner = null; communityArg = heard.nick; screen = "whispers" }, onClose = { banner = null })
+                }
             },
             instead = when (screen) {
                 "menu" -> {

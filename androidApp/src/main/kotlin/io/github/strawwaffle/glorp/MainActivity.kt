@@ -57,6 +57,12 @@ class MainActivity : ComponentActivity() {
         }
         override fun changed() = Notifier.schedule(applicationContext)
         override fun openSystemSettings() = Notifier.openSystemSettings(this@MainActivity)
+        override fun show(alert: Alert) {
+            if (permitted) Notifier.post(applicationContext, alert)
+        }
+        override fun setLive(connected: Boolean) {
+            Notifier.liveChat = connected
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -38,9 +38,13 @@ object Notifier {
     /** The extra on the activity's intent saying what a tapped notification opens. */
     const val EXTRA_OPEN = "io.github.strawwaffle.glorp.OPEN"
 
-    /** True while the app is on screen: chat shows what a notification would say. */
+    /** True while the app is on screen. */
     @Volatile
     var onScreen = false
+
+    /** True while chat is connected: it notifies as things arrive, so the background check stays quiet. */
+    @Volatile
+    var liveChat = false
 
     private const val JOB_ID = 0x6c6f72
 
@@ -79,7 +83,7 @@ object Notifier {
         try {
             val alerts = AlertCheck(client, Site.guess(origin), prefs, options, cookies, prefs.get(NotifyOptions.NICK), prefs.get(NotifyOptions.SERVER)).run()
             AppLog.note("notify", "background check: ${alerts.size} new")
-            if (!onScreen && permitted(context)) alerts.forEach { post(context, it) }
+            if (!liveChat && permitted(context)) alerts.forEach { post(context, it) }
         } finally {
             client.close()
         }

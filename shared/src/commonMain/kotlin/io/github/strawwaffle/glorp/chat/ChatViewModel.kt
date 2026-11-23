@@ -260,6 +260,8 @@ class ChatViewModel(
     }
 
     fun start() {
+        backgroundWatch?.cancel()
+        backgroundWatch = null
         wanted = true
         watchMods()
         if (connection?.isActive == true) return
@@ -818,7 +820,7 @@ class ChatViewModel(
         if (item is Forget) return item.nicks.fold(false) { changed, nick -> log.removeNick(nick) or changed }
         val parsed = item as? Parsed ?: Parsed(parseFrame(item as String, now), null)
         return when (val event = parsed.event) {
-            is ChatEvent.Message -> received(event.line)
+            is ChatEvent.Message -> received(event.line).also { if (it) alertFor(event.line) }
             is ChatEvent.History -> {
                 val added = event.lines.fold(false) { changed, line -> received(line) or changed }
                 val censored = event.removed.fold(false) { changed, nick -> log.moderate(nick) or changed }
@@ -913,6 +915,55 @@ class ChatViewModel(
                 log.add(ChatLine.info(errorText(event.code), now()))
             }
             null -> false
+        }
+    }
+
+    /** A whisper, or a message mentioning you, as it arrives over the live connection. */
+    data class LiveAlert(val alert: io.github.strawwaffle.glorp.notify.Alert, val nick: String, val text: String, val notify: Boolean)
+
+    private val _liveAlerts = kotlinx.coroutines.flow.MutableSharedFlow<LiveAlert>(extraBufferCapacity = 16)
+
+    /**
+     * Whispers and mentions as chat hears them, for a notification right away
+     * (picture in picture, full screen, the app in the background with a
+     * stream playing) or the banner in the app. [LiveAlert.notify] says
+     * whether that kind of notification is on.
+     */
+    val liveAlerts: kotlinx.coroutines.flow.SharedFlow<LiveAlert> = _liveAlerts
+
+    private fun alertFor(line: ChatLine) {
+        val nick = line.nick ?: return
+        val me = _account.value?.nick ?: return
+        if (nick.equals(me, ignoreCase = true)) return
+        val options = io.github.strawwaffle.glorp.notify.NotifyOptions(prefs, settings)
+        val alert = when {
+            line.kind == ChatLine.Kind.Whisper -> io.github.strawwaffle.glorp.notify.Alert(
+                io.github.strawwaffle.glorp.notify.Alert.Kind.Whisper, "Whisper from $nick", line.text,
+                io.github.strawwaffle.glorp.notify.AlertCheck.OPEN_WHISPER + nick,
+            ).let { LiveAlert(it, nick, line.text, options.whispers) }
+            line.kind == ChatLine.Kind.User && io.github.strawwaffle.glorp.ui.mentions(line.text, me) -> io.github.strawwaffle.glorp.notify.Alert(
+                io.github.strawwaffle.glorp.notify.Alert.Kind.Mention, "$nick mentioned you", line.text,
+                io.github.strawwaffle.glorp.notify.AlertCheck.OPEN_CHAT,
+            ).let { LiveAlert(it, nick, line.text, options.mentions) }
+            else -> return
+        }
+        _liveAlerts.tryEmit(alert)
+    }
+
+    private var backgroundWatch: Job? = null
+
+    /**
+     * The app left the screen. Chat stays connected while [stillWanted] says
+     * so (a stream playing on with the screen off), so whispers and mentions
+     * still notify at once; then it closes, as it always did.
+     */
+    fun stopWhenIdle(stillWanted: () -> Boolean) {
+        backgroundWatch?.cancel()
+        backgroundWatch = viewModelScope.launch {
+            // Give the player a moment to decide whether it plays on.
+            delay(2.seconds)
+            while (stillWanted()) delay(15.seconds)
+            stop()
         }
     }
 

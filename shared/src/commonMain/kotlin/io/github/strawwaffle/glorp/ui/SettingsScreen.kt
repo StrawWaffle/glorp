@@ -518,7 +518,8 @@ private fun NotificationSettings(
     val signedOutNote = if (cookies) null else "Needs the computer sign-in, because the site only shows whispers to its own login"
     Column {
         Text(
-            "Glorp looks at the site every so often in the background, without keeping chat connected.",
+            "In picture in picture, full screen, or playing with the screen off, whispers and mentions notify as they arrive. " +
+                "With Glorp open, a whisper shows as a banner instead. When Glorp is closed, it checks the site as often as you choose below.",
             color = Palette.TextDim,
             fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),

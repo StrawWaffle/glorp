@@ -36,6 +36,10 @@ interface NotifyControls {
     /** The options changed: schedule, move or cancel the check. */
     fun changed()
     fun openSystemSettings()
+    /** Shows [alert] now, as the background check would (a whisper or mention heard live). */
+    fun show(alert: Alert) {}
+    /** Whether chat is connected: while it is, it notifies as things arrive and the background check stays quiet. */
+    fun setLive(connected: Boolean) {}
 }
 
 /** Where a tapped notification asked the app to go (an [Alert.open]), until the app takes it. */
@@ -187,6 +191,9 @@ class AlertCheck(
     companion object {
         /** What tapping a live notification opens: the app, on what bigscreen shows. */
         const val OPEN_LIVE = "glorp:live"
+
+        /** Opens the app on chat (a mention heard live, still in chat). */
+        const val OPEN_CHAT = "glorp:chat"
 
         /** Prefix of a whisper notification's target; the nick follows. */
         const val OPEN_WHISPER = "glorp:whisper:"
