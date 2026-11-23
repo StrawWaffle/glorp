@@ -10,7 +10,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -37,6 +37,13 @@ import kotlin.time.Duration.Companion.minutes
  * The engine (a few tens of MB with the plugin in it) is loaded on the first
  * lookup and closed after a few idle minutes.
  */
+/**
+ * The one thread the plugin's JavaScript engine runs on: always the same one
+ * (the engine checks its stack against the thread it was made on), with room
+ * for the plugin's deep calls.
+ */
+internal expect val jsThread: kotlinx.coroutines.CoroutineDispatcher
+
 class YouTubePlugin(
     private val download: HttpClient,
     /** A client for the plugin's own requests, with its own cookie jar. */
@@ -51,13 +58,17 @@ class YouTubePlugin(
     /** What the plugin finds for a video: a live stream's playlist or a recording's files. */
     internal suspend fun details(videoId: String): YtDetails? = mutex.withLock {
         idle?.cancel()
-        val rt = runtime ?: load().also { runtime = it }
         try {
-            parseYtDetails(rt.contentDetails("https://www.youtube.com/watch?v=$videoId"))
+            // The engine runs scripts on the calling thread, and the plugin's
+            // work takes seconds: off the main thread, on the engine's own.
+            withContext(jsThread) {
+                val rt = runtime ?: load().also { runtime = it }
+                parseYtDetails(rt.contentDetails("https://www.youtube.com/watch?v=$videoId"))
+            }
         } finally {
             idle = scope.launch {
                 delay(3.minutes)
-                mutex.withLock { runtime?.close(); runtime = null }
+                mutex.withLock { withContext(jsThread) { runtime?.close(); runtime = null } }
             }
         }
     }
@@ -74,7 +85,7 @@ class YouTubePlugin(
             config,
             script,
             pluginHttp(),
-            Dispatchers.IO,
+            jsThread,
             // The native UMP path needs a browser for attestation, which Glorp doesn't run.
             settings = mapOf("use_native_ump" to "false"),
             log = { println("YouTube plugin: ${it.take(200)}") },

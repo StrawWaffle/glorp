@@ -1,6 +1,7 @@
 package io.github.strawwaffle.glorp.site
 
 import io.github.strawwaffle.glorp.chat.ChatSocket
+import io.github.strawwaffle.glorp.diag.AppLog
 import io.github.strawwaffle.glorp.chat.chatJson
 import io.github.strawwaffle.glorp.chat.retryDelay
 import io.ktor.client.HttpClient
@@ -41,6 +42,8 @@ import kotlin.time.TimeSource
  * as bigscreen does: the server answers a signed-in socket with `me`, then
  * takes `watching` ({platform, id}, or null), and chat shows it beside your
  * messages (the site's "watching the same stream" dimming, the embeds list).
+ * The site keeps one per account, from whichever device told it last, so
+ * this says nothing on connecting unless something plays here.
  * A login key isn't taken here, so then nothing is sent.
  */
 class LiveSocket(
@@ -64,14 +67,26 @@ class LiveSocket(
                     if (cookieHeader != null) header(HttpHeaders.Cookie, cookieHeader)
                 }) {
                     opened = TimeSource.Monotonic.markNow()
+                    AppLog.note("live", "connected" + if (cookieHeader != null) " with the site's cookies" else "")
                     var reporting: Job? = null
                     try {
                         for (frame in incoming) {
                             if (frame !is Frame.Text) continue
                             val text = frame.readText()
                             if (reporting == null && isMe(text)) {
+                                AppLog.note("live", "signed in")
                                 reporting = launch {
-                                    watching.collect { embed -> send(Frame.Text(watchingMessage(embed))) }
+                                    // The last device to pick something is what the site shows,
+                                    // so connecting with nothing playing says nothing; after
+                                    // that every change is told, closing the player included.
+                                    var connecting = true
+                                    watching.collect { embed ->
+                                        val quiet = connecting && embed == null
+                                        connecting = false
+                                        if (quiet) return@collect
+                                        send(Frame.Text(watchingMessage(embed)))
+                                        AppLog.note("live", "told the site: watching ${embed?.key ?: "nothing"}")
+                                    }
                                 }
                             }
                             parseLiveMessage(text)?.let(onUpdate)
