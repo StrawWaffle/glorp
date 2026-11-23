@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
@@ -376,7 +377,8 @@ private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top
     val offset = (base + frame * emote.width) * scale
     val filter = if (pose.brightness == 1f) null
     else ColorFilter.colorMatrix(ColorMatrix().apply { setToScale(pose.brightness, pose.brightness, pose.brightness, 1f) })
-    val pivot = Offset(emote.originX * w, emote.originY * h)
+    // A keyframe's own pivot (BLADE stabs from its corner) over the emote's.
+    val pivot = Offset((if (pose.ox.isNaN()) emote.originX else pose.ox) * w, (if (pose.oy.isNaN()) emote.originY else pose.oy) * h)
     val dx = left + pose.tx.dp.toPx()
     val dy = top + pose.ty.dp.toPx()
     withTransform({
@@ -384,6 +386,20 @@ private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top
         if (pose.rotate != 0f) rotate(pose.rotate, pivot)
         if (pose.sx != 1f || pose.sy != 1f) scale(pose.sx, pose.sy, pivot)
     }) {
+        val shape = pose.clip?.let { c ->
+            Path().apply {
+                moveTo(c[0] * w, c[1] * h)
+                for (i in 2 until c.size - 1 step 2) lineTo(c[i] * w, c[i + 1] * h)
+                close()
+            }
+        }
+        if (shape != null) clipPath(shape) { drawSheet(emote, painter, w, h, offset, scale, pose, filter) }
+        else drawSheet(emote, painter, w, h, offset, scale, pose, filter)
+    }
+}
+
+private fun DrawScope.drawSheet(emote: Emote, painter: Painter, w: Float, h: Float, offset: Float, scale: Float, pose: Pose, filter: ColorFilter?) {
+    run {
         clipRect(0f, 0f, w, h) {
             // A picture slid inside its box (GIGACHAD arriving) as well.
             translate(left = -offset + pose.bx * scale, top = pose.by * scale) {

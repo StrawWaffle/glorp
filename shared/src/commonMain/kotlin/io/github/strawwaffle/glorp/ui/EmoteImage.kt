@@ -103,7 +103,7 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
         scaleX = pose.sx
         scaleY = pose.sy
         alpha = pose.opacity.coerceIn(0f, 1f)
-        transformOrigin = TransformOrigin(emote.originX, emote.originY)
+        transformOrigin = TransformOrigin(if (pose.ox.isNaN()) emote.originX else pose.ox, if (pose.oy.isNaN()) emote.originY else pose.oy)
     }
     Canvas(modifier.then(layer).size(emote.width.dp, emote.height.dp).clipToBounds()) {
         val at = if (still) 0L else elapsed.longValue

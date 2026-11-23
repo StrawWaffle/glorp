@@ -272,8 +272,8 @@ private fun build(
         sheetWidth = sheetWidth.toInt().coerceAtLeast(1), sheetHeight = sheetHeight.toInt().coerceAtLeast(1), offsetX = offset.toInt(),
         // A motion whose keyframes this can't read moves nothing; kept, an endless
         // one would redraw the emote every frame for nothing (EatFresh's x5 combo).
-        motions = motions.map { m -> m.slidingFrom(offset, shrink) }
-            .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.brightness != null || it.background != null } },
+        motions = motions.map { m -> m.slidingFrom(offset, shrink).withOrigins(width / shrink, height / shrink, originX to originY) }
+            .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.brightness != null || it.background != null || it.origin != null || it.clip != null } },
         originX = originX, originY = originY, rest = rest,
     )
 }
@@ -290,9 +290,13 @@ private fun Motion.slidingFrom(offset: Double, shrink: Double): Motion {
     return copy(frames = frames.map { f ->
         val (x, y) = f.background ?: return@map f
         val background = if (easing is Easing.Steps) null else ((x * shrink + offset).toFloat() to (y * shrink).toFloat())
-        KeyFrame(f.at, f.transform, f.opacity, f.brightness, background)
+        f.copy(background = background)
     })
 }
+
+/** This motion's `transform-origin` keyframes as fractions of the emote's size ([width] by [height] CSS px). */
+private fun Motion.withOrigins(width: Double, height: Double, own: Pair<Float, Float>): Motion =
+    copy(restOrigin = own, frames = frames.map { f -> f.originText?.let { f.copy(origin = readOrigin(it, width, height)) } ?: f })
 
 private fun cssMillis(text: String): Long? {
     val v = text.trim().substringBefore(',').trim()

@@ -36,6 +36,26 @@ class CssParityTest {
     }
 
     @Test
+    fun readsAKeyframesPivotAndClip() {
+        val frames = motionKeyframes("""
+            @keyframes stab { 0%, 100% { transform: rotate(0deg); transform-origin: left bottom; } 10% { transform: rotate(45deg); } }
+            @keyframes path { 0% { clip-path: polygon(-5% 95%, 20% 70%, 30% 80%, 5% 105%); } 50% { clip-path: polygon(-5% 95%, 95% -5%, 105% 5%, 5% 105%); } }
+        """.trimIndent())
+        val stab = motionsOf(listOf("stab 1s 1 linear"), frames).single().copy(restOrigin = 0.5f to 0.5f)
+        // As an emote's motion, the written origin becomes fractions of its box.
+        val placed = stab.copy(frames = stab.frames.map { f -> f.originText?.let { f.copy(origin = readOrigin(it, 30.0, 30.0)) } ?: f })
+        val pose = placed.apply(100, Pose.Rest)
+        near(pose.ox, 0f); near(pose.oy, 1f); near(pose.rotate, 45f)
+        val path = motionsOf(listOf("path 1s 1 linear"), frames).single()
+        val halfway = assertNotNull(path.apply(250, Pose.Rest).clip)
+        near(halfway[2], 0.575f); near(halfway[3], 0.325f)
+        // Past the last keyframe that sets it, toward none: the polygon holds until halfway, then goes.
+        assertNotNull(path.apply(700, Pose.Rest).clip)
+        assertEquals(null, path.apply(800, Pose.Rest).clip)
+        assertEquals(true, Pose() == Pose.Rest)
+    }
+
+    @Test
     fun slidesAPictureInsideItsBox() {
         // GIGACHAD arrives from the left and below, and rests where its own rules put it.
         val chad = assertNotNull(emotes["GIGACHAD"])

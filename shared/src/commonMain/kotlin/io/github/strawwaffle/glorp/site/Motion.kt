@@ -9,7 +9,9 @@ import kotlin.math.floor
  * what the stylesheet's `transform`, `opacity` and `filter: brightness()`
  * keyframes come to, and how far its picture is slid inside its box
  * ([bx], [by]: `background-position` keyframes, from where the emote's own
- * rules put it). Distances are CSS pixels.
+ * rules put it). Distances are CSS pixels. [ox], [oy] are a
+ * `transform-origin` keyframe's pivot as fractions of the emote's size (NaN:
+ * the emote's own), and [clip] a `clip-path: polygon()` as x, y fractions.
  */
 data class Pose(
     val tx: Float = 0f,
@@ -21,6 +23,9 @@ data class Pose(
     val brightness: Float = 1f,
     val bx: Float = 0f,
     val by: Float = 0f,
+    val ox: Float = Float.NaN,
+    val oy: Float = Float.NaN,
+    val clip: List<Float>? = null,
 ) {
     companion object {
         val Rest = Pose()
@@ -28,13 +33,18 @@ data class Pose(
 }
 
 /** One keyframe: where in the cycle (0 to 1) and what it sets; null for what it leaves alone. */
-class KeyFrame(
+data class KeyFrame(
     val at: Float,
     val transform: Pose?,
     val opacity: Float?,
     val brightness: Float?,
     /** `background-position` in CSS pixels (x, y), as written; once in an emote's [Motion], relative to the emote's own. */
     val background: Pair<Float, Float>? = null,
+    /** `transform-origin` as written; an emote's [Motion] has it as [origin], fractions of its size. */
+    val originText: String? = null,
+    val origin: Pair<Float, Float>? = null,
+    /** `clip-path: polygon()` as x, y fractions of the emote's box. */
+    val clip: List<Float>? = null,
 )
 
 /** A timing function, as CSS has them. */
@@ -95,6 +105,8 @@ data class Motion(
     val reverse: Boolean,
     /** `forwards`: keeps the last keyframe's pose after it ends. */
     val holdLast: Boolean,
+    /** The emote's own pivot, where a keyframe sets `transform-origin` and the next doesn't. */
+    val restOrigin: Pair<Float, Float> = 0.5f to 0.5f,
 ) {
     val endMs: Long get() = if (iterations == Int.MAX_VALUE) Long.MAX_VALUE else delayMs + durationMs * iterations
 
@@ -129,7 +141,33 @@ data class Motion(
         interpolate(p, { it.brightness }, 1f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(brightness = it) }
         interpolate(p, { it.background }, 0f to 0f) { a, b, f -> lerp(a.first, b.first, f) to lerp(a.second, b.second, f) }
             ?.let { pose = pose.copy(bx = it.first, by = it.second) }
+        interpolate(p, { it.origin }, restOrigin) { a, b, f -> lerp(a.first, b.first, f) to lerp(a.second, b.second, f) }
+            ?.let { pose = pose.copy(ox = it.first, oy = it.second) }
+        if (frames.any { it.clip != null }) pose = pose.copy(clip = clipAt(p))
         return pose
+    }
+
+    /**
+     * The clip at [p]. Between two polygons of as many points, each point
+     * moves; to or from none (where a keyframe leaves it out), it switches
+     * halfway, as CSS does with what it can't blend.
+     */
+    private fun clipAt(p: Float): List<Float>? {
+        var before: Pair<Float, List<Float>>? = null
+        var after: Pair<Float, List<Float>>? = null
+        for (frame in frames) {
+            val value = frame.clip ?: continue
+            if (frame.at <= p) before = frame.at to value
+            if (frame.at >= p && after == null) after = frame.at to value
+        }
+        val fromAt = before?.first ?: 0f
+        val toAt = after?.first ?: 1f
+        val from = before?.second
+        val to = after?.second
+        if (toAt <= fromAt) return from ?: to
+        val f = easing.of((p - fromAt) / (toAt - fromAt))
+        if (from == null || to == null || from.size != to.size) return if (f < 0.5f) from else to
+        return from.indices.map { lerp(from[it], to[it], f) }
     }
 
     /**
@@ -171,14 +209,16 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
             val opacity = decls["opacity"]?.trim()?.let(::number)
             val brightness = decls["filter"]?.let(::readBrightness)
             val background = decls["background-position"]?.let(::readBackgroundPosition)
-            if (transform == null && opacity == null && brightness == null && background == null) continue
+            val origin = decls["transform-origin"]
+            val clip = decls["clip-path"]?.let(::readPolygon)
+            if (transform == null && opacity == null && brightness == null && background == null && origin == null && clip == null) continue
             for (at in s.groupValues[1].split(',')) {
                 val offset = when (val word = at.trim().lowercase()) {
                     "from" -> 0f
                     "to" -> 1f
                     else -> word.removeSuffix("%").toFloatOrNull()?.div(100f)
                 } ?: continue
-                frames += KeyFrame(offset, transform, opacity, brightness, background)
+                frames += KeyFrame(offset, transform, opacity, brightness, background, origin, clip = clip)
             }
         }
         if (frames.isNotEmpty()) out[match.groupValues[1]] = frames.sortedBy { it.at }
@@ -198,6 +238,18 @@ internal fun readBackgroundPosition(value: String): Pair<Float, Float>? {
     val x = px(parts[0]) ?: return null
     val y = if (parts.size == 2) px(parts[1]) ?: return null else 0f
     return x to y
+}
+
+/** `polygon(x% y%, …)` as x, y fractions; null for anything else (px, a shape, `none`). */
+internal fun readPolygon(value: String): List<Float>? {
+    val inside = Regex("""^polygon\((.*)\)$""").find(value.trim())?.groupValues?.get(1) ?: return null
+    val out = ArrayList<Float>()
+    for (point in inside.split(',')) {
+        val xy = point.trim().split(Regex("""\s+"""))
+        if (xy.size != 2) return null
+        for (v in xy) out += (if (v == "0") 0f else v.takeIf { it.endsWith("%") }?.removeSuffix("%")?.toFloatOrNull()?.div(100f)) ?: return null
+    }
+    return out.takeIf { it.size >= 6 }
 }
 
 private fun declarations(body: String): Map<String, String> {
