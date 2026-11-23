@@ -1,5 +1,7 @@
 package io.github.strawwaffle.glorp.site
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import io.github.strawwaffle.glorp.chat.ChatSocket
 import io.github.strawwaffle.glorp.chat.chatJson
 import io.ktor.client.HttpClient
@@ -86,6 +88,10 @@ class Emotes private constructor(
         }
     }
 
+    /** The same emotes with the rules for how they look beside others. */
+    private fun withNeighbours(context: EmoteContext): Emotes =
+        Emotes(byPrefix, builder?.let { Builder(it.own, it.images, it.keyframes, it.moving, context) })
+
     /** What building variants needs: each emote's own rules and image, the keyframes and the context rules. */
     private class Builder(
         val own: Map<String, Map<String, List<String>>>,
@@ -140,10 +146,20 @@ class Emotes private constructor(
          * are not read.
          */
         fun parse(json: String, css: String): Emotes {
-            val rules = baseRules(css)
-            val keyframes = keyframeOffsets(css)
-            val clean = css.replace(Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL), "")
-            val moving = motionKeyframes(clean)
+            val clean = withoutComments(css)
+            val context = runCatching { EmoteContext.parse(clean) }.getOrDefault(EmoteContext.None)
+            return assemble(json, baseRules(css), keyframeOffsets(css), motionKeyframes(clean), context)
+        }
+
+        private fun withoutComments(css: String) = css.replace(Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL), "")
+
+        private fun assemble(
+            json: String,
+            rules: Map<String, Decls>,
+            keyframes: Map<String, StripKeyframes>,
+            moving: Map<String, List<KeyFrame>>,
+            context: EmoteContext,
+        ): Emotes {
             val map = LinkedHashMap<String, Emote>()
             val images = HashMap<String, Pair<Int, Int>>()
             for (entry in chatJson.decodeFromString<List<Entry>>(json)) {
@@ -155,16 +171,33 @@ class Emotes private constructor(
                 images[entry.prefix] = image.width to image.height
                 map[entry.prefix] = build(entry.prefix, url, image.width, image.height, entry.minimumSubTier, decls, keyframes, moving)
             }
-            val context = runCatching { EmoteContext.parse(clean) }.getOrDefault(EmoteContext.None)
             return Emotes(map, Builder(rules, images, keyframes, moving, context))
         }
 
-        suspend fun fetch(client: HttpClient, site: Site): Emotes = try {
+        /**
+         * The site's emotes, read off the main thread with the stylesheet's
+         * parts read side by side. [onFirst] gets them as soon as each emote's
+         * own rules are read (about a fifth of a second on a phone), so chat
+         * can start; the rules for emotes next to others come after, in what
+         * this returns.
+         */
+        suspend fun fetch(client: HttpClient, site: Site, onFirst: (Emotes) -> Unit = {}): Emotes = try {
             coroutineScope {
                 val json = async { get(client, "${site.cdn}/emotes/emotes.json") }
                 val css = async { get(client, "${site.cdn}/emotes/emotes.css") }
                 val body = json.await()
-                if (body == null) None else parse(body, css.await().orEmpty())
+                val cssText = css.await().orEmpty()
+                if (body == null) None
+                else withContext(Dispatchers.Default) {
+                    val clean = withoutComments(cssText)
+                    val context = async { runCatching { EmoteContext.parse(clean) }.getOrDefault(EmoteContext.None) }
+                    val rules = async { baseRules(cssText) }
+                    val keyframes = async { keyframeOffsets(cssText) }
+                    val moving = async { motionKeyframes(clean) }
+                    val first = assemble(body, rules.await(), keyframes.await(), moving.await(), EmoteContext.None)
+                    onFirst(first)
+                    first.withNeighbours(context.await())
+                }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

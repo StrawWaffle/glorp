@@ -37,6 +37,7 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.derivedStateOf
@@ -173,7 +174,8 @@ private fun ChatBody(
 ) {
     Column(Modifier.fillMaxSize()) {
         // No bar: the connection shows only when something is wrong.
-        ConnectionNotice(state)
+        // Empty, chat says what it's doing in the middle instead (see below).
+        if (lines.isNotEmpty()) ConnectionNotice(state)
         // Newest at the bottom, in a reversed list: only the rows on screen are
         // composed, so only their emotes are drawn or animated.
         // A run of messages from one person shows their name once, as chat
@@ -218,6 +220,24 @@ private fun ChatBody(
         }
         LaunchedEffect(reversed) { if (following) list.scrollToItem(0) }
         Box(Modifier.fillMaxWidth().weight(1f)) {
+            if (reversed.isEmpty()) {
+                Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (state != SocketState.Stopped) {
+                        CircularProgressIndicator(color = Palette.Glorp, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+                    }
+                    Text(
+                        when (state) {
+                            SocketState.Connected -> "Waiting for the first messages…"
+                            SocketState.Connecting -> "Establishing contact…"
+                            SocketState.Waiting -> "Signal lost, retrying"
+                            SocketState.Stopped -> "Transmission ended"
+                        },
+                        color = Palette.TextDim,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                }
+            }
             LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true) {
                 items(reversed, key = { it.line.id }, contentType = { it.line.kind }) { shown ->
                     val marked = remember(shown.line, highlighter) {

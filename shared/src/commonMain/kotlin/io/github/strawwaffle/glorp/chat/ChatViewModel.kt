@@ -40,6 +40,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -219,7 +221,11 @@ class ChatViewModel(
         viewModelScope.launch {
             site = Site.discover(client, origin)
             launch { _flairs.value = Flairs.fetch(client, site) }
-            launch { _emotes.value = Emotes.fetch(client, site); emotesLoaded.complete(Unit) }
+            launch {
+                // Chat starts with each emote's own rules; how emotes look beside others follows.
+                _emotes.value = Emotes.fetch(client, site) { first -> _emotes.value = first; emotesLoaded.complete(Unit) }
+                emotesLoaded.complete(Unit)
+            }
             // Like chat-gui on page load: ask who the cookies belong to first,
             // which also renews `sid` from `rememberme` when it has run out.
             // A login key can only be checked by chat itself, on connect.
@@ -244,13 +250,23 @@ class ChatViewModel(
         if (connection?.isActive == true) return
         connection = viewModelScope.launch {
             ready.await()
-            // The backlog needs the emote list to group combos; don't wait long for it.
-            withTimeoutOrNull(5.seconds) { emotesLoaded.await() }
+            // Chat and the live feed connect while the emote list loads; the
+            // event loop waits for the list before it groups the backlog.
+            launch { LiveSocket(client, site).run { update -> _live.value = _live.value.with(update) } }
             val chat = ChatSocket(client, site.chatSocketUrl, session?.cookieHeader)
             socket = chat
             launch { chat.state.collect { _socketState.value = it } }
-            launch { LiveSocket(client, site).run { update -> _live.value = _live.value.with(update) } }
-            chat.run { events.send(it) }
+            // Frames are read off the main thread (a backlog or the user list
+            // on connect is a lot of text); only applying them happens on it.
+            val now = { Clock.System.now().toEpochMilliseconds() }
+            chat.run { raw ->
+                events.send(
+                    withContext(Dispatchers.Default) {
+                        val event = parseFrame(raw, now)
+                        Parsed(event, (event as? ChatEvent.Names)?.let { rosterNicks(it.payload) })
+                    },
+                )
+            }
         }
     }
 
@@ -608,6 +624,9 @@ class ChatViewModel(
         viewModelScope.launch { if (!action()) notice("Couldn't send: the connection dropped.") }
     }
 
+    /** A frame read on a background thread, with the names in it when it's the user list. */
+    private class Parsed(val event: ChatEvent?, val roster: List<String>?)
+
     /** Asks the event loop to take an ignored user's lines out. */
     private class Forget(val nicks: List<String>)
 
@@ -694,8 +713,15 @@ class ChatViewModel(
 
     private suspend fun applyEvents() {
         val now = { Clock.System.now().toEpochMilliseconds() }
+        var first = true
         while (true) {
-            var changed = apply(events.receive(), now)
+            val item = events.receive()
+            // The backlog needs the emote list to group combos; don't wait long for it.
+            if (first) {
+                withTimeoutOrNull(5.seconds) { emotesLoaded.await() }
+                first = false
+            }
+            var changed = apply(item, now)
             while (true) {
                 val next = events.tryReceive().getOrNull() ?: break
                 changed = apply(next, now) or changed
@@ -708,12 +734,13 @@ class ChatViewModel(
     private suspend fun apply(item: Any, now: () -> Long): Boolean {
         if (item is ChatLine) return log.add(item)
         if (item is Forget) return item.nicks.fold(false) { changed, nick -> log.removeNick(nick) or changed }
-        return when (val event = parseFrame(item as String, now)) {
+        val parsed = item as? Parsed ?: Parsed(parseFrame(item as String, now), null)
+        return when (val event = parsed.event) {
             is ChatEvent.Message -> received(event.line)
             is ChatEvent.History -> event.lines.fold(false) { changed, line -> received(line) or changed }
             is ChatEvent.Names -> {
                 // Only someone who can type needs names to complete.
-                if (_account.value != null) input.completer.setRoster(rosterNicks(event.payload))
+                if (_account.value != null) input.completer.setRoster(parsed.roster ?: rosterNicks(event.payload))
                 false
             }
             is ChatEvent.Removal -> log.moderate(event.nick)

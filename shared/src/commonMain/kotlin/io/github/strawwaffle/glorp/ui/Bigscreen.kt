@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -75,6 +76,11 @@ fun Bigscreen(
 
 @Composable
 private fun Offline(live: LiveState) {
+    // Until the site says, nothing is known: not "offline".
+    if (!live.known) {
+        CircularProgressIndicator(color = Palette.Glorp, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+        return
+    }
     val last = live.streams.firstOrNull { it.title != null }
     Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("No signal", color = Palette.Glorp, fontWeight = FontWeight.Bold, fontSize = 16.sp)

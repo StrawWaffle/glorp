@@ -66,7 +66,7 @@ sealed interface LiveUpdate {
 }
 
 fun LiveState.with(update: LiveUpdate): LiveState = when (update) {
-    is LiveUpdate.Streams -> copy(streams = update.streams)
+    is LiveUpdate.Streams -> copy(streams = update.streams, known = true)
     is LiveUpdate.Hosting -> copy(hosting = update.embed)
     is LiveUpdate.Banned -> copy(banned = update.keys)
     is LiveUpdate.Embeds -> copy(embeds = update.embeds)

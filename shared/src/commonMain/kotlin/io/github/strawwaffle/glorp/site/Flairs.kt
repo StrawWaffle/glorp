@@ -1,5 +1,7 @@
 package io.github.strawwaffle.glorp.site
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import io.github.strawwaffle.glorp.chat.ChatSocket
 import io.github.strawwaffle.glorp.chat.chatJson
 import io.ktor.client.HttpClient
@@ -76,7 +78,7 @@ class Flairs private constructor(
             val response = client.get("${site.cdn}/flairs/flairs.json") {
                 header(HttpHeaders.UserAgent, ChatSocket.USER_AGENT)
             }
-            if (response.status.isSuccess()) parse(response.bodyAsText()) else None
+            if (response.status.isSuccess()) response.bodyAsText().let { withContext(Dispatchers.Default) { parse(it) } } else None
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (_: Exception) {

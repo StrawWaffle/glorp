@@ -85,6 +85,8 @@ data class LiveState(
     val hosting: Embed? = null,
     val banned: Set<String> = emptySet(),
     val embeds: List<EmbedListing> = emptyList(),
+    /** Whether the site has said yet which of Destiny's streams are live. */
+    val known: Boolean = false,
 ) {
     val liveStreams: List<LiveStream> get() = streams.filter { it.live }
 
