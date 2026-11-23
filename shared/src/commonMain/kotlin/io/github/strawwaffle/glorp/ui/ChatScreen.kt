@@ -406,6 +406,9 @@ private class HoldGate {
 
 val LocalChatLook = staticCompositionLocalOf { ChatLook() }
 
+/** Links the app opens itself (rustlesearch.dev searches); true when it took the link, false for the browser. */
+val LocalOpenLink = staticCompositionLocalOf<(String) -> Boolean> { { false } }
+
 /** A line laid out once per change of its inputs, with pictures as inline content. */
 private class RenderedLine(val text: AnnotatedString, val inline: Map<String, InlineTextContent>, val mentionsMe: Boolean)
 
@@ -426,6 +429,7 @@ internal fun ChatRow(
     val density = LocalDensity.current
     val look = LocalChatLook.current
     val uri = LocalUriHandler.current
+    val openLink = LocalOpenLink.current
     // A press held long enough to open the sheet isn't also a tap on the
     // name or link under it, which would fire when the finger lifts.
     val gate = remember { HoldGate() }
@@ -438,7 +442,7 @@ internal fun ChatRow(
             onReveal = { revealed = true },
             onEmbed = { if (gate.open) onEmbed(it) },
             onNick = { if (gate.open) onNick(it) },
-            onUrl = { if (gate.open) runCatching { uri.openUri(it) } },
+            onUrl = { if (gate.open && !openLink(it)) runCatching { uri.openUri(it) } },
         )
     }
     // A tagged user's lines get a bar of their colour down the left, as chat-gui draws them.

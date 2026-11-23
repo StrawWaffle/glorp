@@ -1,6 +1,10 @@
 package io.github.strawwaffle.glorp.community
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -75,11 +79,19 @@ import kotlin.time.Instant
 fun RustleSearchScreen(env: CommunityEnv) {
     val scope = rememberCoroutineScope()
     val search = remember(env.http) { SearchState(RustleApi(env.http), scope) }
-    var username by remember { mutableStateOf(env.argument.orEmpty()) }
-    var words by remember { mutableStateOf("") }
-    var channel by remember { mutableStateOf("Destinygg") }
-    var start by remember { mutableStateOf<String?>(null) }
-    var end by remember { mutableStateOf<String?>(null) }
+    // Opened from a rustlesearch.dev link: its search, or the chat around its message.
+    val link = remember(env.argument) { env.argument?.let(::rustleLinkOf) }
+    val linked = (link as? RustleLink.Search)?.query
+    var username by remember {
+        mutableStateOf(linked?.username ?: (link as? RustleLink.Around)?.message?.username ?: env.argument.orEmpty())
+    }
+    var words by remember { mutableStateOf(linked?.text.orEmpty()) }
+    var channel by remember { mutableStateOf(linked?.channel ?: (link as? RustleLink.Around)?.message?.channel ?: "Destinygg") }
+    var start by remember { mutableStateOf(linked?.startDate) }
+    var end by remember { mutableStateOf(linked?.endDate) }
+    // Times as the site shows them by default: the phone's own; or UTC.
+    var local by rememberSaveable { mutableStateOf(true) }
+    val uri = LocalUriHandler.current
     var picking by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
     val list = rememberLazyListState()
@@ -94,8 +106,13 @@ fun RustleSearchScreen(env: CommunityEnv) {
         send()
     }
 
-    // Opened for someone (from a name in chat): search them straight away.
-    LaunchedEffect(Unit) { if (!env.argument.isNullOrBlank()) send() }
+    // Opened for someone (a name in chat) or from a link: straight away.
+    LaunchedEffect(Unit) {
+        when (link) {
+            is RustleLink.Around -> search.open(link.message)
+            else -> if (!env.argument.isNullOrBlank()) send()
+        }
+    }
     // A new search, or the next set past the cap, starts at the top.
     LaunchedEffect(search.generation) { list.scrollToItem(0) }
 
@@ -105,6 +122,9 @@ fun RustleSearchScreen(env: CommunityEnv) {
                 Text("Chat log search", color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 Credit()
             }
+            TextButton(onClick = { runCatching { uri.openUri(RustleQuery(username, words, channel, start, end).siteLink()) } }) {
+                Text("Open on site", color = Palette.Blue, fontSize = 13.sp)
+            }
             TextButton(onClick = env.onClose) { Text("Close", color = Palette.TextDim) }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -113,15 +133,36 @@ fun RustleSearchScreen(env: CommunityEnv) {
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             ChannelPicker(channel, search) { channel = it }
-            TextButton(onClick = { picking = true }) {
-                Text(if (start == null) "Any date" else if (start == end) start!! else "$start to $end", color = Palette.Blue, fontSize = 13.sp)
+            TextButton(onClick = { local = !local }) {
+                Text(if (local) "Local time" else "UTC", color = Palette.Blue, fontSize = 13.sp)
             }
-            if (start != null) TextButton(onClick = { start = null; end = null }) { Text("Any date", color = Palette.TextDim, fontSize = 12.sp) }
             Box(Modifier.weight(1f))
             Button(onClick = ::send, enabled = !search.loading, modifier = Modifier.padding(end = 8.dp)) { Text("Search") }
         }
+        // The site's quick ranges, and any other by picking the days.
+        val now = remember { Clock.System.now().toEpochMilliseconds() }
+        val ranges = remember(now) { DateRange.entries.associateWith { dateRange(it, now) } }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            for ((range, dates) in ranges) {
+                Chip(range.name, start == dates.first && end == dates.second) { start = dates.first; end = dates.second }
+            }
+            Chip("All", start == null) { start = null; end = null }
+            Chip("Dates…", start != null && ranges.values.none { it.first == start && it.second == end }) { picking = true }
+        }
+        start?.let { from ->
+            Text(
+                if (from == end) "On $from (UTC)" else "From $from to ${end ?: "today"} (UTC)",
+                color = Palette.TextDim,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp),
+            )
+        }
         Status(search)
-        Results(env, search, list, ::searchUser)
+        Results(env, search, list, local, ::searchUser)
     }
 
     if (picking) DateRange(
@@ -129,7 +170,12 @@ fun RustleSearchScreen(env: CommunityEnv) {
         onDismiss = { picking = false },
     )
     search.context?.let { context ->
-        ContextSheet(env, context, onClose = search::closeContext, onNick = { search.closeContext(); searchUser(it) })
+        ContextSheet(
+            env, context, local,
+            onSite = { runCatching { uri.openUri(context.message.siteLink()) } },
+            onClose = search::closeContext,
+            onNick = { search.closeContext(); searchUser(it) },
+        )
     }
 }
 
@@ -341,15 +387,33 @@ private sealed interface Item {
 
 private fun utc(at: Long): String = Instant.fromEpochMilliseconds(at).toString()
 
+/** `2026-11-23T03:23:32…` in the phone's time ([local]) or UTC. */
+private fun stamp(at: Long, local: Boolean): String = utc(if (local) at + localOffsetMillis(at) else at)
+
+/** A small toggle, as the site's range buttons. */
+@Composable
+private fun Chip(label: String, picked: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        color = if (picked) Palette.White else Palette.TextDim,
+        fontSize = 13.sp,
+        maxLines = 1,
+        modifier = Modifier.heightIn(min = 36.dp)
+            .background(if (picked) Palette.NavyLight else Palette.Navy, RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+    )
+}
+
 /** As chat draws a log line: no flairs are logged, and every emote shows, as the sender's tier isn't known. */
 private fun chatLine(nick: String, text: String, at: Long) = ChatLine.user(nick, emptyList(), text, at, subTier = Int.MAX_VALUE)
 
-private fun items(results: List<LogMessage>): List<Item> {
+private fun items(results: List<LogMessage>, local: Boolean): List<Item> {
     val out = ArrayList<Item>(results.size + 8)
     var day: String? = null
     var previous: ChatLine? = null
     for (message in results) {
-        val stamp = utc(message.at)
+        val stamp = stamp(message.at, local)
         val date = stamp.take(10)
         if (date != day) {
             out += Item.Day(date)
@@ -364,8 +428,8 @@ private fun items(results: List<LogMessage>): List<Item> {
 }
 
 @Composable
-private fun Results(env: CommunityEnv, search: SearchState, list: LazyListState, onNick: (String) -> Unit) {
-    val shown = remember(search.results) { items(search.results) }
+private fun Results(env: CommunityEnv, search: SearchState, list: LazyListState, local: Boolean, onNick: (String) -> Unit) {
+    val shown = remember(search.results, local) { items(search.results, local) }
     val me = env.account?.nick
     val mention = remember(me) { me?.let(::mentionPattern) }
     // Near the end, the next page (unless the cap is reached: then it waits for a tap).
@@ -377,7 +441,11 @@ private fun Results(env: CommunityEnv, search: SearchState, list: LazyListState,
         }.distinctUntilChanged().filter { it }.collect { if (!search.capped) search.more() }
     }
     when {
-        search.query == null -> Hint("Search by name, words or both, newest first. Times are UTC. Tap a line to see the chat around it.")
+        search.query == null -> Hint(
+            "Search by name, words or both, newest first. Tap a line to see the chat around it.\n\n" +
+                "In names and words: a | b for either, a + b for both, \"a phrase\" for exact words, " +
+                "-word to leave it out, and ( ) to group.",
+        )
         search.results.isEmpty() && search.loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = Palette.Blue)
         }
@@ -441,16 +509,27 @@ private fun LogRow(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ContextSheet(env: CommunityEnv, context: ContextState, onClose: () -> Unit, onNick: (String) -> Unit) {
+private fun ContextSheet(
+    env: CommunityEnv,
+    context: ContextState,
+    local: Boolean,
+    onSite: () -> Unit,
+    onClose: () -> Unit,
+    onNick: (String) -> Unit,
+) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, containerColor = Palette.Black) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.85f)) {
-            Text(
-                "Around ${context.message.username}'s message, ${utc(context.message.at).take(16).replace('T', ' ')} UTC",
-                color = Palette.TextDim,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Around ${context.message.username}'s message, ${stamp(context.message.at, local).take(16).replace('T', ' ')}" +
+                        if (local) "" else " UTC",
+                    color = Palette.TextDim,
+                    fontSize = 12.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onSite) { Text("Open on site", color = Palette.Blue, fontSize = 13.sp) }
+            }
             val surrounds = context.surrounds
             val error = context.error
             when {
@@ -461,7 +540,7 @@ private fun ContextSheet(env: CommunityEnv, context: ContextState, onClose: () -
                 surrounds.lines.isEmpty() -> Hint("Nothing logged around it.")
                 else -> {
                     val lines = remember(surrounds) {
-                        surrounds.lines.map { chatLine(it.nick, it.text, it.at) to utc(it.at).substring(11, 16) }
+                        surrounds.lines.map { chatLine(it.nick, it.text, it.at) to stamp(it.at, local).substring(11, 16) }
                     }
                     val me = env.account?.nick
                     val mention = remember(me) { me?.let(::mentionPattern) }

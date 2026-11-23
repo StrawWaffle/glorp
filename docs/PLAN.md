@@ -258,6 +258,11 @@ open, and fall back to a link to the site when something changes.
   gives the lines around one; `/anon/channels`. chat-gui uses it for the
   user menu's recent messages. Its /stalk and /mentions use destiny.gg's own
   `/api/chat/stalk` and `/api/chat/mentions` instead (signed-in cookies).
+  Done (0.1.19): rustlesearch.dev links in chat (`/?username=&text=&channel=&start_date=&end_date=`
+  and `/surrounds?channel=&date=&username=`) open the in-app search, which
+  has the site's Today/Month/Year/All ranges, local or UTC times and an
+  operator guide, and opens the same search on the site (read from the
+  site's own bundle, 2026-11-23).
   Plan: a search screen rendered as chat lines, a user sheet from tapping a
   nick, and mentions from destiny.gg's API so the shared quota isn't spent.
 - **mitchdev.net/dgg** (by Mitchdev). Poll archive and embed history.

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -21,6 +22,8 @@ import io.github.strawwaffle.glorp.ui.Bigscreen
 import io.github.strawwaffle.glorp.ui.ChatScreen
 import io.github.strawwaffle.glorp.ui.ChatLook
 import io.github.strawwaffle.glorp.ui.LocalChatLook
+import io.github.strawwaffle.glorp.ui.LocalOpenLink
+import io.github.strawwaffle.glorp.community.rustleLinkOf
 import io.github.strawwaffle.glorp.ui.PlayerBar
 import io.github.strawwaffle.glorp.ui.SettingsScreen
 import io.github.strawwaffle.glorp.ui.UserActions
@@ -128,6 +131,15 @@ fun GlorpApp(
         val settings = chat.settings
         CompositionLocalProvider(
             LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it },
+            // rustlesearch.dev links open the app's own log search on that query.
+            LocalOpenLink provides { url ->
+                if (rustleLinkOf(url) == null) false
+                else {
+                    communityArg = url
+                    screen = "rustle"
+                    true
+                }
+            },
             LocalChatLook provides ChatLook(
                 settings.showTime, settings.timestampFormat, settings.hideFlairIcons,
                 settings.highlightSelf, chat.input.tags.colors, settings.taggedVisibility,
@@ -279,7 +291,8 @@ fun GlorpApp(
                             argument = communityArg,
                         )
                         when (screen) {
-                            "rustle" -> RustleSearchScreen(env)
+                            // A new link or name starts the search afresh, even with the screen open.
+                            "rustle" -> key(communityArg) { RustleSearchScreen(env) }
                             "polls" -> PollArchiveScreen(env)
                             else -> DinkDonkScreen(env)
                         }
