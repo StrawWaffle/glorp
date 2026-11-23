@@ -24,6 +24,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.Image
+import io.github.strawwaffle.glorp.resources.Res
+import io.github.strawwaffle.glorp.resources.glorp_sleeping
+import org.jetbrains.compose.resources.painterResource
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
@@ -84,6 +88,12 @@ private fun Offline(live: LiveState) {
     }
     val last = live.streams.firstOrNull { it.title != null }
     Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        // Glorp, asleep while there's nothing to watch.
+        Image(
+            painterResource(Res.drawable.glorp_sleeping),
+            contentDescription = "Glorp, asleep",
+            modifier = Modifier.size(96.dp).padding(bottom = 8.dp),
+        )
         Text("No signal", color = Palette.Glorp, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         Text(
             if (last != null) "Destiny is offline. Last stream: ${last.title}" else "Destiny is offline.",
