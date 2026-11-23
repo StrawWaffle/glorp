@@ -40,7 +40,23 @@ class MainActivity : ComponentActivity() {
     private var videoShowing = false
     private var videoBounds: android.graphics.Rect? = null
 
-    private val pipListener = Consumer<PictureInPictureModeChangedInfo> { inPip = it.isInPictureInPictureMode }
+    private val pipListener = Consumer<PictureInPictureModeChangedInfo> {
+        inPip = it.isInPictureInPictureMode
+        // Out of picture in picture while stopped: the window was swiped away,
+        // which means stop, sound included. A screensaver or the lock screen
+        // stops the app too, but leaves the window as it was, sound playing.
+        // Checked a moment later: Android doesn't promise whether this comes
+        // before or after the app is stopped, or started again when the
+        // window is opened up from the lock screen.
+        window.decorView.removeCallbacks(pipClosed)
+        if (!it.isInPictureInPictureMode) window.decorView.postDelayed(pipClosed, 500)
+    }
+    private val pipClosed = Runnable {
+        if (!isInPictureInPictureMode && !lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+            AppLog.note("player", "picture in picture closed")
+            io.github.strawwaffle.glorp.video.Playback.release(this)
+        }
+    }
 
     // Android 13+ asks the user before an app may notify.
     private var onPermission: ((Boolean) -> Unit)? = null
@@ -167,15 +183,6 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         takeOpenRequest(intent)
-    }
-
-    override fun onStop() {
-        // Stopped while still in picture in picture, with the screen on: the
-        // window was swiped away. That means stop, sound included. (Locking
-        // the phone also stops the activity; then the sound plays on.)
-        val screenOn = getSystemService(android.os.PowerManager::class.java)?.isInteractive != false
-        if (isInPictureInPictureMode && screenOn) io.github.strawwaffle.glorp.video.Playback.release(this)
-        super.onStop()
     }
 
     override fun onDestroy() {

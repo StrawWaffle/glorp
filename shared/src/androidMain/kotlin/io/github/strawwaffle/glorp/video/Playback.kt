@@ -120,8 +120,20 @@ object Playback {
             // YouTube's recordings (a manifest of separate files) are read by byte range.
             if (playable.format == Playable.Format.Dash) YouTubeRangesDataSource.Factory(it, playable.headers) else it
         }.let { if (expiresAt != null) ExpiringDataSource.Factory(it, expiresAt) else it }
+        // Live HLS is read at the edge, where downloads wait on the stream (see LiveBandwidthMeter).
+        val meter = if (playable.live && playable.format == Playable.Format.Hls) LiveBandwidthMeter(app) else null
         val player = ExoPlayer.Builder(app)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSources))
+            .apply { meter?.let(::setBandwidthMeter) }
+            // A few seconds from live there's never the 10 s of buffer Auto
+            // wants before stepping up, and Media3 counts one segment less than
+            // there is: 1 s is enough to try a better quality.
+            .setTrackSelector(
+                androidx.media3.exoplayer.trackselection.DefaultTrackSelector(
+                    app,
+                    QualitySelection(if (meter != null) 1_000 else androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection.DEFAULT_MIN_DURATION_FOR_QUALITY_INCREASE_MS),
+                ),
+            )
             // Pauses for calls and other apps' sound, as a video app should.
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
@@ -138,6 +150,26 @@ object Playback {
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setViewportSizeToPhysicalDisplaySize(app, true)
             .build()
+        meter?.let(player::addAnalyticsListener)
+        if (logLive) player.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onLoadCompleted(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo,
+                mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData,
+            ) {
+                if (mediaLoadData.dataType != C.DATA_TYPE_MEDIA) return
+                val f = mediaLoadData.trackFormat
+                android.util.Log.d("GlorpLoad", "type=${mediaLoadData.trackType} ${f?.bitrate} ${f?.height}p ${loadEventInfo.bytesLoaded} bytes in ${loadEventInfo.loadDurationMs} ms")
+            }
+            override fun onTracksChanged(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, tracks: androidx.media3.common.Tracks) {
+                tracks.groups.forEach { g ->
+                    android.util.Log.d("GlorpLoad", "group type=${g.type} " + (0 until g.length).joinToString { "${g.getTrackFormat(it).height}p/${g.getTrackFormat(it).bitrate}/${g.isTrackSupported(it)}" })
+                }
+            }
+            override fun onBandwidthEstimate(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, totalLoadTimeMs: Int, totalBytesLoaded: Long, bitrateEstimate: Long) {
+                android.util.Log.d("GlorpLoad", "estimate ${bitrateEstimate / 1000} kbit/s")
+            }
+        })
         player.addListener(object : Player.Listener {
             private val stalls = ArrayDeque<Long>()
             private var wasReady = false
@@ -219,11 +251,88 @@ object Playback {
         release(context)
     }
 
-    // With no picture, take the smallest stream too: where sound and video
-    // come together (Kick, Twitch, AngelThump) that's what gets downloaded.
+    // The track settings from before sound only, put back on return (a quality picked by hand included).
+    private var beforeSoundOnly: androidx.media3.common.TrackSelectionParameters? = null
+    private var pictureOff: Pair<Player, Player.Listener>? = null
+    private val pictureOffLater = Runnable { turnPictureOff() }
+
+    /**
+     * No picture, and the smallest stream (see QualitySelection.lowestOnly).
+     *
+     * Media3 only changes which HLS stream it reads while video is selected.
+     * Auto quality carries on choosing by itself with the picture off, so
+     * usually the picture just goes. A quality picked by hand doesn't: Auto
+     * has to take over first, with the picture still on, and the picture goes
+     * once it has. (That swap drops what was buffered: a second of silence.)
+     */
     private fun soundOnly(player: ExoPlayer, on: Boolean) {
+        if (!on) {
+            val before = beforeSoundOnly ?: return
+            cancelPictureOff()
+            player.removeListener(reprepared)
+            QualitySelection.lowestOnly = false
+            player.trackSelectionParameters = before
+            beforeSoundOnly = null
+            return
+        }
+        if (beforeSoundOnly != null) return
+        val before = player.trackSelectionParameters
+        beforeSoundOnly = before
+        QualitySelection.lowestOnly = true
+        reprepared.player = player
+        reprepared.lastState = player.playbackState
+        player.addListener(reprepared)
+        if (before.overrides.values.none { it.type == C.TRACK_TYPE_VIDEO }) {
+            player.trackSelectionParameters = before.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true).build()
+        } else {
+            pictureOnThenOff(player)
+        }
+    }
+
+    /**
+     * Auto on the smallest stream with the picture on, then the picture off:
+     * for a quality picked by hand, and for a stream prepared again (after an
+     * error) while sound only, which would otherwise read the first stream
+     * its playlist lists, usually the largest.
+     */
+    private fun pictureOnThenOff(player: ExoPlayer) {
+        cancelPictureOff()
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, on).setForceLowestBitrate(on).build()
+            .clearOverridesOfType(C.TRACK_TYPE_VIDEO).setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false).build()
+        val listener = object : Player.Listener {
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) = turnPictureOff()
+        }
+        pictureOff = player to listener
+        player.addListener(listener)
+        // In case nothing changes to say so.
+        handler.postDelayed(pictureOffLater, 2_000)
+    }
+
+    private fun turnPictureOff() {
+        val (player, _) = pictureOff ?: return
+        cancelPictureOff()
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true).build()
+    }
+
+    private fun cancelPictureOff() {
+        handler.removeCallbacks(pictureOffLater)
+        pictureOff?.let { (player, listener) -> player.removeListener(listener) }
+        pictureOff = null
+    }
+
+    // Sound only, and the stream prepared again (a retry after an error).
+    private val reprepared = object : Player.Listener {
+        var player: ExoPlayer? = null
+        var lastState = Player.STATE_IDLE
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            val was = lastState
+            lastState = playbackState
+            if (was == Player.STATE_IDLE && playbackState != Player.STATE_IDLE && beforeSoundOnly != null) {
+                player?.let(::pictureOnThenOff)
+            }
+        }
     }
 
     /** Playing, or about to: a moment of buffering or a passing interruption doesn't count as stopped. */
@@ -321,6 +430,11 @@ object Playback {
         val current = active ?: return
         active = null
         handler.removeCallbacks(idleRelease)
+        cancelPictureOff()
+        current.player.removeListener(reprepared)
+        reprepared.player = null
+        beforeSoundOnly = null
+        QualitySelection.lowestOnly = false
         current.player.removeListener(pausedOffScreen)
         // Where a recording was, for the same one played again soon: looked up
         // again at a new address (the old one expired), or picked again.
