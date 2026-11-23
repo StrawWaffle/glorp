@@ -112,7 +112,7 @@ fun UserSheet(
                     is UserLookup.Found -> Unit
                 }
                 found?.watching?.let { embed ->
-                    Detail("Watching ${embed.id} on ${embed.platform}", Palette.Blue) { actions.watch(embed); onDismiss() }
+                    Detail("Watching ${embed.id} on ${PlatformIcons.name(embed.platform)}", Palette.Blue) { actions.watch(embed); onDismiss() }
                 }
                 found?.createdDate?.let(::joined)?.let { Detail("Joined $it") }
                 found?.age?.let { Detail("Age: ${ageLabel(it)}") }

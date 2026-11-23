@@ -63,6 +63,7 @@ fun PlayerBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BarIcon(if (menuOpen) GlorpIcons.Close else GlorpIcons.Menu, if (menuOpen) "Back to chat" else "Menu", onMenu)
+        if (embed != null) PlatformIcon(embed.platform, 18.dp, Modifier.padding(end = 8.dp))
         Column(
             Modifier.weight(1f).height(48.dp).clickable(onClickLabel = "What chat is watching") { listOpen = true },
             verticalArrangement = Arrangement.Center,
@@ -129,10 +130,10 @@ private fun EmbedList(live: LiveState, picked: Boolean, onPick: (Embed?) -> Unit
         LazyColumn(Modifier.navigationBarsPadding()) {
             if (picked) item { Entry("Follow bigscreen", "Back to what destiny.gg shows", null) { onPick(null) } }
             items(streams, key = { "d:" + it.embed.key }) { stream ->
-                Entry("Destiny on ${stream.embed.platform}", stream.title, null) { onPick(stream.embed) }
+                Entry("Destiny on ${PlatformIcons.name(stream.embed.platform)}", stream.title, null, stream.embed.platform) { onPick(stream.embed) }
             }
             items(embeds, key = { "e:" + it.embed.key }) { listing ->
-                Entry(listing.displayName ?: listing.embed.key, listing.title ?: listing.embed.key, listing.watchers) {
+                Entry(listing.displayName ?: listing.embed.key, listing.title ?: listing.embed.key, listing.watchers, listing.embed.platform) {
                     onPick(listing.embed)
                 }
             }

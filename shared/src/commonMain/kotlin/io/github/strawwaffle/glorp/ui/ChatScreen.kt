@@ -612,7 +612,16 @@ private fun render(
                 is Segment.Link -> withLink(LinkAnnotation.Clickable(segment.url, linkStyle) { onUrl(segment.url) }) { append(segment.text) }
                 is Segment.EmbedLink -> withLink(
                     LinkAnnotation.Clickable(segment.embed.key, linkStyle) { onEmbed(segment.embed) },
-                ) { append(segment.text) }
+                ) {
+                    // The platform's mark first, so the link says where it goes.
+                    val platform = segment.embed.platform
+                    val id = "platform:$platform"
+                    inline.getOrPut(id) {
+                        InlineTextContent(placeholder(19, 16)) { PlatformIcon(platform, 15.dp, Modifier.padding(end = 4.dp)) }
+                    }
+                    appendInlineContent(id, " ")
+                    append(segment.text)
+                }
                 is Segment.EmoteRef -> {
                     val emote = placed.getOrNull(emoteIndex++) ?: segment.emote
                     val id = "emote:${emote.prefix}:${emote.hashCode()}"

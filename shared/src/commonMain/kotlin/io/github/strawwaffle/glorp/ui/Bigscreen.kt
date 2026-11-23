@@ -67,7 +67,7 @@ fun Bigscreen(
             when {
                 embed == null -> Offline(live)
                 embed.let(live::isBanned) -> Note("This embed is banned on the site.")
-                playerUrl == null -> Note("${embed.platform} can't be embedded.")
+                playerUrl == null -> Note("${PlatformIcons.name(embed.platform)} can't be embedded.")
                 else -> Player(embed, playerUrl, origin, resolve)
             }
         }
@@ -122,7 +122,7 @@ private fun Player(embed: Embed, playerUrl: String, origin: String, resolve: sus
 private fun Note(text: String) = Text(text, color = Palette.TextDim, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
 
 internal fun label(embed: Embed, live: LiveState): String {
-    live.streams.firstOrNull { it.embed == embed }?.let { return "Destiny on ${embed.platform}" + (it.title?.let { t -> ": $t" } ?: "") }
+    live.streams.firstOrNull { it.embed == embed }?.let { return "Destiny on ${PlatformIcons.name(embed.platform)}" + (it.title?.let { t -> ": $t" } ?: "") }
     live.embeds.firstOrNull { it.embed.key.equals(embed.key, ignoreCase = true) }?.let { listing ->
         return (listing.displayName ?: embed.key) + (listing.title?.let { ": $it" } ?: "")
     }
@@ -130,11 +130,12 @@ internal fun label(embed: Embed, live: LiveState): String {
 }
 
 @Composable
-internal fun Entry(name: String, detail: String?, watchers: Int?, onClick: () -> Unit) {
+internal fun Entry(name: String, detail: String?, watchers: Int?, platform: String? = null, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (platform != null) PlatformIcon(platform, 20.dp, Modifier.padding(end = 12.dp))
         Column(Modifier.weight(1f)) {
             Text(name, color = Palette.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             detail?.let { Text(it, color = Palette.TextDim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
