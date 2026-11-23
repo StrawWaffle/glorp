@@ -262,6 +262,9 @@ class ChatViewModel(
     fun start() {
         backgroundWatch?.cancel()
         backgroundWatch = null
+        inBackground = false
+        // What arrived while chat was off screen, shown at once.
+        _lines.value = log.snapshot()
         wanted = true
         watchMods()
         if (connection?.isActive == true) return
@@ -320,8 +323,9 @@ class ChatViewModel(
 
     private val tools = VyneerTools(client)
 
+    // Only someone who can type is warned; nobody is, with chat in the background.
     private fun watchMods() {
-        if (!warnings || watching?.isActive == true) return
+        if (!warnings || inBackground || _account.value == null || watching?.isActive == true) return
         watching = viewModelScope.launch { tools.run(input.watch) }
     }
 
@@ -810,7 +814,7 @@ class ChatViewModel(
             }
             // `maxlines` may have changed here or on the site.
             settings.maxLines.let { if (it != log.capacity) { log.capacity = it; changed = true } }
-            if (changed) _lines.value = log.snapshot()
+            if (changed && !inBackground) _lines.value = log.snapshot()
             delay(publishInterval)
         }
     }
@@ -850,6 +854,7 @@ class ChatViewModel(
                         false
                     }
                     me != null -> {
+                        watchMods()
                         // Chat doesn't say the user id; the site's pages did.
                         val known = _account.value
                         _account.value = if (known != null && known.nick.equals(me.nick, ignoreCase = true)) me.copy(userId = known.userId) else me
@@ -952,12 +957,19 @@ class ChatViewModel(
 
     private var backgroundWatch: Job? = null
 
+    /** Off screen: chat still reads what arrives (for notifications) but draws nothing. */
+    @Volatile
+    private var inBackground = false
+
     /**
      * The app left the screen. Chat stays connected while [stillWanted] says
      * so (a stream playing on with the screen off), so whispers and mentions
      * still notify at once; then it closes, as it always did.
      */
     fun stopWhenIdle(stillWanted: () -> Boolean) {
+        inBackground = true
+        watching?.cancel()
+        watching = null
         backgroundWatch?.cancel()
         backgroundWatch = viewModelScope.launch {
             // Give the player a moment to decide whether it plays on.

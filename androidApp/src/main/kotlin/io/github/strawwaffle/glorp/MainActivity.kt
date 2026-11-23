@@ -159,16 +159,6 @@ class MainActivity : ComponentActivity() {
         takeOpenRequest(intent)
     }
 
-    override fun onStart() {
-        super.onStart()
-        Notifier.onScreen = true
-    }
-
-    override fun onStop() {
-        Notifier.onScreen = false
-        super.onStop()
-    }
-
     override fun onDestroy() {
         removeOnPictureInPictureModeChangedListener(pipListener)
         super.onDestroy()

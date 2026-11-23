@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.ui
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -83,7 +84,11 @@ fun Bigscreen(
 private fun Offline(live: LiveState) {
     // Until the site says, nothing is known: not "offline".
     if (!live.known) {
-        CircularProgressIndicator(color = Palette.Glorp, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+        // A spinner for a few seconds, then still words: no endless animation with no network.
+        var waited by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { kotlinx.coroutines.delay(8_000); waited = true }
+        if (!waited) CircularProgressIndicator(color = Palette.Glorp, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+        else Note("Waiting for destiny.gg to say what's live…")
         return
     }
     val last = live.streams.firstOrNull { it.title != null }

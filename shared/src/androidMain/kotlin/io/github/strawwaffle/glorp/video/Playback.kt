@@ -95,6 +95,9 @@ object Playback {
     fun attach(context: Context, playable: Playable, background: Boolean): Active {
         active?.let {
             if (it.url == playable.hlsUrl) {
+                // Back on screen: pictures again, and the player stays.
+                soundOnly(it.player, false)
+                handler.removeCallbacks(idleRelease)
                 // Back on screen, or looked up again, after it failed: start again.
                 if (it.controller.state.value.failed) it.controller.restart()
                 return it.also { start(context, background) }
@@ -203,8 +206,35 @@ object Playback {
      */
     fun detach(context: Context, keepPlaying: Boolean) {
         val current = active ?: return
-        if (keepPlaying && current.player.isPlaying) return
+        if (keepPlaying && current.player.isPlaying) {
+            // Only the sound goes on: no video to decode with nothing to show it.
+            soundOnly(current.player, true)
+            appContext = context.applicationContext
+            current.player.addListener(pausedOffScreen)
+            return
+        }
         release(context)
+    }
+
+    private fun soundOnly(player: ExoPlayer, on: Boolean) {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, on).build()
+    }
+
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var appContext: Context? = null
+
+    // Paused while off screen (from the notification, a call, or a stall) for
+    // five minutes: let the player, its decoder and the service go.
+    private val idleRelease = Runnable {
+        val current = active ?: return@Runnable
+        if (!current.player.isPlaying) appContext?.let(::release)
+    }
+    private val pausedOffScreen = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            handler.removeCallbacks(idleRelease)
+            if (!isPlaying) handler.postDelayed(idleRelease, 5 * 60_000L)
+        }
     }
 
     /**
@@ -281,6 +311,8 @@ object Playback {
     fun release(context: Context) {
         val current = active ?: return
         active = null
+        handler.removeCallbacks(idleRelease)
+        current.player.removeListener(pausedOffScreen)
         // Where a recording was, for the same one played again soon: looked up
         // again at a new address (the old one expired), or picked again.
         if (current.key != null && !current.player.isCurrentMediaItemLive && current.player.currentPosition > 0) {

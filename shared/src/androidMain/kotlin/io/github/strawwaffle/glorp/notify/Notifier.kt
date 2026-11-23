@@ -38,10 +38,6 @@ object Notifier {
     /** The extra on the activity's intent saying what a tapped notification opens. */
     const val EXTRA_OPEN = "io.github.strawwaffle.glorp.OPEN"
 
-    /** True while the app is on screen. */
-    @Volatile
-    var onScreen = false
-
     /** True while chat is connected: it notifies as things arrive, so the background check stays quiet. */
     @Volatile
     var liveChat = false
@@ -63,6 +59,7 @@ object Notifier {
         jobs.schedule(
             JobInfo.Builder(JOB_ID, ComponentName(context, AlertJob::class.java))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                .setRequiresBatteryNotLow(true)
                 .setPeriodic(interval)
                 .setPersisted(true)
                 .build(),
@@ -142,16 +139,22 @@ object Notifier {
 /** One background look at the site (see [Notifier]). */
 class AlertJob : JobService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var running: kotlinx.coroutines.Job? = null
 
     override fun onStartJob(params: JobParameters): Boolean {
-        scope.launch {
+        running = scope.launch {
             runCatching { Notifier.check(applicationContext) }.onFailure { AppLog.note("notify", "background check failed", it) }
             jobFinished(params, false)
         }
         return true
     }
 
-    override fun onStopJob(params: JobParameters): Boolean = true
+    // Android took the job back (no network, Doze): stop at once. The next
+    // periodic run comes as usual, so no retry is asked for.
+    override fun onStopJob(params: JobParameters): Boolean {
+        running?.cancel()
+        return false
+    }
 
     override fun onDestroy() {
         scope.cancel()

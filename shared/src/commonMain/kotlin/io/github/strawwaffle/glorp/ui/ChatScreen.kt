@@ -1,5 +1,8 @@
 package io.github.strawwaffle.glorp.ui
 
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -596,23 +599,33 @@ internal fun ChatRow(
     val faded = look.otherStreams == OtherStreams.Dim && !rendered.mentionsMe && !highlighted &&
         fromOtherStream(line, me, look.playing)
     // A Tier 5 name: the text is drawn, then the moving rainbow is laid over
-    // the name's letters only (SrcAtop, in a layer of its own). Each frame
-    // redraws; nothing is laid out again.
+    // the name's letters only (SrcAtop, in a layer of its own). The name's
+    // outline is worked out once per layout, and the colours move at 30
+    // frames a second, which looks the same as 60 or 120 for a slow sweep.
     val rainbowName = rendered.rainbowName
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    val phase = if (rainbowName == null) null else rememberInfiniteTransition().animateFloat(
-        0f, 1f, infiniteRepeatable(tween(RAINBOW_MS, easing = LinearEasing)),
-    )
-    val rainbowLayer = if (rainbowName == null || phase == null) Modifier else Modifier
+    val outline = remember(layout, rainbowName) {
+        val text = layout
+        if (text == null || rainbowName == null || rainbowName.last >= text.layoutInput.text.length) null
+        else text.getPathForRange(rainbowName.first, rainbowName.last + 1).let { it to it.getBounds() }
+    }
+    val phase = remember { mutableFloatStateOf(0f) }
+    if (rainbowName != null) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                val now = withFrameMillis { it }
+                phase.floatValue = (now % RAINBOW_MS) / RAINBOW_MS.toFloat()
+                delay(33)
+            }
+        }
+    }
+    val rainbowLayer = if (outline == null) Modifier else Modifier
         .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
         .drawWithContent {
             drawContent()
-            val text = layout ?: return@drawWithContent
-            if (rainbowName.last >= text.layoutInput.text.length) return@drawWithContent
-            val path = text.getPathForRange(rainbowName.first, rainbowName.last + 1)
-            val bounds = path.getBounds()
+            val (path, bounds) = outline
             val width = bounds.width.coerceAtLeast(1f)
-            val from = bounds.left + phase.value * width
+            val from = bounds.left + phase.floatValue * width
             drawPath(
                 path,
                 Brush.linearGradient(rainbow, Offset(from, 0f), Offset(from + width, 0f), TileMode.Repeated),

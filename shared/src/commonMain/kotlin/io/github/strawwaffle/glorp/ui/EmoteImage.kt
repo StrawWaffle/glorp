@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.ui
 
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -73,10 +74,16 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
             val elapsedAtStart = Clock.System.now().toEpochMilliseconds() - sentAt
             if (elapsedAtStart >= ends && emote.motions.none { it.iterations == Int.MAX_VALUE }) return@LaunchedEffect
             val firstFrame = withFrameMillis { it }
+            // A strip with nothing else moving only needs a redraw when its
+            // frame changes: sleep to the next frame's start instead of
+            // redrawing on every vsync. withFrameMillis still holds it while
+            // the app is off screen.
+            val step = sprite?.takeIf { emote.motions.isEmpty() && it.frames > 0 }?.let { (it.durationMs / it.frames).coerceAtLeast(16) }
             while (true) {
                 val now = withFrameMillis { it } - firstFrame + elapsedAtStart
                 if (now >= ends) break
                 elapsed.longValue = now
+                if (step != null) delay((step - now % step).coerceAtLeast(1))
             }
             elapsed.longValue = SETTLED
         }
