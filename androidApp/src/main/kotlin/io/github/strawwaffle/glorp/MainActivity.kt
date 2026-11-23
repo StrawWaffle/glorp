@@ -1,5 +1,7 @@
 package io.github.strawwaffle.glorp
 
+import io.github.strawwaffle.glorp.diag.Crashes
+import io.github.strawwaffle.glorp.diag.AppLog
 import android.app.PictureInPictureParams
 import android.os.Build
 import android.os.Bundle
@@ -56,6 +58,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Crashes.install(applicationContext, BuildConfig.VERSION_NAME)
+        AppLog.note("app", "started" + if (savedInstanceState != null) " again (restored)" else "")
         enableEdgeToEdge()
         val sessions = KeystoreSessionStore(applicationContext)
         if (BuildConfig.DEV_IMPORT) {
@@ -70,6 +74,10 @@ class MainActivity : ComponentActivity() {
         val frames = if (BuildConfig.DEV_IMPORT) devFrames() else emptyList()
         // Dev builds: `--es notify-test mention|whisper|live` posts a sample notification, to try where tapping it goes.
         if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("notify-test")?.let(::postTestNotification)
+        // Dev builds: `--es crash-test 1` crashes a few seconds in, to try the crash report.
+        if (BuildConfig.DEV_IMPORT && intent?.getStringExtra("crash-test") != null) {
+            android.os.Handler(mainLooper).postDelayed({ error("Crash test from a dev build") }, 4_000)
+        }
         // Releases check GitHub for a newer one; dev builds come over adb.
         val updates = if (!BuildConfig.SELF_UPDATE) null
         else androidUpdates(this, SharedChatPrefs(applicationContext), BuildConfig.VERSION_NAME, lifecycleScope)
@@ -92,6 +100,7 @@ class MainActivity : ComponentActivity() {
                     setVideoBounds = ::onVideoBounds,
                 ),
                 notify = notify,
+                diagnostics = Crashes.diagnostics(applicationContext, BuildConfig.VERSION_NAME),
             )
         }
     }

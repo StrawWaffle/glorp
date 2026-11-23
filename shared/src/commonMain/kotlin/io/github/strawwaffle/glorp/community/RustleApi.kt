@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.community
 
+import io.github.strawwaffle.glorp.diag.AppLog
 import io.github.strawwaffle.glorp.chat.ChatSocket
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -72,7 +73,7 @@ class RustleApi(private val http: HttpClient, private val base: String = BASE) :
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        println("Glorp: rustlesearch $path failed: $e")
+        AppLog.note("rustlesearch", "$path failed", e)
         RustleReply.Failed("Couldn't reach rustlesearch.dev", null)
     }
 

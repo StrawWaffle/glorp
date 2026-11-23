@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.chat
 
+import io.github.strawwaffle.glorp.diag.AppLog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.strawwaffle.glorp.auth.Session
@@ -301,6 +302,7 @@ class ChatViewModel(
     }
 
     fun stop() {
+        AppLog.note("chat", "closed: the app left the screen")
         wanted = false
         watching?.cancel()
         watching = null

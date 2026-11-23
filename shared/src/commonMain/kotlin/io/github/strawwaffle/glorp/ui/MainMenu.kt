@@ -67,6 +67,8 @@ fun MainMenu(
     update: UpdateState? = null,
     onCheckUpdate: () -> Unit = {},
     onInstallUpdate: (Release) -> Unit = {},
+    /** Null where problems can't be reported from the app. */
+    onReport: (() -> Unit)? = null,
 ) {
     LazyColumn(Modifier.fillMaxSize().background(Palette.Black)) {
         item {
@@ -101,6 +103,7 @@ fun MainMenu(
 
         item { Heading("App") }
         item { Item("Settings", "Timestamps, highlights and tags, the player", onSettings) }
+        if (onReport != null) item { Item("Report a problem", "Opens a GitHub issue with the details filled in, for you to check and send", onReport) }
         if (version != null) item {
             Item(
                 "Glorp $version",

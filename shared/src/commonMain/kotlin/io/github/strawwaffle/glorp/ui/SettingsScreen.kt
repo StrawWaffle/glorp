@@ -238,7 +238,7 @@ internal fun SettingsHeading(text: String) {
 
 /** A setting that's on or off: the whole row toggles it. */
 @Composable
-private fun SwitchRow(title: String, detail: String?, on: Boolean, onChange: (Boolean) -> Unit) {
+internal fun SwitchRow(title: String, detail: String?, on: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { onChange(!on) }.padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

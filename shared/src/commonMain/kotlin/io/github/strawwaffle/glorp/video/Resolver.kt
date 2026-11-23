@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.video
 
+import io.github.strawwaffle.glorp.diag.AppLog
 import io.github.strawwaffle.glorp.chat.chatJson
 import io.github.strawwaffle.glorp.site.Embed
 import io.ktor.client.HttpClient
@@ -80,7 +81,7 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
     } catch (e: kotlinx.coroutines.CancellationException) {
         throw e
     } catch (e: Exception) {
-        println("Glorp: couldn't look up ${embed.key}, using the web player: $e")
+        AppLog.note("player", "couldn't look up ${embed.key}, using the web player", e)
         Resolution.Web
     }
 

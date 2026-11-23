@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.video
 
+import io.github.strawwaffle.glorp.diag.AppLog
 import androidx.annotation.OptIn
 import android.os.Handler
 import android.os.Looper
@@ -42,6 +43,7 @@ class ExoController(private val player: ExoPlayer) : VideoController {
 
         override fun onPlayerError(error: PlaybackException) {
             handler.removeCallbacks(retry)
+            AppLog.note("player", "${error.errorCodeName}, retries $retries", error)
             // A live stream fallen too far behind: jump back to live.
             if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
                 player.seekToDefaultPosition()

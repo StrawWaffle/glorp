@@ -1,0 +1,35 @@
+name: Problem
+description: Something in Glorp doesn't work, or it closed by itself. The app's "Report a problem" fills this in.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. In the app, Menu → Report a problem fills in the version, the phone and the log for you.
+        Check the log below before submitting; it should hold no chat messages, names or logins.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw. A screenshot helps.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Glorp version
+      description: In the menu, at the bottom.
+      placeholder: "0.1.22"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone and Android version
+      placeholder: "Pixel 9, Android 16"
+  - type: textarea
+    id: details
+    attributes:
+      label: Crash and log
+      description: Filled in by the app.
+      render: text

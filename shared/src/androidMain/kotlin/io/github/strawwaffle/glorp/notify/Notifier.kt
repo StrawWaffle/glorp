@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.notify
 
+import io.github.strawwaffle.glorp.diag.AppLog
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -77,6 +78,7 @@ object Notifier {
         val client = createHttpClient()
         try {
             val alerts = AlertCheck(client, Site.guess(origin), prefs, options, cookies, prefs.get(NotifyOptions.NICK), prefs.get(NotifyOptions.SERVER)).run()
+            AppLog.note("notify", "background check: ${alerts.size} new")
             if (!onScreen && permitted(context)) alerts.forEach { post(context, it) }
         } finally {
             client.close()
@@ -139,7 +141,7 @@ class AlertJob : JobService() {
 
     override fun onStartJob(params: JobParameters): Boolean {
         scope.launch {
-            runCatching { Notifier.check(applicationContext) }
+            runCatching { Notifier.check(applicationContext) }.onFailure { AppLog.note("notify", "background check failed", it) }
             jobFinished(params, false)
         }
         return true

@@ -50,6 +50,9 @@ import io.github.strawwaffle.glorp.ui.PictureInPicture
 import io.github.strawwaffle.glorp.ui.SignInScreen
 import io.github.strawwaffle.glorp.ui.WhispersScreen
 import io.github.strawwaffle.glorp.ui.glorpImageLoader
+import io.github.strawwaffle.glorp.ui.ReportScreen
+import io.github.strawwaffle.glorp.ui.CrashPrompt
+import io.github.strawwaffle.glorp.diag.Diagnostics
 
 /**
  * The app's root. [origin] is the site to talk to: destiny.gg, or its test
@@ -68,6 +71,8 @@ fun GlorpApp(
     pictureInPicture: PictureInPicture = PictureInPicture(),
     /** Notifications for Destiny going live, mentions and whispers; null where there are none. */
     notify: NotifyControls? = null,
+    /** Problem reports and the last crash; null where there are none. */
+    diagnostics: Diagnostics? = null,
 ) {
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
     // Keep a stream's sound going with the screen off: on unless turned off in the menu.
@@ -152,6 +157,15 @@ fun GlorpApp(
                 rustleLinkOf(target) != null -> { communityArg = target; screen = "rustle" }
             }
         }
+        // After a crash, the next start offers to report it, once.
+        var crashAsked by rememberSaveable { mutableStateOf(false) }
+        val crashed = remember(diagnostics) { diagnostics?.lastCrash() != null }
+        if (crashed && !crashAsked && diagnostics != null) {
+            CrashPrompt(
+                onReport = { crashAsked = true; screen = "report" },
+                onDismiss = { crashAsked = true; diagnostics.clearCrash() },
+            )
+        }
         CompositionLocalProvider(
             LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it },
             // rustlesearch.dev links open the app's own log search on that query.
@@ -233,6 +247,7 @@ fun GlorpApp(
                             update = update,
                             onCheckUpdate = { updates?.check(force = true) },
                             onInstallUpdate = { updates?.install(it) },
+                            onReport = diagnostics?.let { { screen = "report" } },
                         )
                     }
                 }
@@ -264,6 +279,7 @@ fun GlorpApp(
                         )
                     }
                 }
+                "report" -> diagnostics?.let { d -> { ReportScreen(d) } }
                 "signin", "signin-cookies" -> {
                     {
                         val forWhispers = screen == "signin-cookies"

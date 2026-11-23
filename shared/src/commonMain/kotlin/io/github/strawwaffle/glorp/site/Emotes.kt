@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.site
 
+import io.github.strawwaffle.glorp.diag.AppLog
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import io.github.strawwaffle.glorp.chat.ChatSocket
@@ -202,7 +203,7 @@ class Emotes private constructor(
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            println("Glorp: emote list unavailable: $e")
+            AppLog.note("emotes", "list unavailable", e)
             None
         }
 

@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.chat
 
+import io.github.strawwaffle.glorp.diag.AppLog
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.webSocket
@@ -58,6 +59,7 @@ class ChatSocket(
                     current = this
                     opened = TimeSource.Monotonic.markNow()
                     _state.value = SocketState.Connected
+                    AppLog.note("chat", "connected")
                     var lastFrame = TimeSource.Monotonic.markNow()
                     // The server doesn't answer websocket pings, but it does
                     // answer a PING event. Only a connection quiet for half a
@@ -93,8 +95,8 @@ class ChatSocket(
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
-                // The state flow shows it.
+            } catch (e: Exception) {
+                AppLog.note("chat", "connection ended", e)
             }
             if (halted) break
             // The server completes the handshake before it checks the login,
@@ -102,6 +104,7 @@ class ChatSocket(
             // rejected client would retry at the shortest delay forever.
             val stable = opened?.let { it.elapsedNow() >= stableAfter } ?: false
             if (stable) attempts = 0
+            AppLog.note("chat", "reconnecting, attempt ${attempts + 1}")
             _state.value = SocketState.Waiting
             delay(retryDelay(attempts, Random::nextDouble))
         }

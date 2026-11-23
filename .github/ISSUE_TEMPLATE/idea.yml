@@ -1,0 +1,11 @@
+name: Idea
+description: Something Glorp should do, or do differently.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: What you'd use it for helps more than how it should work.
+    validations:
+      required: true
