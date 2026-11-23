@@ -29,6 +29,8 @@ data class ChatLine(
     val messageId: String? = null,
     /** A moderator muted or banned the sender after this was sent; `showremoved` says how it shows. */
     val moderated: Boolean = false,
+    /** What the sender was watching on bigscreen when they sent it, as `platform/id` in lower case. */
+    val watching: String? = null,
 ) {
     enum class Kind {
         /** A chat message. */
@@ -48,7 +50,7 @@ data class ChatLine(
     }
 
     companion object {
-        fun user(nick: String, features: List<String>, raw: String, at: Long, subTier: Int = 0): ChatLine {
+        fun user(nick: String, features: List<String>, raw: String, at: Long, subTier: Int = 0, watching: String? = null): ChatLine {
             val action = raw.startsWith("/me ")
             val text = if (action) raw.removePrefix("/me ") else raw
             return ChatLine(
@@ -61,6 +63,7 @@ data class ChatLine(
                 action = action,
                 green = text.startsWith(">"),
                 subTier = subTier,
+                watching = watching,
             )
         }
 

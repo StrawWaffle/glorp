@@ -46,14 +46,35 @@ class ChatTest {
 
     @Test
     fun logKeepsItsCapAndDropsRepeats() {
-        val log = ChatLog(capacity = 3)
-        val lines = (1..5).map { ChatLine.user("n", emptyList(), "m$it", it.toLong()) }
+        val log = ChatLog(capacity = ChatLog.MIN_CAPACITY)
+        val lines = (1..52).map { ChatLine.user("n", emptyList(), "m$it", it.toLong()) }
         lines.forEach(log::add)
-        assertEquals(listOf("m3", "m4", "m5"), log.snapshot().map { it.text })
+        assertEquals((3..52).map { "m$it" }, log.snapshot().map { it.text })
         // The backlog on reconnect repeats lines already shown.
-        assertEquals(false, log.add(lines[4]))
+        assertEquals(false, log.add(lines[51]))
         // A line that fell off the end can come back.
         assertEquals(true, log.add(lines[0]))
+    }
+
+    @Test
+    fun lowerMaxLinesDropsTheOldestNow() {
+        val log = ChatLog(capacity = 100)
+        (1..80).forEach { log.add(ChatLine.user("n", emptyList(), "m$it", it.toLong())) }
+        log.capacity = 60
+        assertEquals((21..80).map { "m$it" }, log.snapshot().map { it.text })
+        log.capacity = 5
+        assertEquals(ChatLog.MIN_CAPACITY, log.capacity)
+        assertEquals(ChatLog.MIN_CAPACITY, log.snapshot().size)
+    }
+
+    @Test
+    fun maxLinesComesFromTheSettingWithinLimits() {
+        val settings = ChatSettings(MemoryChatPrefs())
+        assertEquals(250, settings.maxLines)
+        settings.set("maxlines", kotlinx.serialization.json.JsonPrimitive(500))
+        assertEquals(500, settings.maxLines)
+        settings.set("maxlines", kotlinx.serialization.json.JsonPrimitive(99999))
+        assertEquals(ChatLog.MAX_CAPACITY, settings.maxLines)
     }
 
     @Test

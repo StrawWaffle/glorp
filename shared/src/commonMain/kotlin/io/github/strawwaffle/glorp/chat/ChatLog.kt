@@ -13,9 +13,16 @@ package io.github.strawwaffle.glorp.chat
  *
  * Not thread-safe: one coroutine owns it.
  */
-class ChatLog(private val capacity: Int = DEFAULT_CAPACITY) {
-    private val lines = ArrayDeque<ChatLine>(capacity)
-    private val ids = HashSet<String>(capacity * 2)
+class ChatLog(capacity: Int = DEFAULT_CAPACITY) {
+    /** How many lines are kept (chat-gui's `maxlines`); lowering it drops the oldest now. */
+    var capacity: Int = capacity.coerceIn(MIN_CAPACITY, MAX_CAPACITY)
+        set(value) {
+            field = value.coerceIn(MIN_CAPACITY, MAX_CAPACITY)
+            while (lines.size > field) forget(lines.removeFirst())
+        }
+
+    private val lines = ArrayDeque<ChatLine>(this.capacity)
+    private val ids = HashSet<String>(this.capacity * 2)
     // A combo line stands for several messages; their ids go when it goes.
     private val comboMembers = HashMap<String, MutableList<String>>()
 
@@ -77,6 +84,9 @@ class ChatLog(private val capacity: Int = DEFAULT_CAPACITY) {
     }
 
     companion object {
-        const val DEFAULT_CAPACITY = 300
+        /** chat-gui's default `maxlines`. */
+        const val DEFAULT_CAPACITY = 250
+        const val MIN_CAPACITY = 50
+        const val MAX_CAPACITY = 1000
     }
 }

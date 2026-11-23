@@ -48,4 +48,32 @@ class HidingTest {
         assertEquals(setOf("flair14"), again.hiddenFlairs)
         assertEquals(listOf("b"), again.alertWords)
     }
+
+    @Test
+    fun readsWhatTheSenderWatches() {
+        val frame = """MSG {"nick":"Pal","features":[],"watching":{"platform":"Kick","id":"AnythingElse"},"timestamp":5,"data":"hi"}"""
+        val line = (parseFrame(frame) { 0L } as ChatEvent.Message).line
+        assertEquals("kick/anythingelse", line.watching)
+        val none = (parseFrame("""MSG {"nick":"Pal","watching":null,"timestamp":5,"data":"hi"}""") { 0L } as ChatEvent.Message).line
+        assertEquals(null, none.watching)
+    }
+
+    @Test
+    fun otherStreamsAreThoseKnownToWatchAnother() {
+        fun from(nick: String, watching: String?) = ChatLine.user(nick, emptyList(), "hi", 1L, 0, watching)
+        assertTrue(fromOtherStream(from("pal", "twitch/someone"), "me", "kick/Destiny"))
+        assertFalse(fromOtherStream(from("pal", "kick/destiny"), "me", "kick/Destiny"))
+        // Watching nothing on bigscreen (on a phone, say), yourself, or nothing playing here.
+        assertFalse(fromOtherStream(from("pal", null), "me", "kick/destiny"))
+        assertFalse(fromOtherStream(from("Me", "twitch/someone"), "me", "kick/destiny"))
+        assertFalse(fromOtherStream(from("pal", "twitch/someone"), "me", null))
+    }
+
+    @Test
+    fun theOtherStreamsChoiceIsKept() {
+        val prefs = MemoryChatPrefs()
+        assertEquals(OtherStreams.Show, LocalOptions(prefs).otherStreams)
+        LocalOptions(prefs).treatOtherStreams(OtherStreams.Hide)
+        assertEquals(OtherStreams.Hide, LocalOptions(prefs).otherStreams)
+    }
 }

@@ -45,6 +45,7 @@ import androidx.compose.material3.Checkbox
 import coil3.compose.AsyncImage
 import io.github.strawwaffle.glorp.chat.ChatSettings
 import io.github.strawwaffle.glorp.chat.LocalOptions
+import io.github.strawwaffle.glorp.chat.OtherStreams
 import io.github.strawwaffle.glorp.notify.NotifyControls
 import io.github.strawwaffle.glorp.notify.NotifyOptions
 import io.github.strawwaffle.glorp.site.Flairs
@@ -104,6 +105,16 @@ fun SettingsScreen(
         }
         item { SwitchRow("Show flair icons", null, !settings.hideFlairIcons) { settings.setBool("hideflairicons", !it) } }
         item {
+            Choices(
+                "Messages kept",
+                "How far back you can scroll in chat (the site's maxlines, now ${settings.maxLines}). More uses a little more memory",
+                listOf(100, 250, 500, 1000),
+                settings.maxLines,
+                label = { "$it" },
+                onPick = { settings.set("maxlines", kotlinx.serialization.json.JsonPrimitive(it)) },
+            )
+        }
+        item {
             SwitchRow(
                 "Warn about nukes, mutelinks and banned phrases",
                 "Before a message would get you muted or banned. The lists come from vyneer.me (d.gg utilities), checked every 30 seconds while chat is open",
@@ -135,6 +146,17 @@ fun SettingsScreen(
         }
         item { SwitchRow("Hide messages marked NSFW", null, settings.hideNsfw) { settings.setBool("hidensfw", it) } }
         item { SwitchRow("Hide messages marked NSFL", null, settings.hideNsfl) { settings.setBool("hidensfl", it) } }
+        item {
+            Choices(
+                "Chat from people watching another stream",
+                "While something plays here. Dim is the site's eye button; mentions of you and your highlights always show. " +
+                    "Also in the list of what chat is watching",
+                OtherStreams.entries,
+                options.otherStreams,
+                label = { it.label },
+                onPick = options::treatOtherStreams,
+            )
+        }
         item {
             WordsSetting(
                 "Hide messages with these words",
@@ -272,7 +294,7 @@ internal fun SwitchRow(title: String, detail: String?, on: Boolean, onChange: (B
 
 /** One of a few values, all in view. */
 @Composable
-private fun <T> Choices(title: String, detail: String?, values: List<T>, current: T, label: (T) -> String, onPick: (T) -> Unit) {
+internal fun <T> Choices(title: String, detail: String?, values: List<T>, current: T, label: (T) -> String, onPick: (T) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(title, color = Palette.White, fontSize = 15.sp)
         detail?.let { Text(it, color = Palette.TextDim, fontSize = 12.sp) }

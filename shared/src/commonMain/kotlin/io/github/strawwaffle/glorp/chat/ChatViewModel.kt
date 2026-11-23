@@ -732,6 +732,8 @@ class ChatViewModel(
                 val next = events.tryReceive().getOrNull() ?: break
                 changed = apply(next, now) or changed
             }
+            // `maxlines` may have changed here or on the site.
+            settings.maxLines.let { if (it != log.capacity) { log.capacity = it; changed = true } }
             if (changed) _lines.value = log.snapshot()
             delay(publishInterval)
         }

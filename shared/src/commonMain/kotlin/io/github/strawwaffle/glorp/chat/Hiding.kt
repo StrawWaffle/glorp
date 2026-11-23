@@ -21,6 +21,15 @@ class LocalOptions(private val prefs: ChatPrefs) {
     var stickyMentions by mutableStateOf(prefs.get(STICKY_MENTIONS) != "false")
         private set
 
+    /** What to do with messages from people watching another stream than the one playing here. */
+    var otherStreams by mutableStateOf(OtherStreams.entries.firstOrNull { it.name == prefs.get(OTHER_STREAMS) } ?: OtherStreams.Show)
+        private set
+
+    fun treatOtherStreams(mode: OtherStreams) {
+        otherStreams = mode
+        prefs.put(OTHER_STREAMS, mode.name)
+    }
+
     fun keepMentions(on: Boolean) {
         stickyMentions = on
         prefs.put(STICKY_MENTIONS, on.toString())
@@ -46,8 +55,24 @@ class LocalOptions(private val prefs: ChatPrefs) {
         const val HIDDEN_FLAIRS = "hide.flairs"
         const val ALERT_WORDS = "alert.words"
         const val STICKY_MENTIONS = "sticky.mentions"
+        const val OTHER_STREAMS = "other.streams"
     }
 }
+
+/**
+ * The site's eye button ("highlight messages from users watching the same
+ * stream") dims the rest; here they can be hidden too.
+ */
+enum class OtherStreams(val label: String) { Show("Show"), Dim("Dim"), Hide("Hide") }
+
+/**
+ * Whether [line] is from someone known to be watching another embed than
+ * [playing] (`platform/id`). Nothing playing, your own lines, and people
+ * watching nothing on bigscreen (on the phone, say) don't count.
+ */
+fun fromOtherStream(line: ChatLine, me: String?, playing: String?): Boolean =
+    playing != null && line.kind == ChatLine.Kind.User && line.watching != null &&
+        line.watching != playing.lowercase() && !line.nick.equals(me, ignoreCase = true)
 
 /**
  * Which chat messages aren't shown, besides those from ignored users (which

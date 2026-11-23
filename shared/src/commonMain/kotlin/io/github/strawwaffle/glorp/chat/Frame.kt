@@ -64,7 +64,14 @@ internal data class WireUser(
     val roles: List<String> = emptyList(),
     /** Only on `PIN`. */
     val uuid: String? = null,
+    /** The embed the sender has open on bigscreen, if any. */
+    val watching: WireWatching? = null,
 )
+
+@Serializable
+internal data class WireWatching(val platform: String = "", val id: String = "") {
+    val key: String? get() = if (platform.isEmpty() || id.isEmpty()) null else "$platform/$id".lowercase()
+}
 
 @Serializable
 internal data class WireSubscription(val tier: Int = 0)
@@ -220,7 +227,7 @@ private fun parseMessage(payload: String, now: () -> Long): ChatLine? {
     val user = chatJson.decodeFromString<WireUser>(payload)
     val text = user.data ?: return null
     if (user.nick.isEmpty()) return null
-    return ChatLine.user(user.nick, user.features, text, user.timestamp ?: now(), user.subscription?.tier ?: 0)
+    return ChatLine.user(user.nick, user.features, text, user.timestamp ?: now(), user.subscription?.tier ?: 0, user.watching?.key)
 }
 
 /** chat-gui's wording for the server's error codes. */

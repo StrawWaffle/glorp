@@ -60,6 +60,10 @@ class ChatSettings(private val prefs: ChatPrefs) {
      * only 2 leaves them be; Glorp does the same.
      */
     val censorRemoved: Boolean get() = (get("showremoved") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() != 2
+    /** How many lines chat keeps (`maxlines`), within what the app allows. */
+    val maxLines: Int
+        get() = ((get("maxlines") as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toInt() ?: ChatLog.DEFAULT_CAPACITY)
+            .coerceIn(ChatLog.MIN_CAPACITY, ChatLog.MAX_CAPACITY)
     val timestampFormat: String get() = (get("timestampformat") as? JsonPrimitive)?.contentOrNull ?: "HH:mm"
 
     fun setBool(key: String, on: Boolean) = set(key, JsonPrimitive(on))

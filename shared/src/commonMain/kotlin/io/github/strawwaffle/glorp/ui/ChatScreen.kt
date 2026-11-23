@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalUriHandler
@@ -75,6 +76,8 @@ import io.github.strawwaffle.glorp.chat.ChatLine
 import io.github.strawwaffle.glorp.chat.ChatViewModel
 import io.github.strawwaffle.glorp.chat.Highlighter
 import io.github.strawwaffle.glorp.chat.LineFilter
+import io.github.strawwaffle.glorp.chat.OtherStreams
+import io.github.strawwaffle.glorp.chat.fromOtherStream
 import io.github.strawwaffle.glorp.chat.Poll
 import io.github.strawwaffle.glorp.chat.Segment
 import io.github.strawwaffle.glorp.chat.SocketState
@@ -189,11 +192,21 @@ private fun ChatBody(
         val filter = remember(me, ignoredNicks, settings.ignoreMentions, settings.hideNsfw, settings.hideNsfl, hiddenPhrases) {
             LineFilter(me, ignoredNicks, settings.ignoreMentions, settings.hideNsfw, settings.hideNsfl, hiddenPhrases)
         }
-        val reversed = remember(lines, filter) {
-            val shownLines = if (filter.isEmpty) lines else lines.filter { !filter.hides(it) }
+        val mention = remember(me) { me?.let(::mentionPattern) }
+        // Highlights by name and by word; mentions of you are the row's own business.
+        val highlightNicks = input.highlighted.nicks
+        val words = input.settings.list("customhighlight")
+        val highlighter = remember(me, highlightNicks, words) { Highlighter(me, self = false, highlightNicks, words) }
+        // Hiding other streams' chat keeps what mentions or highlights you, as the site's dimming does.
+        val look = LocalChatLook.current
+        val hideOthers = look.otherStreams == OtherStreams.Hide && look.playing != null
+        val reversed = remember(lines, filter, hideOthers, look.playing, mention, highlighter) {
+            val shownLines = lines.filter { line ->
+                !(!filter.isEmpty && filter.hides(line)) &&
+                    !(hideOthers && fromOtherStream(line, me, look.playing) && !singledOut(line, mention, highlighter))
+            }
             shownLines.mapIndexed { i, line -> Shown(line, i > 0 && continues(shownLines[i - 1], line)) }.asReversed()
         }
-        val mention = remember(me) { me?.let(::mentionPattern) }
         val embedHandler = rememberUpdatedState(onEmbed)
         val openEmbed: (Embed) -> Unit = remember { { embedHandler.value(it) } }
         // Tapping a name, or holding a message, opens the sheet about that person.
@@ -202,10 +215,6 @@ private fun ChatBody(
         input.tappedNick?.let { nick ->
             UserSheet(nick, input.tappedLine, flairs, account, input, userActions, onDismiss = input::closeUser)
         }
-        // Highlights by name and by word; mentions of you are the row's own business.
-        val highlightNicks = input.highlighted.nicks
-        val words = input.settings.list("customhighlight")
-        val highlighter = remember(me, highlightNicks, words) { Highlighter(me, self = false, highlightNicks, words) }
         if (pinned != null && !pinned.dismissed) PinnedBar(pinned, flairs, emotes, me, openEmbed, tapNick, onShowPin)
         if (poll != null && !poll.dismissed) PollCard(poll, onVote, onClosePoll)
         val list = rememberLazyListState()
@@ -251,7 +260,6 @@ private fun ChatBody(
             }
             // The newest mention of you stays in view once it has scrolled past
             // (the d.gg utilities userscript's sticky mentions), until closed.
-            val look = LocalChatLook.current
             var closedMention by remember { mutableStateOf<String?>(null) }
             val latest = remember(reversed, mention, me, look.highlightSelf) {
                 if (mention == null || !look.highlightSelf) null
@@ -370,6 +378,10 @@ internal fun continues(previous: ChatLine, line: ChatLine): Boolean =
  * not, whether mentions of you stand out, and tagged users' colours (lower
  * case nick to a [tagColor] name).
  */
+/** A line that mentions you or matches your highlights: never dimmed or hidden for its stream. */
+private fun singledOut(line: ChatLine, mention: Regex?, highlighter: Highlighter): Boolean =
+    mention?.containsMatchIn(line.text) == true || highlighter.highlights(line.nick, line.text)
+
 data class ChatLook(
     val showTime: Boolean = false,
     val timeFormat: String = "HH:mm",
@@ -381,6 +393,9 @@ data class ChatLook(
     val hiddenFlairs: Set<String> = emptySet(),
     /** Whether a muted or banned user's messages hide behind `<censored>`. */
     val censorRemoved: Boolean = true,
+    /** The embed playing here (`platform/id`), and what to do with chat from people watching another. */
+    val playing: String? = null,
+    val otherStreams: OtherStreams = OtherStreams.Show,
 )
 
 /** chat-gui's tag colours. */
@@ -454,10 +469,13 @@ internal fun ChatRow(
         else -> Color.Transparent
     }
     val bar = tag?.let(::tagColor)
+    // From someone watching another stream: faded as the site's eye button does.
+    val faded = look.otherStreams == OtherStreams.Dim && !rendered.mentionsMe && !highlighted &&
+        fromOtherStream(line, me, look.playing)
     Text(
         rendered.text,
         inlineContent = rendered.inline,
-        modifier = Modifier.fillMaxWidth().background(background)
+        modifier = Modifier.fillMaxWidth().then(if (faded) Modifier.alpha(0.3f) else Modifier).background(background)
             .then(if (bar == null) Modifier else Modifier.drawBehind { drawRect(bar, size = Size(4.dp.toPx(), size.height)) })
             .then(
                 if (onHold == null) Modifier

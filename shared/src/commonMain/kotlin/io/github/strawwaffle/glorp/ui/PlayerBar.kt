@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.strawwaffle.glorp.chat.OtherStreams
 import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.site.LiveState
 
@@ -56,6 +57,9 @@ fun PlayerBar(
     onTogglePlayer: () -> Unit,
     onFullscreen: () -> Unit,
     onWhispers: () -> Unit,
+    /** What chat from people watching another stream does; set from the list too. */
+    otherStreams: OtherStreams = OtherStreams.Show,
+    onOtherStreams: (OtherStreams) -> Unit = {},
 ) {
     var listOpen by remember { mutableStateOf(false) }
     Row(
@@ -76,7 +80,7 @@ fun PlayerBar(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                if (picked) "Picked from chat · tap for more" else "Tap for what chat is watching",
+                barNote(picked, if (embed == null) OtherStreams.Show else otherStreams),
                 color = Palette.TextDim,
                 fontSize = 11.sp,
                 maxLines = 1,
@@ -86,7 +90,9 @@ fun PlayerBar(
         if (embed != null && playerShown) BarIcon(GlorpIcons.Fullscreen, "Full screen", onFullscreen)
         BarIcon(if (playerShown) GlorpIcons.ExpandLess else GlorpIcons.ExpandMore, if (playerShown) "Hide the player" else "Show the player", onTogglePlayer)
     }
-    if (listOpen) EmbedList(live, picked, onPick = { listOpen = false; onPick(it) }, onDismiss = { listOpen = false })
+    if (listOpen) {
+        EmbedList(live, picked, otherStreams, onOtherStreams, onPick = { listOpen = false; onPick(it) }, onDismiss = { listOpen = false })
+    }
 }
 
 @Composable
@@ -117,13 +123,28 @@ private fun Badged(count: Int, content: @Composable () -> Unit) {
 /** What chat is watching, in a sheet: Destiny's streams, then the embeds by viewers. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EmbedList(live: LiveState, picked: Boolean, onPick: (Embed?) -> Unit, onDismiss: () -> Unit) {
+private fun EmbedList(
+    live: LiveState,
+    picked: Boolean,
+    otherStreams: OtherStreams,
+    onOtherStreams: (OtherStreams) -> Unit,
+    onPick: (Embed?) -> Unit,
+    onDismiss: () -> Unit,
+) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(), containerColor = Palette.Navy) {
         Text(
             "What chat is watching",
             color = Palette.White,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        Choices(
+            "Chat from people watching another stream",
+            null,
+            OtherStreams.entries,
+            otherStreams,
+            label = { it.label },
+            onPick = onOtherStreams,
         )
         val streams = live.liveStreams
         val embeds = live.embeds.filter { !live.isBanned(it.embed) }
@@ -141,5 +162,20 @@ private fun EmbedList(live: LiveState, picked: Boolean, onPick: (Embed?) -> Unit
                 item { Text("Nothing right now.", color = Palette.TextDim, modifier = Modifier.padding(16.dp)) }
             }
         }
+    }
+}
+
+/** The bar's second line, short enough for a phone held upright. */
+private fun barNote(picked: Boolean, otherStreams: OtherStreams): String {
+    val others = when (otherStreams) {
+        OtherStreams.Show -> null
+        OtherStreams.Dim -> "dimmed"
+        OtherStreams.Hide -> "hidden"
+    }
+    return when {
+        picked && others != null -> "Picked from chat · others $others"
+        others != null -> "Other streams' chat $others"
+        picked -> "Picked from chat · tap for more"
+        else -> "Tap for what chat is watching"
     }
 }

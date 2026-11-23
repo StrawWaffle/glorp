@@ -182,6 +182,7 @@ fun GlorpApp(
                 settings.showTime, settings.timestampFormat, settings.hideFlairIcons,
                 settings.highlightSelf, chat.input.tags.colors, settings.taggedVisibility,
                 chat.input.options.hiddenFlairs, settings.censorRemoved,
+                playing = embed?.key, otherStreams = chat.input.options.otherStreams,
             ),
         ) {
         ChatScreen(
@@ -229,6 +230,8 @@ fun GlorpApp(
                     onTogglePlayer = { playerShown = !playerShown },
                     onFullscreen = { fullscreenWanted = true },
                     onWhispers = { communityArg = inbox.sorted.firstOrNull { it.unread > 0 }?.nick; screen = "whispers" },
+                    otherStreams = chat.input.options.otherStreams,
+                    onOtherStreams = chat.input.options::treatOtherStreams,
                 )
             },
             instead = when (screen) {
