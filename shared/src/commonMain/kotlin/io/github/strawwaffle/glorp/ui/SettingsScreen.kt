@@ -177,6 +177,11 @@ fun SettingsScreen(
         }
         item { SwitchRow("Show flair icons", null, !settings.hideFlairIcons) { settings.setBool("hideflairicons", !it) } }
         item {
+            SwitchRow("Animate emotes and names", "When off, emotes and Tier 5 names stand still, like the site's Disable animations", !settings.disableAnimations) {
+                settings.setBool("disableanimations", !it)
+            }
+        }
+        item {
             SwitchRow(
                 "Titles for YouTube and Rumble links",
                 "The video's title and channel in place of the link. Each one is asked of YouTube or Rumble, which sees your IP address, as when you open it",

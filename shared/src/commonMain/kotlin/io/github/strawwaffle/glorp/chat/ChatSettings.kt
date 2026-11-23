@@ -53,6 +53,8 @@ class ChatSettings(private val prefs: ChatPrefs) {
     val hideNsfw: Boolean get() = bool("hidensfw")
     val hideNsfl: Boolean get() = bool("hidensfl")
     val previewAllImages: Boolean get() = bool("previewallimages")
+    /** chat-gui's "disable animations": emotes and rainbow names stand still. */
+    val disableAnimations: Boolean get() = bool("disableanimations")
 
     /**
      * Whether a muted or banned user's earlier messages hide behind

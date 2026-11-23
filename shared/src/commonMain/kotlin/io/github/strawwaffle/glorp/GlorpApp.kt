@@ -276,6 +276,7 @@ fun GlorpApp(
                 chat.input.options.hiddenFlairs, settings.censorRemoved,
                 playing = embed?.key, otherStreams = chat.input.options.otherStreams, textScale = textScale,
                 icons = chat.input.options.nameIcons, theme = colorTheme,
+                animations = !settings.disableAnimations,
             ),
         ) {
         ChatScreen(

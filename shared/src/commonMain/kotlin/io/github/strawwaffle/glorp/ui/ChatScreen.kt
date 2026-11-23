@@ -2,6 +2,9 @@ package io.github.strawwaffle.glorp.ui
 
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -275,13 +278,30 @@ private fun ChatBody(
             snapshotFlow { list.isScrollInProgress to list.canScrollBackward }
                 .collect { (scrolling, awayFromBottom) -> if (scrolling) following = !awayFromBottom }
         }
-        // Pinned to the newest in the same frame the rows arrive, rather than a
-        // frame later; a finger resting at the bottom doesn't come unpinned.
-        LaunchedEffect(reversed) { if (following) list.scrollToItem(0) }
+        // New rows a few a frame rather than a screenful in one (see RowPacer).
+        val pacer = remember { RowPacer() }
+        val fresh = remember(reversed) { pacer.fresh(reversed, following) }
+        var hidden by remember(reversed) { mutableIntStateOf(fresh) }
+        val displayed = if (hidden <= 0) reversed else reversed.subList(hidden.coerceAtMost(reversed.size), reversed.size)
+        SideEffect { pacer.shown(displayed) }
+        LaunchedEffect(reversed) {
+            var perFrame = RowPacer.START
+            var last = withFrameNanos { it }
+            while (hidden > 0) {
+                hidden = (hidden - perFrame).coerceAtLeast(0)
+                val now = withFrameNanos { it }
+                perFrame = pacer.next(perFrame, (now - last) / 1_000_000)
+                last = now
+            }
+        }
+        // Kept at the newest while following; the list itself would keep the
+        // row you were looking at in place and leave new ones below. (Pinning
+        // in the same frame was tried: on a phone its frames ran longer.)
+        LaunchedEffect(displayed) { if (following) list.scrollToItem(0) }
         LaunchedEffect(following) { onReading(!following) }
         DisposableEffect(Unit) { onDispose { onReading(false) } }
         Box(Modifier.fillMaxWidth().weight(1f)) {
-            if (reversed.isEmpty()) {
+            if (displayed.isEmpty()) {
                 Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (state != SocketState.Stopped) {
                         CircularProgressIndicator(color = Palette.Glorp, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
@@ -300,7 +320,7 @@ private fun ChatBody(
                 }
             }
             LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true) {
-                items(reversed, key = { it.line.id }, contentType = { it.line.kind }) { shown ->
+                items(displayed, key = { it.line.id }, contentType = { it.line.kind }) { shown ->
                     val marked = remember(shown.line, highlighter) {
                         shown.line.kind == ChatLine.Kind.User && highlighter.highlights(shown.line.nick, shown.line.text)
                     }
@@ -313,9 +333,9 @@ private fun ChatBody(
             // The newest mention of you stays in view once it has scrolled past
             // (the d.gg utilities userscript's sticky mentions), until closed.
             var closedMention by remember { mutableStateOf<String?>(null) }
-            val latest = remember(reversed, mention, me, look.highlightSelf) {
+            val latest = remember(displayed, mention, me, look.highlightSelf) {
                 if (mention == null || !look.highlightSelf) null
-                else reversed.indexOfFirst { s ->
+                else displayed.indexOfFirst { s ->
                     s.line.kind == ChatLine.Kind.User && !s.line.nick.equals(me, ignoreCase = true) &&
                         facts.mentions(s.line) { mention.containsMatchIn(it.text) }
                 }.takeIf { it >= 0 }
@@ -326,7 +346,7 @@ private fun ChatBody(
                     latest != null && (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: Int.MAX_VALUE) < latest
                 }
             }
-            val stuck = latest?.let { reversed.getOrNull(it)?.line }
+            val stuck = latest?.let { displayed.getOrNull(it)?.line }
             if (input.options.stickyMentions && sticky && stuck != null && stuck.id != closedMention) {
                 val scope = rememberCoroutineScope()
                 StickyMention(
@@ -465,6 +485,8 @@ data class ChatLook(
     val icons: Map<String, String> = emptyMap(),
     /** The colour theme: rows drawn in one are drawn again in another. */
     val theme: ColorTheme = ColorTheme.Glorp,
+    /** Off with chat-gui's "disable animations": emotes don't move and rainbow names stay still. */
+    val animations: Boolean = true,
 )
 
 /** An event card's colour: its bar, its tint and its mark. */
@@ -635,7 +657,7 @@ internal fun ChatRow(
         else text.getPathForRange(rainbowName.first, rainbowName.last + 1).let { it to it.getBounds() }
     }
     val phase = remember { mutableFloatStateOf(0f) }
-    if (rainbowName != null) {
+    if (rainbowName != null && look.animations) {
         LaunchedEffect(Unit) {
             while (true) {
                 val now = withFrameMillis { it }
@@ -751,7 +773,10 @@ private fun render(
                 if (emote != null) {
                     val id = "emote:${emote.prefix}:${emote.hashCode()}"
                     inline.getOrPut(id) {
-                        InlineTextContent(placeholder(emote.width, emote.height)) { TappableEmote(emote.prefix) { EmoteImage(emote, sentAt = line.at) } }
+                        InlineTextContent(placeholder(emote.width, emote.height)) {
+                            // Each hit plays it again, as chat-gui re-adds the emote.
+                            TappableEmote(emote.prefix) { EmoteImage(emote, sentAt = line.lastHitAt.takeIf { it > 0 } ?: line.at) }
+                        }
                     }
                     appendInlineContent(id, emote.prefix)
                 } else {
@@ -838,7 +863,8 @@ private fun render(
         }
 
         val style = when {
-            line.action -> SpanStyle(fontStyle = FontStyle.Italic, color = nameColor)
+            // Italic only: chat-gui doesn't colour `/me` messages.
+            line.action -> SpanStyle(fontStyle = FontStyle.Italic)
             line.green -> SpanStyle(color = Palette.Greentext)
             else -> SpanStyle()
         }
@@ -847,7 +873,7 @@ private fun render(
         val placed = emotes.inLine(
             LineModel.message(
                 line.features, flairs.nameFlair(line.features), continued, line.green && !line.action,
-                elementsOf(parts),
+                elementsOf(parts), nick = line.nick,
             ),
         )
         var emoteIndex = 0
@@ -923,5 +949,54 @@ private class LineFacts {
         val kept = lines.mapTo(HashSet()) { it.id }
         hidden.keys.retainAll(kept)
         mentions.keys.retainAll(kept)
+    }
+}
+
+/**
+ * Lets a screenful of new rows in a few a frame instead of all at once: in
+ * busy chat an update brings a whole screen of new lines, and composing them
+ * in one frame took 60–100 ms on a mid-range phone. Only for bursts: a
+ * smaller update comes in one go, as it always did. Rows come oldest first,
+ * so chat still flows from the bottom; nothing is left out, only held back a
+ * frame or two. How many a frame follows how long frames are taking.
+ */
+private class RowPacer {
+    private var newestShown: String? = null
+
+    /**
+     * How many of [target]'s newest rows weren't on screen yet. None while
+     * reading back (they're out of view), and a backlog that has grown past
+     * [MOST_BEHIND] is let in down to one screen, so chat never falls behind.
+     */
+    fun fresh(target: List<Shown>, following: Boolean): Int {
+        val shown = newestShown ?: return 0
+        if (!following) return 0
+        val i = target.indexOfFirst { it.line.id == shown }
+        return when {
+            // Up to half a screen comes at once, as before: pacing that would
+            // only move chat more often, which costs more than it saves.
+            i <= ONCE -> 0
+            i > MOST_BEHIND -> SCREEN
+            else -> i
+        }
+    }
+
+    fun shown(displayed: List<Shown>) {
+        newestShown = displayed.firstOrNull()?.line?.id
+    }
+
+    /** Fewer rows a frame when frames run long, more when there's room. */
+    fun next(perFrame: Int, frameMs: Long): Int = when {
+        frameMs > 20 -> (perFrame / 2).coerceAtLeast(1)
+        frameMs < 12 -> (perFrame + 1).coerceAtMost(MOST)
+        else -> perFrame
+    }
+
+    companion object {
+        const val START = 4
+        private const val MOST = 8
+        private const val ONCE = 12
+        private const val SCREEN = 30
+        private const val MOST_BEHIND = 60
     }
 }

@@ -67,8 +67,10 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
     // drawing, so a new frame redraws this emote without recomposing or
     // re-laying out the line around it.
     val elapsed = remember(emote, sentAt) { mutableLongStateOf(SETTLED) }
+    // chat-gui's "disable animations" (`animation: none`): the first frame, and only the still transform.
+    val still = !LocalChatLook.current.animations
 
-    if (sentAt > 0) {
+    if (sentAt > 0 && !still) {
         LaunchedEffect(emote, sentAt) {
             val ends = emote.settlesAfterMs
             val elapsedAtStart = Clock.System.now().toEpochMilliseconds() - sentAt
@@ -94,7 +96,7 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
 
     val moving = emote.motions.isNotEmpty() || emote.rest != Pose.Rest
     val layer = if (!moving) Modifier else Modifier.graphicsLayer {
-        val pose = pose(emote, elapsed.longValue)
+        val pose = if (still) emote.rest else pose(emote, elapsed.longValue)
         translationX = pose.tx.dp.toPx()
         translationY = pose.ty.dp.toPx()
         rotationZ = pose.rotate
@@ -104,7 +106,7 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
         transformOrigin = TransformOrigin(emote.originX, emote.originY)
     }
     Canvas(modifier.then(layer).size(emote.width.dp, emote.height.dp).clipToBounds()) {
-        val at = elapsed.longValue
+        val at = if (still) 0L else elapsed.longValue
         val frame = when {
             sprite == null -> 0
             at < sprite.totalMs -> ((at % sprite.durationMs) * sprite.frames / sprite.durationMs).toInt()

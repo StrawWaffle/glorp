@@ -15,11 +15,20 @@ class ChatTest {
 
     @Test
     fun readsAMessage() {
-        val event = parseFrame("""MSG {"nick":"glorp","features":["subscriber"],"timestamp":42,"data":">be me"}""", now)
+        val event = parseFrame("""MSG {"nick":"glorp","features":["subscriber"],"subscription":{"tier":1},"timestamp":42,"data":">be me"}""", now)
         val line = assertIs<ChatEvent.Message>(event).line
         assertEquals("glorp", line.nick)
         assertEquals(42L, line.at)
         assertTrue(line.green)
+    }
+
+    @Test
+    fun greentextIsForSubscribersAndThePrivileged() {
+        // As chat-gui's GreenTextFormatter: anyone else's `>` is plain text.
+        val plain = assertIs<ChatEvent.Message>(parseFrame("""MSG {"nick":"a","data":">be me"}""", now)).line
+        assertEquals(false, plain.green)
+        val mod = assertIs<ChatEvent.Message>(parseFrame("""MSG {"nick":"a","roles":["MODERATOR"],"data":">be me"}""", now)).line
+        assertTrue(mod.green)
     }
 
     @Test

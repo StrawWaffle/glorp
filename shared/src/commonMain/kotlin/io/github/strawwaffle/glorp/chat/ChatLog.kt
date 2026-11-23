@@ -53,12 +53,12 @@ class ChatLog(capacity: Int = DEFAULT_CAPACITY) {
         val last = lines.lastOrNull()
         if (emote != null && last != null) {
             if (last.kind == ChatLine.Kind.Combo && last.text == emote) {
-                lines[lines.lastIndex] = last.copy(comboCount = last.comboCount + 1)
+                lines[lines.lastIndex] = last.copy(comboCount = last.comboCount + 1, lastHitAt = line.at)
                 comboMembers.getOrPut(last.id) { ArrayList() }.add(line.id)
                 return true
             }
             if (last.kind == ChatLine.Kind.User && soleEmote(last) == emote) {
-                val combo = ChatLine.combo(emote, last, 2)
+                val combo = ChatLine.combo(emote, last, 2).copy(lastHitAt = line.at)
                 lines[lines.lastIndex] = combo
                 ids.add(combo.id)
                 comboMembers[combo.id] = mutableListOf(last.id, line.id)

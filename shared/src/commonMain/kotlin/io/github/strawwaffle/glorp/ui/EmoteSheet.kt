@@ -43,7 +43,7 @@ fun EmoteSheet(emote: Emote, info: EmoteInfo?, account: Account?, input: ChatInp
     // Played from the start while the card is open.
     val openedAt = remember(emote.prefix) { Clock.System.now().toEpochMilliseconds() }
     val favorite = emote.prefix in input.favoriteEmotes
-    val usable = account != null && mayUse(emote, account.features, account.subTier)
+    val usable = account != null && mayUse(emote, account.features, account.subTier, account.roles)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),

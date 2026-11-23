@@ -267,7 +267,7 @@ class ChatViewModel(
         viewModelScope.launch {
             combine(_emotes, _account) { e, a -> e to a }.collect { (emotes, account) ->
                 val features = account?.features.orEmpty()
-                input.completer.setEmotes(emotes.all.filter { mayUse(it, features, account?.subTier ?: 0) }.map { it.prefix })
+                input.completer.setEmotes(emotes.all.filter { mayUse(it, features, account?.subTier ?: 0, account?.roles.orEmpty()) }.map { it.prefix })
                 input.completer.setCommands(commandWords(account?.modPowers == true))
             }
         }
@@ -844,7 +844,7 @@ class ChatViewModel(
                     val last = io.github.strawwaffle.glorp.community.localDateTime(found.lines.last().at / 1000)
                     val from = found.source?.let { " (from $it)" }.orEmpty()
                     notice(if (stalk) "Stalked $nick last seen $last$from." else "Mentions for $nick last seen $last$from.")
-                    found.lines.forEach { events.trySend(ChatLine.user(it.nick, emptyList(), it.text, it.at)) }
+                    found.lines.forEach { events.trySend(ChatLine.user(it.nick, emptyList(), it.text, it.at, subTier = Int.MAX_VALUE)) }
                 }
             }
         }

@@ -184,18 +184,32 @@ private fun declarations(body: String): Map<String, String> {
 private val function = Regex("""([a-zA-Z0-9]+)\(([^()]*)\)""")
 
 /** A `transform` value as one pose; null when it uses something not drawn here (a variable, a skew). */
-internal fun readTransform(value: String): Pose? {
+internal fun readTransform(written: String): Pose? {
+    // Two numbers multiplied or divided, as in mhm's `scale(calc(28/36))`, are worked out; anything else can't be.
+    val value = simpleCalc.replace(written) { m ->
+        val a = m.groupValues[1].toDouble(); val b = m.groupValues[3].toDouble()
+        (if (m.groupValues[2] == "*") a * b else if (b != 0.0) a / b else 1.0).toString()
+    }
     if ("var(" in value || "calc(" in value) return null
     if (value.trim() == "none") return Pose.Rest
     var pose = Pose.Rest
     for (f in function.findAll(value)) {
         val args = f.groupValues[2].split(',', ' ').map { it.trim() }.filter { it.isNotEmpty() }
         fun px(i: Int) = args.getOrNull(i)?.let(::length) ?: 0f
+        // A translation after a scale or a turn moves in the scaled, turned
+        // directions, as CSS applies the functions in order: `scale(-1,1)
+        // translate(-2px,3px)` moves 2 px right.
+        fun moved(x: Float, y: Float): Pose {
+            val sx = x * pose.sx; val sy = y * pose.sy
+            val r = pose.rotate * (kotlin.math.PI.toFloat() / 180f)
+            val c = kotlin.math.cos(r); val s = kotlin.math.sin(r)
+            return pose.copy(tx = pose.tx + sx * c - sy * s, ty = pose.ty + sx * s + sy * c)
+        }
         pose = when (f.groupValues[1].lowercase()) {
-            "translate" -> pose.copy(tx = pose.tx + px(0), ty = pose.ty + px(1))
-            "translate3d" -> pose.copy(tx = pose.tx + px(0), ty = pose.ty + px(1))
-            "translatex" -> pose.copy(tx = pose.tx + px(0))
-            "translatey" -> pose.copy(ty = pose.ty + px(0))
+            "translate" -> moved(px(0), px(1))
+            "translate3d" -> moved(px(0), px(1))
+            "translatex" -> moved(px(0), 0f)
+            "translatey" -> moved(0f, px(0))
             "rotate", "rotatez" -> pose.copy(rotate = pose.rotate + (args.firstOrNull()?.let(::angle) ?: 0f))
             "scale" -> {
                 val x = args.getOrNull(0)?.let(::number) ?: 1f
@@ -224,6 +238,8 @@ private fun readBrightness(value: String): Float? {
     val arg = Regex("""brightness\(([^)]*)\)""").find(value)?.groupValues?.get(1)?.trim() ?: return null
     return if (arg.endsWith("%")) arg.removeSuffix("%").toFloatOrNull()?.div(100f) else arg.toFloatOrNull()
 }
+
+private val simpleCalc = Regex("""calc\(\s*(-?\d*\.?\d+)\s*([*/])\s*(-?\d*\.?\d+)\s*\)""")
 
 private fun number(text: String): Float? = text.trim().removeSuffix("%").toFloatOrNull()?.let { if (text.trim().endsWith("%")) it / 100f else it }
 
@@ -297,8 +313,11 @@ internal fun motionsOf(parts: List<String>, keyframes: Map<String, List<KeyFrame
     Motion(frames, duration, times.getOrNull(1) ?: 0, iterations.coerceAtLeast(1), easing, alternate, reverse, hold)
 }
 
-/** `transform-origin` as fractions of the emote's width and height; the centre by default. */
-internal fun readOrigin(value: String?): Pair<Float, Float> {
+/**
+ * `transform-origin` as fractions of the emote's width and height; the centre
+ * by default. Lengths (BLADE's `-36px 32px`, or a bare `0`) need its size in px.
+ */
+internal fun readOrigin(value: String?, width: Double = 0.0, height: Double = 0.0): Pair<Float, Float> {
     if (value == null) return 0.5f to 0.5f
     val words = value.trim().split(Regex("""\s+"""))
     fun of(word: String, horizontal: Boolean): Float? = when (word) {
@@ -307,7 +326,13 @@ internal fun readOrigin(value: String?): Pair<Float, Float> {
         "top" -> if (!horizontal) 0f else null
         "bottom" -> if (!horizontal) 1f else null
         "center" -> 0.5f
-        else -> if (word.endsWith("%")) word.removeSuffix("%").toFloatOrNull()?.div(100f) else null
+        "0" -> 0f
+        else -> when {
+            word.endsWith("%") -> word.removeSuffix("%").toFloatOrNull()?.div(100f)
+            word.endsWith("px") -> word.removeSuffix("px").toDoubleOrNull()
+                ?.let { px -> (if (horizontal) width else height).takeIf { it > 0 }?.let { (px / it).toFloat() } }
+            else -> null
+        }
     }
     var x = 0.5f
     var y = 0.5f

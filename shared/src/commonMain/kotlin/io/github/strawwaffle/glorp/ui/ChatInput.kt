@@ -375,9 +375,9 @@ private sealed interface PickerItem {
 @Composable
 private fun EmotePicker(emotes: Emotes, account: Account, state: ChatInputState, onPick: (Emote) -> Unit) {
     val items = remember(emotes, account, state.favoriteEmotes) {
-        val usable = emotes.all.filter { mayUse(it, account.features, account.subTier) }
+        val usable = emotes.all.filter { mayUse(it, account.features, account.subTier, account.roles) }
         val recent = state.completer.recentEmotes(16).mapNotNull { emotes[it] }
-        val favorites = state.favoriteEmotes.mapNotNull { emotes[it] }.filter { mayUse(it, account.features, account.subTier) }
+        val favorites = state.favoriteEmotes.mapNotNull { emotes[it] }.filter { mayUse(it, account.features, account.subTier, account.roles) }
         buildList {
             if (favorites.isNotEmpty()) {
                 add(PickerItem.Header("Favourites"))

@@ -261,7 +261,7 @@ private fun build(
         val n = if (v == "infinite") Int.MAX_VALUE else v.toDoubleOrNull()?.toInt()?.coerceAtLeast(1)
         if (n != null) { sprite = sprite?.copy(iterations = n); motions = motions.map { it.copy(iterations = n) } }
     }
-    val (originX, originY) = readOrigin(decls.value("transform-origin"))
+    val (originX, originY) = readOrigin(decls.value("transform-origin"), width / shrink, height / shrink)
     // The still transform, and the separate `translate`, `rotate` and `scale` properties.
     var rest = decls.value("transform")?.let(::readTransform) ?: Pose.Rest
     decls.value("translate")?.let { readTransform("translate(${it.trim().replace(Regex("""\s+"""), ",")})") }?.let { rest = rest.copy(tx = rest.tx + it.tx, ty = rest.ty + it.ty) }
@@ -270,7 +270,10 @@ private fun build(
     return Emote(
         prefix, url, width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1), minimumSubTier, sprite,
         sheetWidth = sheetWidth.toInt().coerceAtLeast(1), sheetHeight = sheetHeight.toInt().coerceAtLeast(1), offsetX = offset.toInt(),
-        motions = motions, originX = originX, originY = originY, rest = rest,
+        // A motion whose keyframes this can't read moves nothing; kept, an endless
+        // one would redraw the emote every frame for nothing (EatFresh's x5 combo).
+        motions = motions.filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.brightness != null } },
+        originX = originX, originY = originY, rest = rest,
     )
 }
 
@@ -302,12 +305,13 @@ private fun Decls.value(name: String): String? {
 
 private fun Decls.px(name: String): Double? = value(name)?.let { pxRegex.find(it)?.groupValues?.get(1)?.toDouble() }
 
-/** `background-size: Wpx Hpx` (or one length for both), or null for the picture's own size. */
+/** `background-size: Wpx Hpx` (one length: the height follows the picture), or null for the picture's own size. */
 private fun Decls.backgroundSize(): Pair<Double, Double?>? {
     val parts = value("background-size")?.split(Regex("""\s+""")) ?: return null
     val w = parts.getOrNull(0)?.let { pxRegex.find(it)?.groupValues?.get(1)?.toDouble() } ?: return null
     val h = parts.getOrNull(1)?.let { pxRegex.find(it)?.groupValues?.get(1)?.toDouble() }
-    return w to (h ?: w.takeIf { parts.size == 1 })
+    // One length is the width; the height is then `auto`, from the picture's shape.
+    return w to h
 }
 
 /** How far left `background-position` shifts the picture, in px (0 for keywords like `center`). */
@@ -326,7 +330,7 @@ private fun baseRules(css: String): Map<String, Decls> {
     val out = HashMap<String, HashMap<String, MutableList<String>>>()
     // The `}` before a rule is looked at, not taken, or a rule straight after
     // another would be missed.
-    for (match in Regex("""(?:^|(?<=\}))\s*(?:\.text\s*>\s*)?\.emote\.([A-Za-z0-9_]+)\s*\{([^{}]*)\}""").findAll(clean)) {
+    for (match in Regex("""(?:^|(?<=\}))\s*(?:\.text\s*>\s*)?\.emote\.([A-Za-z0-9_-]+)\s*\{([^{}]*)\}""").findAll(clean)) {
         val decls = out.getOrPut(match.groupValues[1]) { HashMap() }
         for (decl in match.groupValues[2].split(';')) {
             val colon = decl.indexOf(':')

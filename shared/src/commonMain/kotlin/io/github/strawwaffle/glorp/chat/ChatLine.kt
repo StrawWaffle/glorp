@@ -23,8 +23,12 @@ data class ChatLine(
     val green: Boolean,
     /** The sender's subscription tier, which decides the emotes they may use. */
     val subTier: Int = 0,
+    /** The sender's roles (ADMIN, MODERATOR, PROTECTED…), which chat-gui's privileges come from. */
+    val roles: List<String> = emptyList(),
     /** For [Kind.Combo]: how many messages it stands for. */
     val comboCount: Int = 0,
+    /** For [Kind.Combo]: when the latest of them came; its emote plays again from there, as on the site. */
+    val lastHitAt: Long = 0,
     /** For [Kind.Whisper]: the site's id for it, to mark it read. */
     val messageId: String? = null,
     /** A moderator muted or banned the sender after this was sent; `showremoved` says how it shows. */
@@ -57,7 +61,10 @@ data class ChatLine(
     }
 
     companion object {
-        fun user(nick: String, features: List<String>, raw: String, at: Long, subTier: Int = 0, watching: String? = null): ChatLine {
+        fun user(
+            nick: String, features: List<String>, raw: String, at: Long, subTier: Int = 0, watching: String? = null,
+            roles: List<String> = emptyList(),
+        ): ChatLine {
             val action = raw.startsWith("/me ")
             val text = if (action) raw.removePrefix("/me ") else raw
             return ChatLine(
@@ -68,8 +75,10 @@ data class ChatLine(
                 text = text,
                 at = at,
                 action = action,
-                green = text.startsWith(">"),
+                // As chat-gui: greentext only for subscribers and the privileged.
+                green = text.startsWith(">") && (subTier > 0 || isPrivileged(roles, features)),
                 subTier = subTier,
+                roles = roles,
                 watching = watching,
             )
         }
@@ -111,6 +120,7 @@ data class ChatLine(
             action = false,
             green = false,
             comboCount = count,
+            lastHitAt = first.at,
         )
 
         /** A moderation notice from the server ("x muted by y."), the same line again when the backlog replays it. */

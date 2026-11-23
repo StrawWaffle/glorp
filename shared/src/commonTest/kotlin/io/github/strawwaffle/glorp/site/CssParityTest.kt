@@ -1,0 +1,62 @@
+package io.github.strawwaffle.glorp.site
+
+import kotlin.math.abs
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+
+/** Rules from the site's emotes.css that Glorp once read wrongly. */
+class CssParityTest {
+    private val css = """
+        .emote.buddy-nutcheck { background-image: url("n.png"); width: 48px; height: 32px; background-size: 480px 32px;
+          animation: nut 1s steps(10) 1; }
+        @keyframes nut { from { background-position: 0 0; } to { background-position: -480px 0; } }
+        .emote.BLADE { background-image: url("b.png"); width: 72px; height: 32px; transform-origin: -36px 32px; }
+        .emote.WIDE { background-image: url("w.png"); width: 64px; height: 32px; background-size: 64px; }
+    """.trimIndent()
+
+    private val json = """[{"prefix":"buddy-nutcheck","image":[{"url":"https://cdn.example/n.png","width":528,"height":32}]},""" +
+        """{"prefix":"BLADE","image":[{"url":"https://cdn.example/b.png","width":72,"height":32}]},""" +
+        """{"prefix":"WIDE","image":[{"url":"https://cdn.example/w.png","width":128,"height":32}]}]"""
+
+    private val emotes = Emotes.parse(json, css)
+
+    private fun near(actual: Float, expected: Float) = assertTrue(abs(actual - expected) < 0.01f, "$actual, expected $expected")
+
+    @Test
+    fun readsRulesForNamesWithAHyphen() {
+        val nut = assertNotNull(emotes["buddy-nutcheck"])
+        assertEquals(48, nut.width)
+        assertEquals(10, assertNotNull(nut.sprite).frames)
+    }
+
+    @Test
+    fun readsAPivotGivenInPixels() {
+        val blade = assertNotNull(emotes["BLADE"])
+        near(blade.originX, -0.5f)
+        near(blade.originY, 1f)
+        assertEquals(0f to 0.75f, readOrigin("0 75%"))
+    }
+
+    @Test
+    fun oneBackgroundSizeKeepsThePicturesShape() {
+        // `background-size: 64px` is 64 wide and `auto` high: half of a 128×32 picture.
+        assertEquals(16, assertNotNull(emotes["WIDE"]).sheetHeight)
+    }
+
+    @Test
+    fun movesInTheDirectionsAnEarlierScaleOrTurnLeaves() {
+        // Mirrored, a step left is a step right on screen.
+        val mirrored = assertNotNull(readTransform("scale(-1, 1) translate(-2px, 3px)"))
+        near(mirrored.tx, 2f); near(mirrored.ty, 3f)
+        // Written translate-first, it moves as written.
+        val plain = assertNotNull(readTransform("translate(102px) scale(-1, 1)"))
+        near(plain.tx, 102f)
+    }
+
+    @Test
+    fun worksOutASimpleCalc() {
+        near(assertNotNull(readTransform("scale(calc(28/36))")).sx, 28f / 36f)
+    }
+}

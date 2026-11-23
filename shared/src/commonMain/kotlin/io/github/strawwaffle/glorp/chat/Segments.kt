@@ -14,12 +14,19 @@ sealed interface Segment {
     data class EmbedLink(val text: String, val embed: Embed) : Segment
 }
 
-// Chat lets these use every emote whatever their subscription.
-private val privileged = setOf("admin", "moderator", "protected", "bot")
+/**
+ * chat-gui's `isPrivileged`: a moderator, admin or protected user, who may use
+ * every emote and greentext. Privileges come from roles; the flairs of the same
+ * names are read too, for anything that arrives without roles.
+ */
+fun isPrivileged(roles: List<String>, features: List<String>): Boolean =
+    roles.any { it.uppercase() in privilegedRoles } || features.any { it.uppercase() in privilegedRoles }
+
+private val privilegedRoles = setOf("ADMIN", "MODERATOR", "PROTECTED")
 
 /** Whether someone with [features] and [subTier] may send [emote], as chat decides. */
-fun mayUse(emote: Emote, features: List<String>, subTier: Int): Boolean =
-    emote.minimumSubTier <= subTier || features.any { it in privileged }
+fun mayUse(emote: Emote, features: List<String>, subTier: Int, roles: List<String> = emptyList()): Boolean =
+    emote.minimumSubTier <= subTier || isPrivileged(roles, features)
 
 /** Moderator powers, as chat-gui's `hasModPowers`. */
 fun hasModPowers(features: List<String>): Boolean = features.any { it.equals("admin", true) || it.equals("moderator", true) }
@@ -31,7 +38,7 @@ fun hasModPowers(features: List<String>): Boolean = features.any { it.equals("ad
 fun segments(line: ChatLine, emotes: Emotes): List<Segment> {
     val out = ArrayList<Segment>()
     val text = StringBuilder()
-    val mayUseAll = line.features.any { it in privileged }
+    val mayUseAll = isPrivileged(line.roles, line.features)
     fun flush() {
         if (text.isNotEmpty()) {
             out += Segment.Text(text.toString())
@@ -78,7 +85,7 @@ fun soleEmote(line: ChatLine, emotes: Emotes): Emote? {
     val text = line.text
     val word = (if (text.startsWith("/")) text.replace(leadingCommand, "") else text).trim()
     val emote = emotes[word] ?: return null
-    val mayUseAll = line.features.any { it in privileged }
+    val mayUseAll = isPrivileged(line.roles, line.features)
     return if (mayUseAll || emote.minimumSubTier <= line.subTier) emote else null
 }
 

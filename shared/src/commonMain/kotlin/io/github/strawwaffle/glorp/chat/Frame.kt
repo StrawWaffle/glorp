@@ -229,7 +229,7 @@ fun parseFrame(raw: String, now: () -> Long): ChatEvent? {
                 val pin = chatJson.decodeFromString<WireUser>(payload)
                 val text = pin.data.orEmpty()
                 val line = if (text.isBlank() || pin.nick.isEmpty()) null
-                else ChatLine.user(pin.nick, pin.features, text, pin.timestamp ?: now(), pin.subscription?.tier ?: 0)
+                else ChatLine.user(pin.nick, pin.features, text, pin.timestamp ?: now(), pin.subscription?.tier ?: 0, roles = pin.roles)
                 ChatEvent.Pin(pin.uuid ?: line?.id.orEmpty(), line)
             }
             else -> null
@@ -245,7 +245,7 @@ private fun parseMessage(payload: String, now: () -> Long): ChatLine? {
     val user = chatJson.decodeFromString<WireUser>(payload)
     val text = user.data ?: return null
     if (user.nick.isEmpty()) return null
-    return ChatLine.user(user.nick, user.features, text, user.timestamp ?: now(), user.subscription?.tier ?: 0, user.watching?.key)
+    return ChatLine.user(user.nick, user.features, text, user.timestamp ?: now(), user.subscription?.tier ?: 0, user.watching?.key, user.roles)
 }
 
 /** chat-gui's wording for the server's error codes. */

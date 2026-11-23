@@ -35,6 +35,9 @@ internal class EmoteContext private constructor(
         private val drawn = setOf(
             "animation", "width", "height", "background-position", "background-size", "background-image",
             "transform", "transform-origin", "filter", "opacity",
+            // Longhands a neighbour rule changes timing with (`.emote.SOY + .emote.Clap`).
+            "animation-duration", "animation-delay", "animation-iteration-count", "animation-direction",
+            "translate", "rotate", "scale",
         )
 
         fun parse(css: String): EmoteContext {
@@ -92,12 +95,16 @@ internal class El(val tag: String, val classes: Set<String>, val attrs: Map<Stri
 internal class LineModel(val root: El, val emotes: List<El>) {
     companion object {
         /** [parts] in order: an emote's name, or null for a link (text between them isn't an element). */
-        fun message(features: List<String>, nameFlair: String?, continued: Boolean, green: Boolean, parts: List<String?>): LineModel {
+        fun message(
+            features: List<String>, nameFlair: String?, continued: Boolean, green: Boolean, parts: List<String?>,
+            /** The sender, as chat-gui's `data-username`: lower case. Some emotes look different for one person. */
+            nick: String? = null,
+        ): LineModel {
             val classes = buildSet {
                 add("msg-chat"); add("msg-user"); addAll(features)
                 if (continued) add("msg-continue")
             }
-            val root = El("div", classes)
+            val root = El("div", classes, nick?.let { mapOf("data-username" to it.lowercase()) }.orEmpty())
             if (features.isNotEmpty()) {
                 val badges = root.add(El("span", setOf("features")))
                 for (f in features) badges.add(El("i", setOf("flair", f)))
