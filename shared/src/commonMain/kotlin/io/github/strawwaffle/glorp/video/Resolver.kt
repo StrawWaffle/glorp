@@ -77,6 +77,9 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
             "youtube" -> youtube(embed.id, embed.startSeconds)
             "angelthump" -> angelThump(client, embed.id, io.github.strawwaffle.glorp.chat.ChatSocket.USER_AGENT)
             else -> Resolution.Web
+        }.let { found ->
+            // Every stream carries its embed, for the media notification's title (and a recording's place).
+            if (found is Resolution.Native && found.playable.key == null) Resolution.Native(found.playable.copy(key = embed.key)) else found
         }
     } catch (e: kotlinx.coroutines.CancellationException) {
         throw e

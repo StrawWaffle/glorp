@@ -119,6 +119,8 @@ fun ChatScreen(
     /** The input's draft, suggestions and lists, kept by the view model. */
     input: ChatInputState,
     onEmbed: (Embed) -> Unit,
+    /** Opens signing in, from the bar shown in the input's place while signed out. */
+    onSignIn: () -> Unit = {},
     /** What the sheet for a tapped name can do. */
     userActions: UserActions,
     /** The player, shown above chat; null when hidden. */
@@ -149,7 +151,7 @@ fun ChatScreen(
         if (instead != null) instead()
         else ChatBody(
             lines, flairs, emotes, state, account, onSend, input, onEmbed, userActions,
-            poll, onVote, onClosePoll, pinned, onShowPin,
+            poll, onVote, onClosePoll, pinned, onShowPin, onSignIn,
         )
     }
     val bodySlot = remember { movableContentOf { currentBody() } }
@@ -192,6 +194,7 @@ private fun ChatBody(
     onClosePoll: () -> Unit,
     pinned: ChatViewModel.Pinned?,
     onShowPin: (Boolean) -> Unit,
+    onSignIn: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         // No bar: the connection shows only when something is wrong.
@@ -319,6 +322,16 @@ private fun ChatBody(
         }
         if (account != null) {
             ChatInput(input, emotes, account, connected = state == SocketState.Connected, onSend)
+        } else {
+            // Signed out, where the input would be: how to join in.
+            Row(
+                Modifier.fillMaxWidth().background(Palette.Navy).clickable(onClick = onSignIn)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Sign in to chat", color = Palette.Blue, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                Text("You're reading as a guest", color = Palette.TextDim, fontSize = 13.sp)
+            }
         }
     }
 }

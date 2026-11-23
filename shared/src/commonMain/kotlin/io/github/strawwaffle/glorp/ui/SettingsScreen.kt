@@ -515,7 +515,7 @@ private fun NotificationSettings(
             onChanged()
         }
     }
-    val signedOutNote = if (cookies) null else "Needs signing in with the site's cookies, as the site's own notifications do"
+    val signedOutNote = if (cookies) null else "Needs the computer sign-in, because the site only shows whispers to its own login"
     Column {
         Text(
             "Glorp looks at the site every so often in the background, without keeping chat connected.",

@@ -152,7 +152,12 @@ object Playback {
                 }
             }
         })
+        // What the media notification and the lock screen show.
+        val title = playable.key?.split('/')?.takeIf { it.size == 2 }?.let { (platform, id) ->
+            "$id on ${io.github.strawwaffle.glorp.ui.PlatformIcons.name(platform)}"
+        } ?: "Glorp"
         val item = MediaItem.Builder().setUri(playable.hlsUrl)
+            .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder().setTitle(title).setArtist("Glorp").build())
             .setMimeType(
                 when (playable.format) {
                     Playable.Format.Hls -> MimeTypes.APPLICATION_M3U8

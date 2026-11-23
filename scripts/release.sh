@@ -30,7 +30,7 @@ name="glorp-$version.apk"
 cp "$apk" "$out/$name"
 # The map from minified names back to the code, for reading crash reports
 # (scripts/retrace.sh).
-cp androidApp/build/outputs/mapping/release/mapping.txt "$out/glorp-$version-mapping.txt"
+cp androidApp/build/outputs/mapping/release/mapping.txt "$out/mapping-glorp-$version.txt"
 
 # Signed with the release key, or phones would refuse it as an update.
 sdk=${ANDROID_HOME:-"$LOCALAPPDATA/Android/Sdk"}
@@ -58,7 +58,7 @@ GCM_INTERACTIVE=never git push -q origin main "$tag"
 # versions" switch offers it; Obtainium and everyone else stay on releases.
 body=$(python -c 'import json,sys; v=sys.argv[2]; print(json.dumps({"tag_name":sys.argv[1],"name":"Glorp "+v+(" (test)" if "-test." in v else ""),"prerelease":"-test." in v,"body":open(sys.argv[3],encoding="utf-8").read()}))' "$tag" "$version" "$notes")
 id=$(curl -sf "${auth[@]}" -X POST "https://api.github.com/repos/$repo/releases" -d "$body" | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-for file in "$name" "$name.sha256" "glorp-$version-mapping.txt"; do
+for file in "$name" "$name.sha256" "mapping-glorp-$version.txt"; do
   type=$([ "${file##*.}" = apk ] && echo application/vnd.android.package-archive || echo text/plain)
   curl -sf "${auth[@]}" -H "Content-Type: $type" --data-binary "@$out/$file" \
     "https://uploads.github.com/repos/$repo/releases/$id/assets?name=$file" >/dev/null

@@ -233,6 +233,7 @@ fun GlorpApp(
             onSend = chat::send,
             input = chat.input,
             onEmbed = { chat.watch(it); playerShown = true },
+            onSignIn = { screen = "signin" },
             userActions = remember(chat) {
                 UserActions(
                     lookUp = chat::lookUp,
