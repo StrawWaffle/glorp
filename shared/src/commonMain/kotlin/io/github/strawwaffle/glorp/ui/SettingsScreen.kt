@@ -2,6 +2,8 @@ package io.github.strawwaffle.glorp.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -270,7 +272,11 @@ fun SettingsScreen(
             items(flairs.allBadges, key = { "flair:" + it.name }) { badge ->
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                        .clickable { options.setFlairHidden(badge.name, badge.name !in options.hiddenFlairs) }
+                        .toggleable(
+                            value = badge.name in options.hiddenFlairs,
+                            role = androidx.compose.ui.semantics.Role.Checkbox,
+                            onValueChange = { options.setFlairHidden(badge.name, it) },
+                        )
                         .padding(start = 32.dp, end = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -398,7 +404,10 @@ internal fun SettingsHeading(text: String) {
 @Composable
 internal fun SwitchRow(title: String, detail: String?, on: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { onChange(!on) }.padding(horizontal = 16.dp, vertical = 8.dp),
+        // A switch to TalkBack, saying whether it's on.
+        Modifier.fillMaxWidth().heightIn(min = 56.dp)
+            .toggleable(value = on, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onChange)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
@@ -431,7 +440,7 @@ internal fun <T> Choices(title: String, detail: String?, values: List<T>, curren
                     fontWeight = if (picked) FontWeight.SemiBold else FontWeight.Normal,
                     modifier = Modifier.heightIn(min = 40.dp)
                         .background(if (picked) Palette.NavyLight else Palette.Navy, RoundedCornerShape(8.dp))
-                        .clickable { onPick(value) }
+                        .selectable(selected = picked, role = androidx.compose.ui.semantics.Role.RadioButton) { onPick(value) }
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                 )
             }

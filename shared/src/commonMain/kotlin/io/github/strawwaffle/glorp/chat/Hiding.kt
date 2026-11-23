@@ -40,7 +40,7 @@ class LocalOptions(private val prefs: ChatPrefs) {
     /** Sets [nick]'s icon, or takes it away when [icon] is blank. */
     fun setIcon(nick: String, icon: String?) {
         val key = nick.lowercase()
-        val clean = icon?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_ICON)
+        val clean = icon?.trim()?.takeIf { it.isNotEmpty() }?.let(::cutIcon)
         nameIcons = if (clean == null) nameIcons - key else nameIcons + (key to clean)
         prefs.putList(NAME_ICONS, nameIcons.map { (n, i) -> "$n $i" }.sorted())
     }
@@ -85,6 +85,12 @@ class LocalOptions(private val prefs: ChatPrefs) {
 
         /** Room for one emoji made of several code points (a family, a flag with a modifier). */
         const val MAX_ICON = 12
+
+        /** At most [MAX_ICON] characters, without cutting an emoji's two halves apart. */
+        fun cutIcon(icon: String): String {
+            val cut = icon.take(MAX_ICON)
+            return if (cut.isNotEmpty() && cut.last().isHighSurrogate()) cut.dropLast(1) else cut
+        }
 
         fun readIcons(list: List<String>): Map<String, String> =
             list.mapNotNull { entry -> entry.split(' ', limit = 2).takeIf { it.size == 2 && it[1].isNotBlank() }?.let { it[0] to it[1] } }.toMap()

@@ -26,8 +26,12 @@ class KeystoreSessionStore(context: Context) : SessionStore {
             val cipher = Cipher.getInstance(TRANSFORM)
             cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes, 0, IV_SIZE))
             Session.decode(cipher.doFinal(bytes, IV_SIZE, bytes.size - IV_SIZE).decodeToString())
-        } catch (_: Exception) {
-            prefs.edit().remove(KEY).apply()
+        } catch (e: Exception) {
+            // Unreadable for good (the key was replaced, or the data is
+            // damaged): forget it. Anything else may pass; keep the login.
+            if (e is javax.crypto.AEADBadTagException || e is IllegalArgumentException ||
+                e is android.security.keystore.KeyPermanentlyInvalidatedException
+            ) prefs.edit().remove(KEY).apply()
             null
         }
     }
@@ -37,10 +41,14 @@ class KeystoreSessionStore(context: Context) : SessionStore {
             prefs.edit().remove(KEY).apply()
             return
         }
-        val cipher = Cipher.getInstance(TRANSFORM)
-        cipher.init(Cipher.ENCRYPT_MODE, key())
-        val sealed = cipher.iv + cipher.doFinal(Session.encode(session).encodeToByteArray())
-        prefs.edit().putString(KEY, Base64.encodeToString(sealed, Base64.NO_WRAP)).apply()
+        // A keystore that won't seal it shouldn't crash signing in: the login
+        // then lasts until the app closes.
+        runCatching {
+            val cipher = Cipher.getInstance(TRANSFORM)
+            cipher.init(Cipher.ENCRYPT_MODE, key())
+            val sealed = cipher.iv + cipher.doFinal(Session.encode(session).encodeToByteArray())
+            prefs.edit().putString(KEY, Base64.encodeToString(sealed, Base64.NO_WRAP)).apply()
+        }.onFailure { io.github.strawwaffle.glorp.diag.AppLog.note("signin", "couldn't save the login", it) }
     }
 
     private fun key(): SecretKey {

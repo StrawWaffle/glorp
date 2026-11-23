@@ -23,12 +23,20 @@ class AvifImageDecoder(private val source: ImageSource) : Decoder {
         buffer.flip()
         val info = AvifDecoder.Info()
         check(AvifDecoder.getInfo(buffer, bytes.size, info) && info.width > 0 && info.height > 0) { "Not an AVIF picture libavif can read" }
+        // A huge picture linked in chat would take hundreds of megabytes, or
+        // be too large to draw at all: not shown, rather than crash the app.
+        check(info.width.toLong() * info.height <= MAX_PIXELS) { "AVIF picture too large to show (${info.width}×${info.height})" }
         val bitmap = Bitmap.createBitmap(info.width, info.height, Bitmap.Config.ARGB_8888)
         if (!AvifDecoder.decode(buffer, bytes.size, bitmap)) {
             bitmap.recycle()
             error("libavif couldn't decode the picture")
         }
         return DecodeResult(bitmap.asImage(), isSampled = false)
+    }
+
+    private companion object {
+        // 4K: about 33 MB once decoded.
+        const val MAX_PIXELS = 3840L * 2160
     }
 
     class Factory : Decoder.Factory {

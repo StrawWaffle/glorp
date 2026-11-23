@@ -1,5 +1,8 @@
 package io.github.strawwaffle.glorp.ui
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -123,7 +126,8 @@ fun ChatInput(
     OnBack(enabled = picker) { picker = false }
     // The name sheet's Mention and Whisper hand the input the caret.
     LaunchedEffect(state.focusRequests) {
-        if (state.focusRequests > 0) {
+        if (state.focusRequests > state.focusHandled) {
+            state.focusHandled = state.focusRequests
             picker = false
             focus.requestFocus()
             keyboard?.show()
@@ -329,7 +333,9 @@ private fun ModNotes(watch: ModWatch) {
 private fun EmoteButton(open: Boolean, onClick: () -> Unit) {
     val color = if (open) Palette.Blue else Palette.TextDim
     Box(
-        Modifier.size(44.dp).clickable(onClickLabel = if (open) "Keyboard" else "Emotes", onClick = onClick),
+        Modifier.size(44.dp)
+            .clickable(onClickLabel = if (open) "Keyboard" else "Emotes", role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = if (open) "Keyboard" else "Emotes" },
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.size(24.dp)) {

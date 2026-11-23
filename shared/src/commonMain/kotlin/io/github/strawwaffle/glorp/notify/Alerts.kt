@@ -108,6 +108,9 @@ class AlertCheck(
      * they're found (and their marker moved on), so a check cut short by
      * Android still posts what it already found.
      */
+    // People the account ignores, as live chat leaves them out.
+    private val ignored by lazy { io.github.strawwaffle.glorp.chat.NickSet(io.github.strawwaffle.glorp.chat.ChatSettings(prefs), "ignorenicks") }
+
     suspend fun run(onFound: (List<Alert>) -> Unit = {}): List<Alert> = buildList {
         fun found(alerts: List<Alert>) { if (alerts.isNotEmpty()) { addAll(alerts); onFound(alerts) } }
         if (options.live) found(listOfNotNull(live()))
@@ -142,7 +145,7 @@ class AlertCheck(
         val seen = prefs.get(WHISPERS_SEEN)?.toLongOrNull()
         prefs.put(WHISPERS_SEEN, maxOf(newest, seen ?: 0).toString())
         if (seen == null) return emptyList()
-        return list.filter { it.unread > 0 && !it.previewMine && it.lastAt > seen }.take(MAX_EACH).map {
+        return list.filter { it.unread > 0 && !it.previewMine && it.lastAt > seen && it.nick !in ignored }.take(MAX_EACH).map {
             Alert(Alert.Kind.Whisper, "Whisper from ${it.nick}", it.preview, "$OPEN_WHISPER${it.nick}")
         }
     }
@@ -156,7 +159,7 @@ class AlertCheck(
         val seen = prefs.get(MENTIONS_SEEN)?.toLongOrNull()
         prefs.put(MENTIONS_SEEN, maxOf(found.maxOfOrNull { it.atSeconds } ?: 0, seen ?: 0).toString())
         if (seen == null) return emptyList()
-        return found.filter { it.atSeconds > seen && !it.nick.equals(nick, ignoreCase = true) }
+        return found.filter { it.atSeconds > seen && !it.nick.equals(nick, ignoreCase = true) && it.nick !in ignored }
             .sortedBy { it.atSeconds }.takeLast(MAX_EACH).map { m ->
                 // Tapping it opens the chat around it in the log search: by then
                 // it may have scrolled out of what chat keeps.
@@ -179,7 +182,7 @@ class AlertCheck(
         val found = parseServerMentions(body) ?: return emptyList()
         prefs.put(SERVER_SEEN, maxOf(found.maxOfOrNull { it.at } ?: 0, seen ?: kotlin.time.Clock.System.now().toEpochMilliseconds()).toString())
         if (seen == null) return emptyList()
-        return found.filter { it.at > seen }.takeLast(MAX_EACH).map {
+        return found.filter { it.at > seen && it.username !in ignored }.takeLast(MAX_EACH).map {
             Alert(Alert.Kind.Mention, "${it.username} mentioned you", it.text, it.siteLink())
         }
     }
@@ -187,7 +190,8 @@ class AlertCheck(
     private suspend fun get(url: String, more: io.ktor.client.request.HttpRequestBuilder.() -> Unit = {}): String? = try {
         val response = client.get(url) {
             header(HttpHeaders.UserAgent, ChatSocket.USER_AGENT)
-            cookies?.let { header(HttpHeaders.Cookie, it.cookieHeader) }
+            // The login goes to destiny.gg only, never to the mentions service.
+            if (url.startsWith(site.origin + "/")) cookies?.let { header(HttpHeaders.Cookie, it.cookieHeader) }
             more()
         }
         if (response.status.isSuccess()) response.bodyAsText() else null
@@ -211,8 +215,9 @@ class AlertCheck(
          * Chat was connected until now and told of whispers and mentions as they came:
          * the background check starts from here, so nothing is told twice.
          */
-        fun heardUntilNow(prefs: ChatPrefs) {
-            val ms = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        fun heardUntilNow(prefs: ChatPrefs, until: Long = 0) {
+            val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+            val ms = if (until > 0) minOf(until, now) else now
             prefs.put(WHISPERS_SEEN, ms.toString())
             prefs.put(MENTIONS_SEEN, (ms / 1000).toString())
             prefs.put(SERVER_SEEN, ms.toString())

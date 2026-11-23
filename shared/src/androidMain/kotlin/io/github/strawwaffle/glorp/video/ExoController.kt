@@ -41,6 +41,9 @@ class ExoController(private val player: ExoPlayer) : VideoController {
             } else {
                 handler.removeCallbacks(steady)
             }
+            // A live stream that ended (its playlist closed): as good as gone,
+            // so it's looked up again and shows as offline.
+            if (playbackState == Player.STATE_ENDED && wasLive) fail()
             watchLoading()
         }
 
@@ -62,6 +65,7 @@ class ExoController(private val player: ExoPlayer) : VideoController {
             val refused = (error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode in 400..499
             if (!refused && retries < IN_PLACE_RETRIES) {
                 retries++
+                retrying = true
                 handler.postDelayed(retry, 2_000L * retries)
             } else {
                 fail()
@@ -77,6 +81,7 @@ class ExoController(private val player: ExoPlayer) : VideoController {
         }
 
         override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+            if (player.isCurrentMediaItemLive) wasLive = true
             _state.update { it.copy(live = player.isCurrentMediaItemLive) }
         }
     }
@@ -88,9 +93,17 @@ class ExoController(private val player: ExoPlayer) : VideoController {
     private val handler = Handler(Looper.getMainLooper())
     private var retries = 0
 
+    // Was live: it no longer says so once its playlist has closed.
+    private var wasLive = false
+
+    /** Between a dropped connection and trying it again: not playing, but meaning to. */
+    var retrying = false
+        private set
+
     private val steady = Runnable { retries = 0 }
 
     private val retry = Runnable {
+        retrying = false
         if (player.playbackState == Player.STATE_IDLE) player.prepare()
     }
 
@@ -107,6 +120,7 @@ class ExoController(private val player: ExoPlayer) : VideoController {
     private fun fail() {
         handler.removeCallbacks(stuck)
         handler.removeCallbacks(retry)
+        retrying = false
         // Nothing more to fetch until the screen decides what to do.
         player.stop()
         _state.update { it.copy(failed = true, playing = false) }
@@ -114,6 +128,7 @@ class ExoController(private val player: ExoPlayer) : VideoController {
 
     override fun restart() {
         handler.removeCallbacks(retry)
+        retrying = false
         retries = 0
         _state.update { it.copy(failed = false) }
         player.stop()

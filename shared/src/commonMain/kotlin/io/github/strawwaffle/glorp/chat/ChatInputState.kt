@@ -64,6 +64,9 @@ class ChatInputState(
     var focusRequests by mutableIntStateOf(0)
         private set
 
+    /** The requests the input has acted on: each one only once, not on every return to chat. */
+    var focusHandled = 0
+
     fun openUser(nick: String, line: ChatLine? = null) {
         tappedNick = nick
         tappedLine = line

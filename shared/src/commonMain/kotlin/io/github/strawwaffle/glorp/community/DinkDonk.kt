@@ -78,8 +78,18 @@ private sealed interface Detail {
 }
 
 /** A list that loads a page at a time. [load] gets the page key and returns the items and the next key, if any. */
-private class Paged<K, T>(private val scope: CoroutineScope, private val first: K, private val load: suspend (K) -> Pair<List<T>, K?>) {
+private class Paged<K, T>(
+    private val scope: CoroutineScope,
+    private val first: K,
+    /** What tells items apart: the list shows each once (a new entry shifts the pages). */
+    private val id: (T) -> Any,
+    private val load: suspend (K) -> Pair<List<T>, K?>,
+) {
     val items = mutableStateListOf<T>()
+    private val seen = HashSet<Any>()
+
+    // Bumped by reset: a page asked for before it is dropped, not added.
+    private var generation = 0
     var loading by mutableStateOf(false)
     var failed by mutableStateOf(false)
     var started by mutableStateOf(false)
@@ -93,17 +103,19 @@ private class Paged<K, T>(private val scope: CoroutineScope, private val first: 
         if (loading || failed) return
         started = true
         loading = true
+        val asked = generation
         job = scope.launch {
             try {
                 val (page, after) = load(key)
-                items += page
+                if (asked != generation) return@launch
+                items += page.filter { seen.add(id(it)) }
                 next = after
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                failed = true
+                if (asked == generation) failed = true
             } finally {
-                loading = false
+                if (asked == generation) loading = false
             }
         }
     }
@@ -111,8 +123,10 @@ private class Paged<K, T>(private val scope: CoroutineScope, private val first: 
     fun retry() { failed = false; loadMore() }
 
     fun reset() {
+        generation++
         job?.cancel()
         items.clear()
+        seen.clear()
         next = first
         loading = false
         failed = false
@@ -124,16 +138,16 @@ private const val HISTORY_PAGE = 30
 
 private class DinkDonkState(val client: DinkDonkClient, scope: CoroutineScope) {
     var historySearch = ""
-    val history = Paged<Int, Watched>(scope, 0) { offset ->
+    val history = Paged<Int, Watched>(scope, 0, { it.id }) { offset ->
         val page = client.history(offset, HISTORY_PAGE, historySearch)
         page to (offset + page.size).takeIf { page.size == HISTORY_PAGE }
     }
     var ratingsSearch = ""
     var ratingsOrder by mutableStateOf(RatingOrder.Recent)
-    val ratings = Paged<Int, RatingCard>(scope, 1) { page ->
+    val ratings = Paged<Int, RatingCard>(scope, 1, { it.id }) { page ->
         client.ratings(page, ratingsSearch, ratingsOrder.value).let { it.items to it.next?.takeIf { n -> n > page } }
     }
-    val polls = Paged<Int, PollCard>(scope, 1) { page ->
+    val polls = Paged<Int, PollCard>(scope, 1, { it.id }) { page ->
         client.polls(page).let { it.items to it.next?.takeIf { n -> n > page } }
     }
 
@@ -403,7 +417,7 @@ private fun ScheduleTab(schedule: Load<MovieSchedule>, onRetry: () -> Unit) {
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     )
                 }
-                items(upcoming, key = { "s" + it.start }) { s ->
+                items(upcoming.distinctBy { it.start }, key = { "s" + it.start }) { s ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(span(s), color = Palette.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
                         if (s.start <= now) Text("On now", color = Palette.Orange, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -442,7 +456,7 @@ private fun RatingDetail(client: DinkDonkClient, id: String) {
                                 color = if (r.link != null) Palette.Blue else Palette.White,
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
-                                modifier = if (r.link != null) Modifier.clickable { uri.openUri(r.link) } else Modifier,
+                                modifier = if (r.link != null) Modifier.clickable { runCatching { uri.openUri(r.link) } } else Modifier,
                             )
                             val meta = listOfNotNull(r.createdBy?.let { "Rating poll by $it" }, r.endedAt?.let { "ended ${localDateTime(it)}" })
                             if (meta.isNotEmpty()) Text(meta.joinToString(", "), color = Palette.TextDim, fontSize = 12.sp)
@@ -519,7 +533,7 @@ private fun PollDetail(client: DinkDonkClient, id: String) {
                 items(p.options) { o ->
                     Row(
                         Modifier.fillMaxWidth()
-                            .then(if (o.link != null) Modifier.clickable { uri.openUri(o.link) } else Modifier)
+                            .then(if (o.link != null) Modifier.clickable { runCatching { uri.openUri(o.link) } } else Modifier)
                             .padding(start = if (o.sub) 40.dp else 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -648,7 +662,7 @@ private fun SiteLink(text: String, url: String) {
 @Composable
 private fun SiteLinkText(text: String, url: String) {
     val uri = LocalUriHandler.current
-    Text(text, color = Palette.Blue, fontSize = 14.sp, modifier = Modifier.clickable { uri.openUri(url) }.padding(vertical = 10.dp))
+    Text(text, color = Palette.Blue, fontSize = 14.sp, modifier = Modifier.clickable { runCatching { uri.openUri(url) } }.padding(vertical = 10.dp))
 }
 
 /** "Sat 28 Nov, 03:00 – 15:00", or with the end's date when it falls on another day. */

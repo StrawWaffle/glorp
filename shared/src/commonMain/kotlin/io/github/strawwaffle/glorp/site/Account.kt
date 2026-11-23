@@ -60,9 +60,14 @@ suspend fun checkSession(client: HttpClient, site: Site, session: Session.Cookie
     val newSid = response.headers.getAll(HttpHeaders.SetCookie).orEmpty()
         .firstNotNullOfOrNull { Regex("""^sid=([^;]+)""").find(it.trim())?.groupValues?.get(1) }
         ?.takeIf { it != "deleted" && it.isNotEmpty() }
+    // Only the site's own answer signs anyone out: signed out, it says 403 in
+    // JSON. A challenge page (HTML), too many requests or anything else is
+    // the site not answering, and the login is kept.
+    val json = response.headers[HttpHeaders.ContentType]?.contains("json", ignoreCase = true) == true
     when {
-        response.status.value in 500..599 -> SessionCheck.Unreachable
-        !response.status.isSuccess() -> SessionCheck.Invalid
+        !json -> SessionCheck.Unreachable
+        response.status.value == 401 || response.status.value == 403 -> SessionCheck.Invalid
+        !response.status.isSuccess() -> SessionCheck.Unreachable
         else -> {
             val me = chatJson.decodeFromString<Me?>(response.bodyAsText())
             val nick = me?.nick
@@ -75,9 +80,7 @@ suspend fun checkSession(client: HttpClient, site: Site, session: Session.Cookie
     }
 } catch (e: kotlinx.coroutines.CancellationException) {
     throw e
-} catch (e: IllegalArgumentException) {
-    // Not JSON: a login page or an error page rather than an answer.
-    SessionCheck.Invalid
 } catch (_: Exception) {
+    // Unreadable, or no connection: not the site saying the login is bad.
     SessionCheck.Unreachable
 }

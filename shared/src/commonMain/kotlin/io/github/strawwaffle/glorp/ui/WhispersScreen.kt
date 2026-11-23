@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -186,8 +187,18 @@ private fun ConversationView(
             if (lines.isEmpty()) {
                 Text("No messages yet.", color = Palette.TextDim, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             }
+            // The same words from the same person in the same second share an
+            // id; a second one gets a number, or the list would crash.
+            val keys = remember(lines) {
+                val seen = HashMap<String, Int>()
+                lines.map { (line, _) ->
+                    val n = seen.getOrElse(line.id) { 0 }
+                    seen[line.id] = n + 1
+                    if (n == 0) line.id else "${line.id}#$n"
+                }
+            }
             LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true) {
-                items(lines, key = { it.first.id }) { (line, continued) ->
+                itemsIndexed(lines, key = { i, _ -> keys[i] }) { _, (line, continued) ->
                     ChatRow(line, continued, flairs, emotes, account.nick, null, false, onEmbed, onNick = {})
                 }
             }

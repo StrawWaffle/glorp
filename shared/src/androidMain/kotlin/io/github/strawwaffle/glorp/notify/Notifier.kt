@@ -73,6 +73,9 @@ object Notifier {
         val prefs = SharedChatPrefs(context)
         val options = NotifyOptions(prefs, ChatSettings(prefs))
         if (!options.any) return
+        // Notifications turned off in Android: nothing could be shown, so
+        // don't ask the site (and leave what's unseen for when they're back).
+        if (!permitted(context) || context.getSystemService(android.app.NotificationManager::class.java)?.areNotificationsEnabled() == false) return
         // The running app leaves the site and who is signed in (see ChatViewModel).
         val origin = prefs.get(NotifyOptions.ORIGIN) ?: return
         val cookies = KeystoreSessionStore(context).load() as? Session.Cookies

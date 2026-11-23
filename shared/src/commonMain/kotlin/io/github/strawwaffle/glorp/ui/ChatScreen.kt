@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -163,7 +164,14 @@ fun ChatScreen(
         val chatWidth = (maxWidth * 0.38f).coerceIn(280.dp, 420.dp)
         when {
             // Only the video: the floating window, or the whole screen.
-            pip || (fullscreen && player != null) -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { playerSlot() }
+            pip || (fullscreen && player != null) -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { playerSlot() }
+                // Kept, at no size, so what's under the bar (a report being
+                // written, a search, an open conversation) is still there after.
+                val focus = androidx.compose.ui.platform.LocalFocusManager.current
+                LaunchedEffect(Unit) { focus.clearFocus() }
+                Box(Modifier.size(0.dp).clipToBounds()) { bodySlot() }
+            }
             // Sideways: the video beside chat.
             wide -> Row(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) { playerSlot() }

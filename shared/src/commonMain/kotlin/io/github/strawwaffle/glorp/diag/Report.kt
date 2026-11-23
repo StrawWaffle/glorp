@@ -67,7 +67,7 @@ class ProblemReport(
      */
     fun issueLink(limit: Int = 7_500): String {
         fun param(name: String, value: String) = "&$name=" + value.encodeURLParameter()
-        val fixed = "$ISSUES?template=problem.yml" + param("title", title) + param("what", what) +
+        val fixed = "$ISSUES?template=problem.yml" + param("title", title.take(200)) + param("what", what.take(2_000)) +
             param("version", version) + param("device", device) + "&details="
         // Encoding can triple a character; fit the details by trying smaller budgets.
         var budget = limit - fixed.length

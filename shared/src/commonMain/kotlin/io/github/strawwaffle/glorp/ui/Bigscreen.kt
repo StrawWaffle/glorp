@@ -119,14 +119,17 @@ private fun Player(embed: Embed, playerUrl: String, origin: String, resolve: sus
     // Bumped when the player gives up on the stream, to look it up again:
     // a fresh address, or the news that it ended.
     var lookups by remember(embed) { mutableIntStateOf(0) }
-    val resolution by produceState<Resolution?>(null, embed, lookups) {
+    // Each result with the embed it's for: picking another embed must not
+    // leave the last one playing while (or after) the new one is looked up.
+    val looked by produceState<Pair<Embed, Resolution>?>(null, embed, lookups) {
         val found = resolve(embed)
-        // A failed lookup while the stream was playing natively (no network,
+        val before = value?.takeIf { it.first == embed }?.second
+        // A failed lookup while this stream was playing natively (no network,
         // say) keeps the player, which tries again, instead of swapping in
         // the web player.
-        value = if (found == Resolution.Web && value is Resolution.Native) value else found
+        value = embed to (if (found == Resolution.Web && before is Resolution.Native) before else found)
     }
-    when (val found = resolution) {
+    when (val found = looked?.takeIf { it.first == embed }?.second) {
         null -> CircularProgressIndicator(color = Palette.Glorp)
         is Resolution.Native -> NativePlayer(found.playable, Modifier.fillMaxSize(), reload = { lookups++ })
         is Resolution.Offline -> Note("${found.name} is offline.")

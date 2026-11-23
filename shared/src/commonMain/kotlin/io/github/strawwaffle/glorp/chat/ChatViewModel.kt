@@ -76,6 +76,9 @@ class ChatViewModel(
     }
     private var socket: ChatSocket? = null
 
+    // Asking the site to renew a cookie login chat no longer knows (see ChatEvent.Me).
+    private var renewing = false
+
     /** The input's draft, history, suggestions and the ignore and highlight lists. */
     val input = ChatInputState(prefs)
 
@@ -141,6 +144,10 @@ class ChatViewModel(
 
     /** Whispers sent and not yet confirmed by the server, oldest first. */
     private val unconfirmed = ArrayDeque<Pair<String, String>>()
+
+    // Whether the last thing sent was a whisper: chat's errors don't say what
+    // they answer, and "throttled" after a message isn't about a whisper.
+    private var lastSentWhisper = false
     private var conversationsLoaded = false
 
     private fun messages(): io.github.strawwaffle.glorp.site.Messages? =
@@ -174,6 +181,7 @@ class ChatViewModel(
                 whisperInput.history.add(text)
                 whisperInput.setDraft("")
                 unconfirmed.addLast(nick to text)
+                lastSentWhisper = true
                 transmit { chat.sendWhisper(nick, text).also { if (!it) unconfirmed.removeLastOrNull() } }
                 return true
             }
@@ -233,7 +241,11 @@ class ChatViewModel(
         // The background notification check runs without this view model:
         // it reads the site and who is signed in from here.
         prefs.put(io.github.strawwaffle.glorp.notify.NotifyOptions.ORIGIN, origin)
-        viewModelScope.launch { _account.collect { prefs.put(io.github.strawwaffle.glorp.notify.NotifyOptions.NICK, it?.nick) } }
+        // Not cleared while the account isn't known yet (offline at launch):
+        // only signing out forgets the name.
+        viewModelScope.launch {
+            _account.collect { if (it != null || session == null) prefs.put(io.github.strawwaffle.glorp.notify.NotifyOptions.NICK, it?.nick) }
+        }
         viewModelScope.launch {
             site = Site.discover(client, origin)
             launch { _flairs.value = Flairs.fetch(client, site) }
@@ -271,6 +283,7 @@ class ChatViewModel(
         if (connection?.isActive == true) { startLive(); return }
         connection = viewModelScope.launch {
             ready.await()
+            fetchEmotesAgain()
             // Chat and the live feed connect while the emote list loads; the
             // event loop waits for the list before it groups the backlog.
             startLive()
@@ -279,8 +292,10 @@ class ChatViewModel(
             launch {
                 chat.state.collect {
                     // Dropped: chat told of everything until now; the background check takes it from here.
+                    // Whispers sent and not confirmed by then never will be.
+                    if (it != SocketState.Connected) unconfirmed.clear()
                     if (_socketState.value == SocketState.Connected && it != SocketState.Connected && _account.value != null) {
-                        io.github.strawwaffle.glorp.notify.AlertCheck.heardUntilNow(prefs)
+                        io.github.strawwaffle.glorp.notify.AlertCheck.heardUntilNow(prefs, socket?.lastHeardMs ?: 0)
                     }
                     _socketState.value = it
                 }
@@ -296,6 +311,18 @@ class ChatViewModel(
                     },
                 )
             }
+        }
+    }
+
+    private var emotesAgain: Job? = null
+
+    // The list failed to load at launch (a bad connection): try again each time
+    // chat comes back, rather than showing emotes as words all session.
+    private fun fetchEmotesAgain() {
+        if (!emotesLoaded.isCompleted || _emotes.value.all.isNotEmpty() || emotesAgain?.isActive == true) return
+        emotesAgain = viewModelScope.launch {
+            val fetched = Emotes.fetch(client, site)
+            if (fetched.all.isNotEmpty()) _emotes.value = fetched
         }
     }
 
@@ -338,7 +365,7 @@ class ChatViewModel(
     fun stop() {
         AppLog.note("chat", "closed: the app left the screen")
         if (_account.value != null && _socketState.value == SocketState.Connected) {
-            io.github.strawwaffle.glorp.notify.AlertCheck.heardUntilNow(prefs)
+            io.github.strawwaffle.glorp.notify.AlertCheck.heardUntilNow(prefs, socket?.lastHeardMs ?: 0)
         }
         wanted = false
         liveJob?.cancel()
@@ -462,7 +489,10 @@ class ChatViewModel(
         input.history.add(text)
         input.setDraft("")
         when (command) {
-            is Command.Say -> transmit { chat!!.sendMessage(command.text) }
+            is Command.Say -> {
+                lastSentWhisper = false
+                transmit { chat!!.sendMessage(command.text) }
+            }
             is Command.Whisper -> {
                 if (command.nick.equals(me.nick, ignoreCase = true)) {
                     notice("Cannot send a message to yourself")
@@ -471,6 +501,7 @@ class ChatViewModel(
                     // Shown once the server takes it (PRIVMSGSENT): it can
                     // refuse, for an account too new or a name that's wrong.
                     unconfirmed.addLast(command.nick to command.text)
+                    lastSentWhisper = true
                     transmit {
                         chat!!.sendWhisper(command.nick, command.text).also { if (!it) unconfirmed.removeLastOrNull() }
                     }
@@ -482,7 +513,10 @@ class ChatViewModel(
                 val embed = first ?: _picked.value ?: _live.value.defaultEmbed(preferredPlatform)
                 val words = if (first != null) command.args.drop(1) else command.args
                 if (embed == null) notice("Nothing embedded")
-                else transmit { chat!!.sendMessage(("#${embed.key} " + words.joinToString(" ")).trim()) }
+                else {
+                    lastSentWhisper = false
+                    transmit { chat!!.sendMessage(("#${embed.key} " + words.joinToString(" ")).trim()) }
+                }
             }
             Command.Reply -> {
                 val to = input.replyTo
@@ -875,9 +909,40 @@ class ChatViewModel(
                         loadConversations()
                         false
                     }
+                    session is Session.Cookies && !renewing -> {
+                        // `sid` may simply have run out while the app ran:
+                        // `rememberme` can get a new one, as at launch. Only
+                        // the site saying no signs out.
+                        val stale = session as Session.Cookies
+                        renewing = true
+                        viewModelScope.launch {
+                            try {
+                                when (val result = checkSession(client, site, stale)) {
+                                    // A new `sid`: connect with it. The same one the site
+                                    // accepts and chat doesn't: nothing to fix from here.
+                                    is SessionCheck.Valid -> if (result.session != stale) {
+                                        adopt(result.session, result.account)
+                                        reconnect()
+                                    }
+                                    SessionCheck.Invalid -> if (session == stale) {
+                                        session = null
+                                        store.save(null)
+                                        _account.value = null
+                                        log.add(ChatLine.info("Your login on $host no longer works. Sign in again to chat.", now()))
+                                        _lines.value = log.snapshot()
+                                    }
+                                    SessionCheck.Unreachable -> Unit
+                                }
+                            } finally {
+                                renewing = false
+                            }
+                        }
+                        false
+                    }
+                    session is Session.Cookies -> false
                     session != null -> {
                         // Chat doesn't know the stored login any more: a key
-                        // removed on the site, or cookies that ran out.
+                        // removed on the site.
                         session = null
                         store.save(null)
                         _account.value = null
@@ -927,7 +992,7 @@ class ChatViewModel(
                 else log.add(ChatLine.info("Whisper to $nick: $text", now()))
             }
             is ChatEvent.Error -> {
-                if (event.code in whisperErrors) {
+                if (lastSentWhisper && unconfirmed.isNotEmpty()) {
                     unconfirmed.removeFirstOrNull()?.let { (nick, _) -> _inbox.value = _inbox.value.refused(nick, errorText(event.code)) }
                 }
                 if (isFatal(event.code)) socket?.halt()
@@ -1055,7 +1120,7 @@ class ChatViewModel(
 
     override fun onCleared() {
         if (_account.value != null && _socketState.value == SocketState.Connected) {
-            io.github.strawwaffle.glorp.notify.AlertCheck.heardUntilNow(prefs)
+            io.github.strawwaffle.glorp.notify.AlertCheck.heardUntilNow(prefs, socket?.lastHeardMs ?: 0)
         }
         youtube.close()
         client.close()
@@ -1064,8 +1129,6 @@ class ChatViewModel(
     private companion object {
         val publishInterval = 150.milliseconds
         const val PINS_CLOSED = "pins-closed"
-        /** The errors that answer a whisper, so it was never sent. */
-        val whisperErrors = setOf("privmsgbanned", "privmsgaccounttooyoung", "notfound", "throttled", "duplicate", "muted", "needlogin", "nochatting")
         const val POLL_GRACE_MS = 15_000L
         /** chat-gui's `chat.settings.synced`: the user this device's settings last synced for. */
         const val WARNINGS = "warnings"

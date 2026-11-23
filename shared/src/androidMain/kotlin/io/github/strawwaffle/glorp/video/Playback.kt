@@ -97,7 +97,9 @@ object Playback {
             if (it.url == playable.hlsUrl) {
                 // Back on screen: pictures again, and the player stays.
                 soundOnly(it.player, false)
+                watchNetwork(context, false)
                 handler.removeCallbacks(idleRelease)
+                stoppedAt = null
                 it.player.removeListener(pausedOffScreen)
                 // Back on screen, or looked up again, after it failed: start again.
                 if (it.controller.state.value.failed) it.controller.restart()
@@ -239,13 +241,15 @@ object Playback {
      */
     fun detach(context: Context, keepPlaying: Boolean) {
         val current = active ?: return
-        if (keepPlaying && meantToPlay(current.player)) {
+        // Between a dropped connection and its retry it isn't playing, but it means to.
+        if (keepPlaying && (meantToPlay(current.player) || current.controller.retrying)) {
             // Only the sound goes on: no video to decode with nothing to show it.
             soundOnly(current.player, true)
+            watchNetwork(context, true)
             appContext = context.applicationContext
             current.player.addListener(pausedOffScreen)
             // Already stalled as the app was left: no change will come to arm the timer.
-            if (!current.player.isPlaying) handler.postDelayed(idleRelease, 5 * 60_000L)
+            if (!current.player.isPlaying) stoppedOffScreen()
             return
         }
         release(context)
@@ -321,6 +325,93 @@ object Playback {
         pictureOff = null
     }
 
+    /**
+     * Off screen there's no screen to look a failed stream up again, so after
+     * a longer drop (a lift, a train, Wi-Fi to mobile data) the sound would
+     * stay stopped. Android says when a network is there; then the stream
+     * carries on. Listened for only while the sound is meant to play off screen.
+     */
+    private var networkWatch: android.net.ConnectivityManager.NetworkCallback? = null
+    private var connectivity: android.net.ConnectivityManager? = null
+
+    // Tries without a network change in between, so a stream that ended
+    // isn't tried forever; a network change allows more.
+    private var triesLeft = 0
+
+    // Wi-Fi and mobile networks known to reach the internet. A VPN isn't
+    // counted: it says it works while the network under it is gone.
+    private val usableNetworks = HashSet<android.net.Network>()
+
+    private val networkCheck = Runnable {
+        val current = active ?: return@Runnable
+        if (!current.player.playWhenReady) return@Runnable
+        // Only once it has given up: until then its own retries are at work.
+        if (!current.controller.state.value.failed) return@Runnable
+        if (usableNetworks.isEmpty() || triesLeft <= 0) return@Runnable
+        // Stopped too long ago (timers stop counting while the phone sleeps,
+        // so this asks the clock): don't start playing again, let it go.
+        if (stoppedFor() >= IDLE_LIMIT_MS) {
+            appContext?.let(::release)
+            return@Runnable
+        }
+        triesLeft--
+        io.github.strawwaffle.glorp.diag.AppLog.note("player", "network there: starting again")
+        // As the Retry button does: back a few seconds from live, where
+        // catching up takes over; what was missed in a long drop is gone.
+        current.controller.restart()
+    }
+
+    private fun checkNetworkSoon(networkChanged: Boolean) {
+        if (networkChanged) triesLeft = 3
+        handler.removeCallbacks(networkCheck)
+        handler.postDelayed(networkCheck, 1_000)
+    }
+
+    // Stopped (given up after its retries) while off screen: see if a network is there.
+    private val stoppedOffScreen = object : Player.Listener {
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_IDLE) checkNetworkSoon(networkChanged = false)
+        }
+    }
+
+    private fun watchNetwork(context: Context, on: Boolean) {
+        val connectivity = connectivity
+            ?: context.applicationContext.getSystemService(android.net.ConnectivityManager::class.java)?.also { connectivity = it }
+            ?: return
+        networkWatch?.let { runCatching { connectivity.unregisterNetworkCallback(it) } }
+        networkWatch = null
+        handler.removeCallbacks(networkCheck)
+        active?.player?.removeListener(stoppedOffScreen)
+        usableNetworks.clear()
+        if (!on) return
+        triesLeft = 3
+        active?.player?.addListener(stoppedOffScreen)
+        // Wi-Fi and mobile data themselves: behind a VPN the default network
+        // stays the VPN, which says nothing when Wi-Fi comes and goes.
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            // Wi-Fi reports changes every few seconds (signal strength); only
+            // becoming usable counts as a change.
+            override fun onLost(network: android.net.Network) {
+                usableNetworks.remove(network)
+                checkNetworkSoon(networkChanged = true)
+            }
+
+            override fun onCapabilitiesChanged(network: android.net.Network, capabilities: android.net.NetworkCapabilities) {
+                if (!capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                    usableNetworks.remove(network)
+                } else if (usableNetworks.add(network)) {
+                    checkNetworkSoon(networkChanged = true)
+                }
+            }
+        }
+        val request = android.net.NetworkRequest.Builder()
+            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build()
+        // Called on the main thread, where the player lives.
+        runCatching { connectivity.registerNetworkCallback(request, callback, handler) }
+            .onSuccess { networkWatch = callback }
+    }
+
     // Sound only, and the stream prepared again (a retry after an error).
     private val reprepared = object : Player.Listener {
         var player: ExoPlayer? = null
@@ -342,17 +433,43 @@ object Playback {
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var appContext: Context? = null
 
-    // Paused while off screen (from the notification, a call, or a stall) for
-    // five minutes: let the player, its decoder and the service go.
-    private val idleRelease = Runnable {
+    // Paused or stopped while off screen (from the notification, a call, a
+    // stall, a dropped network) for five minutes: let the player, its decoder
+    // and the service go. Still trying to load by then gets five more.
+    private var stoppedAt: Long? = null
+
+    private fun stoppedFor(): Long = stoppedAt?.let { android.os.SystemClock.elapsedRealtime() - it } ?: 0
+
+    private fun stoppedOffScreen() {
+        if (stoppedAt == null) stoppedAt = android.os.SystemClock.elapsedRealtime()
+        handler.removeCallbacks(idleRelease)
+        handler.postDelayed(idleRelease, (IDLE_LIMIT_MS - stoppedFor()).coerceAtLeast(1_000))
+    }
+
+    private val idleRelease: Runnable = Runnable {
         val current = active ?: return@Runnable
-        if (!meantToPlay(current.player)) appContext?.let(::release)
+        if (current.player.isPlaying) return@Runnable
+        val trying = meantToPlay(current.player) || current.controller.retrying
+        val limit = if (trying) 2 * IDLE_LIMIT_MS else IDLE_LIMIT_MS
+        if (stoppedFor() >= limit) appContext?.let(::release)
+        else handler.postDelayed(idleRelease, 60_000)
     }
     private val pausedOffScreen = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            handler.removeCallbacks(idleRelease)
-            if (!isPlaying) handler.postDelayed(idleRelease, 5 * 60_000L)
+            if (isPlaying) {
+                stoppedAt = null
+                handler.removeCallbacks(idleRelease)
+            } else {
+                stoppedOffScreen()
+            }
         }
+    }
+
+    private const val IDLE_LIMIT_MS = 5 * 60_000L
+
+    /** Background sound turned on while a stream plays on screen: start the service that will carry it. */
+    fun backgroundTurnedOn(context: Context) {
+        if (active != null) start(context, true)
     }
 
     /**
@@ -430,9 +547,11 @@ object Playback {
         val current = active ?: return
         active = null
         handler.removeCallbacks(idleRelease)
+        stoppedAt = null
         cancelPictureOff()
         current.player.removeListener(reprepared)
         reprepared.player = null
+        watchNetwork(context, false)
         beforeSoundOnly = null
         QualitySelection.lowestOnly = false
         current.player.removeListener(pausedOffScreen)

@@ -43,6 +43,15 @@ class ChatSocket(
     val state: StateFlow<SocketState> = _state.asStateFlow()
 
     private var current: DefaultClientWebSocketSession? = null
+
+    /**
+     * When the last frame came, by the phone's clock (0 before any). A socket
+     * that died quietly is noticed only a minute later; what was sent in
+     * between was never heard, so "heard until" means until this.
+     */
+    @kotlin.concurrent.Volatile
+    var lastHeardMs = 0L
+        private set
     private var halted = false
 
     suspend fun run(onFrame: suspend (String) -> Unit) {
@@ -82,6 +91,7 @@ class ChatSocket(
                     try {
                         for (frame in incoming) {
                             lastFrame = TimeSource.Monotonic.markNow()
+                            lastHeardMs = kotlin.time.Clock.System.now().toEpochMilliseconds()
                             if (frame !is Frame.Text) continue
                             val text = frame.readText()
                             // chat-gui answers the server's PING events the same way.

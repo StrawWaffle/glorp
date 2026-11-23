@@ -111,7 +111,7 @@ fun ReportScreen(diagnostics: Diagnostics) {
         item {
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = { links.openUri(report.issueLink()); sent() },
+                    onClick = { runCatching { links.openUri(report.issueLink()) }; sent() },
                     colors = ButtonDefaults.buttonColors(containerColor = Palette.Blue, contentColor = Palette.OnAction),
                 ) { Text("Open on GitHub") }
                 OutlinedButton(onClick = { clipboard.setText(AnnotatedString(report.text())); copied = true; sent() }) {

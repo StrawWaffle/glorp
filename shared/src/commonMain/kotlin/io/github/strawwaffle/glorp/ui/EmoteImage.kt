@@ -84,6 +84,9 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
                 if (now >= ends) break
                 elapsed.longValue = now
                 if (step != null) delay((step - now % step).coerceAtLeast(1))
+                // Moving: about 60 frames a second at most, which looks the
+                // same and halves the drawing on a 120 Hz screen.
+                else delay(8)
             }
             elapsed.longValue = SETTLED
         }

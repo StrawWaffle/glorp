@@ -440,7 +440,9 @@ fun GlorpApp(
                 }
                 "rustle", "polls", "dinkdonk" -> {
                     {
-                        val env = CommunityEnv(
+                        // Made again only when what's in it changes: a new one on
+                        // every chat message would redraw these screens each time.
+                        val env = remember(emotes, flairs, account, communityArg) { CommunityEnv(
                             http = chat.http,
                             emotes = emotes,
                             flairs = flairs,
@@ -449,7 +451,7 @@ fun GlorpApp(
                             onWatch = { chat.watch(it); playerShown = true; screen = "chat" },
                             onOpen = { target, arg -> communityArg = arg; screen = target },
                             argument = communityArg,
-                        )
+                        ) }
                         when (screen) {
                             // A new link or name starts the search afresh, even with the screen open.
                             "rustle" -> key(communityArg) { RustleSearchScreen(env) }

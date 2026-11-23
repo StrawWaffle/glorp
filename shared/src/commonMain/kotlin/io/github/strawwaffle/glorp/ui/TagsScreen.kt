@@ -185,8 +185,9 @@ private fun TagEditor(nick: String, tags: Tags, options: LocalOptions, onDone: (
                 fontSize = 12.sp,
             )
             Field(note, "Why they're tagged", Modifier.fillMaxWidth().padding(top = 8.dp), onDone = onDone) {
-                note = it
-                color?.let { c -> tags.tag(nick, c, it.trim()) }
+                // The site keeps 100 characters, as /tag does.
+                note = it.take(100)
+                color?.let { c -> tags.tag(nick, c, note.trim()) }
             }
         }
         IconRow(icon) { options.setIcon(nick, it) }
@@ -255,7 +256,7 @@ internal fun IconRow(icon: String?, onIcon: (String?) -> Unit) {
         var custom by remember { mutableStateOf("") }
         Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Field(custom, "Or type one", Modifier.weight(1f), onDone = { if (custom.isNotBlank()) { onIcon(custom); custom = "" } }) {
-                custom = it.take(LocalOptions.MAX_ICON)
+                custom = LocalOptions.cutIcon(it)
             }
             TextButton(onClick = { if (custom.isNotBlank()) { onIcon(custom); custom = "" } }) { Text("Use", color = Palette.Blue) }
         }

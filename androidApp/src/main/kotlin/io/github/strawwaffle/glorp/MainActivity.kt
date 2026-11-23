@@ -186,6 +186,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        // Not for this activity to decide once it's gone (a new one may have the player).
+        window.decorView.removeCallbacks(pipClosed)
         removeOnPictureInPictureModeChangedListener(pipListener)
         super.onDestroy()
     }

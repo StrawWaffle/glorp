@@ -69,6 +69,11 @@ internal actual fun NativePlayer(playable: Playable, modifier: Modifier, reload:
     // On screen: attach to the player (the one already playing this stream,
     // picked up without buffering again, or a new one). Off screen: keep only
     // the sound going, if that's on and it was playing; otherwise release.
+    // The setting as it is when the app is left, not as it was when the stream started.
+    val keepPlaying by androidx.compose.runtime.rememberUpdatedState(background)
+    // Turned on while a stream plays: the service that carries the sound
+    // starts now, while the app is on screen and allowed to start it.
+    LaunchedEffect(background) { if (background) Playback.backgroundTurnedOn(context) }
     LifecycleStartEffect(playable.hlsUrl) {
         val active = Playback.attach(context, playable, background)
         view.player = active.player
@@ -85,7 +90,7 @@ internal actual fun NativePlayer(playable: Playable, modifier: Modifier, reload:
             controller = null
             view.player = null
             view.keepScreenOn = false
-            Playback.detach(context, keepPlaying = background)
+            Playback.detach(context, keepPlaying = keepPlaying)
         }
     }
     // A different stream, or the player hidden: nothing to keep.
