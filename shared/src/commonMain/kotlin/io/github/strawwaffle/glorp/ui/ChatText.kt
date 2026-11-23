@@ -18,7 +18,9 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
@@ -138,7 +140,7 @@ internal object ChatImages {
                 val result = runCatching { loader.execute(request) }.getOrNull()
                 loading.remove(url)
                 if (result is SuccessResult) {
-                    painters[url] = result.image.asPainter(context)
+                    painters[url] = playingPainter(result.image, context) ?: result.image.asPainter(context)
                     order.remove(url); order.add(url)
                     while (order.size > MOST) painters.remove(order.first().also { order.remove(it) })
                 }
@@ -146,6 +148,22 @@ internal object ChatImages {
         }
         return null
     }
+}
+
+/** A picture that plays by itself (a GIF) as a painter that keeps drawing its current frame; null for a still one. */
+internal expect fun playingPainter(image: coil3.Image, context: PlatformContext): Painter?
+
+/**
+ * Where an emote is drawn, as the site places it: each emote's stylesheet
+ * gives it `margin-top: -height` and `top: height / 4`, so it adds nothing to
+ * its line's height (its placeholder is only as tall as a hairline, sitting
+ * on the baseline) and hangs down a quarter of its height from the baseline,
+ * reaching up over the line above.
+ */
+internal fun DrawScope.emoteRect(emote: Emote, placeholder: androidx.compose.ui.geometry.Rect): androidx.compose.ui.geometry.Rect {
+    val h = emote.height.dp.toPx()
+    val bottom = placeholder.bottom + h / 4
+    return androidx.compose.ui.geometry.Rect(placeholder.left, bottom - h, placeholder.left + emote.width.dp.toPx(), bottom)
 }
 
 /** Time far past any finite animation: everything shows how it rests. */
@@ -214,14 +232,26 @@ internal fun ChatText(
     val taps = Modifier.pointerInput(prepared, onHold) {
         detectTapGestures(
             onLongPress = { onHold?.invoke() },
-            onTap = { at -> holder.hit(prepared, at)?.let(onTap) },
+            onTap = { at -> holder.hit(prepared, at, this)?.let(onTap) },
         )
     }
     val draw = Modifier.drawBehind {
         val layout = holder.layout ?: return@drawBehind
-        drawText(layout)
         val now = clock.longValue
-        prepared.rainbowName?.let { range -> holder.rainbow(layout, range)?.let { drawRainbow(it, if (now == SETTLED_MS) 0f else (now % 3_000) / 3_000f) } }
+        val rainbow = prepared.rainbowName?.let { holder.rainbow(layout, it) }
+        if (rainbow == null) drawText(layout)
+        else {
+            // The rainbow is laid over the name's letters only (SrcAtop), in a
+            // layer just the size of the name, so the emotes drawn after can
+            // still reach outside the row.
+            drawIntoCanvas { it.saveLayer(rainbow.second.inflate(2f), Paint()) }
+            drawText(layout)
+            drawRainbow(rainbow, if (now == SETTLED_MS) 0f else (now % 3_000) / 3_000f)
+            drawIntoCanvas { it.restore() }
+            drawIntoCanvas { it.save(); it.clipRect(rainbow.second.inflate(2f), androidx.compose.ui.graphics.ClipOp.Difference) }
+            drawText(layout)
+            drawIntoCanvas { it.restore() }
+        }
         val rects = layout.placeholderRects
         prepared.items.forEachIndexed { i, item ->
             val rect = rects.getOrNull(i) ?: return@forEachIndexed
@@ -238,7 +268,8 @@ internal fun ChatText(
                 }
                 is InlineItem.EmoteItem -> ChatImages.get(item.emote.url, context)?.let { p ->
                     val elapsed = if (!animate || item.sentAt <= 0 || now == SETTLED_MS) SETTLED_MS else now - item.sentAt
-                    drawEmote(item.emote, p, rect.left, rect.top, rect.height, elapsed, still = !animate)
+                    val at = emoteRect(item.emote, rect)
+                    drawEmote(item.emote, p, at.left, at.top, at.height, elapsed, still = !animate)
                 }
             }
         }
@@ -270,13 +301,15 @@ private class LayoutHolder {
         return outline ?: layout.getPathForRange(range.first, range.last + 1).let { it to it.getBounds() }.also { outline = it }
     }
 
-    fun hit(prepared: PreparedLine, at: Offset): LineTap? {
+    fun hit(prepared: PreparedLine, at: Offset, density: Density): LineTap? {
         val layout = layout ?: return null
         // A picture first: an emote opens its card.
         layout.placeholderRects.forEachIndexed { i, rect ->
-            if (rect != null && rect.contains(at)) {
-                val item = prepared.items.getOrNull(i)
-                if (item is InlineItem.EmoteItem) return LineTap.EmoteTap(item.emote.prefix)
+            val item = prepared.items.getOrNull(i)
+            if (rect != null && item is InlineItem.EmoteItem) {
+                val h = with(density) { item.emote.height.dp.toPx() }
+                val drawn = androidx.compose.ui.geometry.Rect(rect.left, rect.bottom + h / 4 - h, rect.right, rect.bottom + h / 4)
+                if (drawn.contains(at)) return LineTap.EmoteTap(item.emote.prefix)
             }
         }
         // Then the text under the finger, if the finger is on a line's text.

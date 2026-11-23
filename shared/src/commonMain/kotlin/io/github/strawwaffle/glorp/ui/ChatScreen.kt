@@ -80,6 +80,7 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
@@ -528,6 +529,9 @@ internal fun tagColor(name: String): Color = when (name) {
 /** chat-gui's tag bar is 0.45em wide: about 6 dp beside 14 sp text. */
 private val TAG_BAR = 6.dp
 
+/** chat-gui's `.chat-lines { line-height: 1.65em }`: emotes don't make a line taller, they reach over the one above. */
+private val LINE_HEIGHT = 1.65.em
+
 /** Whether a tap on a row's name or link should count: not after a hold. */
 private class HoldGate {
     var open = true
@@ -662,13 +666,11 @@ internal fun ChatRow(
         ChatText(
             prepared,
             // As Text would: the app's text style (its font, how lines are spaced) under chat's own.
-            LocalTextStyle.current.merge(TextStyle(color = Palette.White, fontSize = 14.sp, lineHeight = 20.sp)),
+            LocalTextStyle.current.merge(TextStyle(color = Palette.White, fontSize = 14.sp, lineHeight = LINE_HEIGHT)),
             density,
             Modifier.fillMaxWidth().then(if (faded) Modifier.alpha(0.3f) else Modifier).background(background)
                 .then(if (bar == null) Modifier else Modifier.drawBehind { drawRect(bar, size = Size(TAG_BAR.toPx(), size.height)) })
-                .padding(horizontal = 10.dp, vertical = 2.dp)
-                // A rainbow name is laid over its letters only (SrcAtop), in a layer of its own.
-                .then(if (prepared.rainbowName == null) Modifier else Modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)),
+                .padding(horizontal = 10.dp, vertical = 2.dp),
             animate = look.animations,
             onTap = { tap ->
                 when (tap) {
@@ -963,8 +965,7 @@ private fun render(
 /**
  * The same line as [render], for [ChatText]: what can be tapped marked with
  * string annotations instead of links, and pictures as placeholders with an
- * item each. Null for a line with a GIF emote, which only the platform's own
- * image view animates: that line keeps the old way.
+ * item each.
  */
 private fun prepare(
     line: ChatLine,
@@ -977,22 +978,24 @@ private fun prepare(
     look: ChatLook,
     censored: Boolean,
     titleOf: (String) -> LinkTitles.Title? = { null },
-): PreparedLine? {
+): PreparedLine {
     val placeholders = ArrayList<AnnotatedString.Range<Placeholder>>()
     val items = ArrayList<InlineItem>()
     val embeds = HashMap<String, Embed>()
     var mentionsMe = false
     var rainbowName: IntRange? = null
-    var gif = false
     fun AnnotatedString.Builder.picture(item: InlineItem, alternate: String) {
         val start = length
         append(alternate)
-        val size = with(density) { Placeholder(item.widthDp.dp.toSp(), item.heightDp.dp.toSp(), PlaceholderVerticalAlign.Center) }
+        val size = with(density) {
+            // An emote takes no height from its line (see emoteRect): a hairline on the baseline, as wide as the emote.
+            if (item is InlineItem.EmoteItem) Placeholder(item.widthDp.dp.toSp(), 1.dp.toSp(), PlaceholderVerticalAlign.AboveBaseline)
+            else Placeholder(item.widthDp.dp.toSp(), item.heightDp.dp.toSp(), PlaceholderVerticalAlign.Center)
+        }
         placeholders += AnnotatedString.Range(size, start, length)
         items += item
     }
     fun AnnotatedString.Builder.emote(emote: io.github.strawwaffle.glorp.site.Emote, sentAt: Long) {
-        if (emote.isWholePicture && emote.url.substringBefore('?').endsWith(".gif", ignoreCase = true)) gif = true
         picture(InlineItem.EmoteItem(emote, sentAt), emote.prefix)
     }
     val nickLook = SpanStyle(textDecoration = TextDecoration.None)
@@ -1126,7 +1129,6 @@ private fun prepare(
             }
         }
     }
-    if (gif) return null
     return PreparedLine(text, placeholders, items, mentionsMe, rainbowName, embeds)
 }
 
