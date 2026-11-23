@@ -247,6 +247,11 @@ object Playback {
 
         private fun rewriting(parser: ParsingLoadable.Parser<HlsPlaylist>) = ParsingLoadable.Parser<HlsPlaylist> { uri, input ->
             val text = input.readBytes().decodeToString()
+            if (logLive) {
+                val tags = text.lineSequence().filter { it.startsWith("#EXT") && !it.startsWith("#EXT-X-PROGRAM-DATE-TIME") }
+                    .map { it.take(120) }.distinct().take(14).joinToString(" | ")
+                android.util.Log.d("GlorpPlaylist", "${uri.host}: $tags")
+            }
             parser.parse(uri, lowLatencyPlaylist(text).encodeToByteArray().inputStream())
         }
     }
