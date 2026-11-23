@@ -40,7 +40,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -89,11 +92,9 @@ fun ChatScreen(
     onSend: (String) -> Boolean,
     /** The input's draft, suggestions and lists, kept by the view model. */
     input: ChatInputState,
-    onIgnore: (String) -> Unit,
-    onHighlight: (String, Boolean) -> Unit,
     onEmbed: (Embed) -> Unit,
-    /** Opens the chat log search for a name. */
-    onSearchUser: (String) -> Unit,
+    /** What the sheet for a tapped name can do. */
+    userActions: UserActions,
     /** The player, shown above chat; null when hidden. */
     player: (@Composable () -> Unit)?,
     /**
@@ -121,7 +122,7 @@ fun ChatScreen(
     val currentBody by rememberUpdatedState<@Composable () -> Unit> {
         if (instead != null) instead()
         else ChatBody(
-            lines, flairs, emotes, state, account, onSend, input, onIgnore, onHighlight, onEmbed, onSearchUser,
+            lines, flairs, emotes, state, account, onSend, input, onEmbed, userActions,
             poll, onVote, onClosePoll, pinned, onShowPin, unreadWhispers, onWhispers,
         )
     }
@@ -154,10 +155,8 @@ private fun ChatBody(
     account: Account?,
     onSend: (String) -> Boolean,
     input: ChatInputState,
-    onIgnore: (String) -> Unit,
-    onHighlight: (String, Boolean) -> Unit,
     onEmbed: (Embed) -> Unit,
-    onSearchUser: (String) -> Unit,
+    userActions: UserActions,
     poll: Poll?,
     onVote: (Int) -> Unit,
     onClosePoll: () -> Unit,
@@ -180,10 +179,12 @@ private fun ChatBody(
         val mention = remember(me) { me?.let(::mentionPattern) }
         val embedHandler = rememberUpdatedState(onEmbed)
         val openEmbed: (Embed) -> Unit = remember { { embedHandler.value(it) } }
-        // Tapping a name offers to mention, whisper, highlight or ignore them.
-        // Signed out there is no input to act from.
-        val signedIn = account != null
-        val tapNick: (String) -> Unit = remember(input, signedIn) { { if (signedIn) input.tappedNick = it } }
+        // Tapping a name, or holding a message, opens the sheet about that person.
+        val tapNick: (String) -> Unit = remember(input) { { input.openUser(it) } }
+        val holdLine: (ChatLine) -> Unit = remember(input) { { line -> line.nick?.let { input.openUser(it, line) } } }
+        input.tappedNick?.let { nick ->
+            UserSheet(nick, input.tappedLine, flairs, account, input, userActions, onDismiss = input::closeUser)
+        }
         // Highlights by name and by word; mentions of you are the row's own business.
         val highlightNicks = input.highlighted.nicks
         val words = input.settings.list("customhighlight")
@@ -207,7 +208,10 @@ private fun ChatBody(
                     val marked = remember(shown.line, highlighter) {
                         shown.line.kind == ChatLine.Kind.User && highlighter.highlights(shown.line.nick, shown.line.text)
                     }
-                    ChatRow(shown.line, shown.continued, flairs, emotes, me, mention, marked, openEmbed, tapNick)
+                    ChatRow(
+                        shown.line, shown.continued, flairs, emotes, me, mention, marked, openEmbed, tapNick,
+                        onHold = if (shown.line.kind == ChatLine.Kind.User) holdLine else null,
+                    )
                 }
             }
             Column(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalAlignment = Alignment.End) {
@@ -224,7 +228,7 @@ private fun ChatBody(
             }
         }
         if (account != null) {
-            ChatInput(input, emotes, account, connected = state == SocketState.Connected, onSend, onIgnore, onHighlight, onSearchUser)
+            ChatInput(input, emotes, account, connected = state == SocketState.Connected, onSend)
         }
     }
 }
@@ -303,6 +307,11 @@ internal fun tagColor(name: String): Color = when (name) {
 
 private val taggedBackground = Color(0xFF232323)
 
+/** Whether a tap on a row's name or link should count: not after a hold. */
+private class HoldGate {
+    var open = true
+}
+
 val LocalChatLook = staticCompositionLocalOf { ChatLook() }
 
 /** A line laid out once per change of its inputs, with pictures as inline content. */
@@ -319,11 +328,22 @@ internal fun ChatRow(
     highlighted: Boolean,
     onEmbed: (Embed) -> Unit,
     onNick: (String) -> Unit,
+    /** Holding the line: its message's sheet. Null for lines that have none. */
+    onHold: ((ChatLine) -> Unit)? = null,
 ) {
     val density = LocalDensity.current
     val look = LocalChatLook.current
+    val uri = LocalUriHandler.current
+    // A press held long enough to open the sheet isn't also a tap on the
+    // name or link under it, which would fire when the finger lifts.
+    val gate = remember { HoldGate() }
     val rendered = remember(line, continued, flairs, emotes, density, me, look) {
-        render(line, continued, flairs, emotes, density, me, mention, look, onEmbed, onNick)
+        render(
+            line, continued, flairs, emotes, density, me, mention, look,
+            onEmbed = { if (gate.open) onEmbed(it) },
+            onNick = { if (gate.open) onNick(it) },
+            onUrl = { if (gate.open) runCatching { uri.openUri(it) } },
+        )
     }
     // A tagged user's lines get a bar of their colour down the left, as chat-gui draws them.
     val tag = if (line.kind == ChatLine.Kind.User) line.nick?.lowercase()?.let { look.tags[it] } else null
@@ -339,6 +359,15 @@ internal fun ChatRow(
         inlineContent = rendered.inline,
         modifier = Modifier.fillMaxWidth().background(background)
             .then(if (bar == null) Modifier else Modifier.drawBehind { drawRect(bar, size = Size(4.dp.toPx(), size.height)) })
+            .then(
+                if (onHold == null) Modifier
+                else Modifier.pointerInput(line) {
+                    detectTapGestures(
+                        onPress = { gate.open = true },
+                        onLongPress = { gate.open = false; onHold(line) },
+                    )
+                },
+            )
             .padding(horizontal = 10.dp, vertical = 2.dp),
         color = Palette.White,
         fontSize = 14.sp,
@@ -368,6 +397,7 @@ private fun render(
     look: ChatLook,
     onEmbed: (Embed) -> Unit,
     onNick: (String) -> Unit,
+    onUrl: (String) -> Unit,
 ): RenderedLine {
     val inline = HashMap<String, InlineTextContent>()
     fun placeholder(widthDp: Int, heightDp: Int) = with(density) {
@@ -471,7 +501,7 @@ private fun render(
         withStyle(style) {
             for (segment in parts) when (segment) {
                 is Segment.Text -> append(segment.text)
-                is Segment.Link -> withLink(LinkAnnotation.Url(segment.url, linkStyle)) { append(segment.text) }
+                is Segment.Link -> withLink(LinkAnnotation.Clickable(segment.url, linkStyle) { onUrl(segment.url) }) { append(segment.text) }
                 is Segment.EmbedLink -> withLink(
                     LinkAnnotation.Clickable(segment.embed.key, linkStyle) { onEmbed(segment.embed) },
                 ) { append(segment.text) }

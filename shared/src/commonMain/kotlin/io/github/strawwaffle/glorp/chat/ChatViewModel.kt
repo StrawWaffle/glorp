@@ -519,6 +519,15 @@ class ChatViewModel(
         notice(if (nicks.size == 1) "Ignoring ${nicks[0]}" else "Added the following people to your ignore list: ${nicks.joinToString(", ")}")
     }
 
+    /** The site's details about [nick], for the name sheet. */
+    suspend fun lookUp(nick: String): io.github.strawwaffle.glorp.site.UserLookup =
+        io.github.strawwaffle.glorp.site.lookUpUser(client, site, nick)
+
+    fun unignore(nick: String) {
+        input.ignored.remove(listOf(nick))
+        notice("$nick has been removed from your ignore list")
+    }
+
     /** `/highlight nick`, `/unhighlight nick`, or the list for a null [nick]. */
     fun highlight(nick: String?, on: Boolean) {
         if (nick == null) {

@@ -61,11 +61,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.strawwaffle.glorp.chat.ChatInputState
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.runtime.key
-import io.github.strawwaffle.glorp.chat.TAG_COLORS
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.border
 import io.github.strawwaffle.glorp.chat.Suggestion
 import io.github.strawwaffle.glorp.chat.complete
 import io.github.strawwaffle.glorp.chat.insertWord
@@ -101,10 +96,6 @@ fun ChatInput(
     account: Account,
     connected: Boolean,
     onSend: (String) -> Boolean,
-    onIgnore: (String) -> Unit,
-    onHighlight: (String, Boolean) -> Unit,
-    /** Opens the chat log search for a name. */
-    onSearchUser: (String) -> Unit = {},
     /** The placeholder; chat's own when null. */
     hint: String? = null,
 ) {
@@ -127,8 +118,14 @@ fun ChatInput(
     val imeVisible = WindowInsets.isImeVisible
     LaunchedEffect(imeVisible) { if (imeVisible) picker = false }
     // Back closes the picker or a name's actions before it leaves chat.
-    OnBack(enabled = picker || state.tappedNick != null) {
-        if (state.tappedNick != null) state.tappedNick = null else picker = false
+    OnBack(enabled = picker) { picker = false }
+    // The name sheet's Mention and Whisper hand the input the caret.
+    LaunchedEffect(state.focusRequests) {
+        if (state.focusRequests > 0) {
+            picker = false
+            focus.requestFocus()
+            keyboard?.show()
+        }
     }
 
     fun take(suggestion: Suggestion) {
@@ -146,26 +143,7 @@ fun ChatInput(
     val send = { onSend(draft.text) }
 
     Column(Modifier.fillMaxWidth().background(Palette.Navy)) {
-        val tapped = state.tappedNick
         when {
-            tapped != null -> NickActions(
-                nick = tapped,
-                highlighted = tapped in state.highlighted,
-                tag = state.tags.colors[tapped.lowercase()],
-                note = state.tags.notes[tapped.lowercase()].orEmpty(),
-                // A new tag keeps the note they had; notes are set with /tag.
-                onTag = { color ->
-                    val key = tapped.lowercase()
-                    if (color == null) state.tags.untag(key) else state.tags.tag(key, color, state.tags.notes[key].orEmpty())
-                    state.tappedNick = null
-                },
-                onMention = { insert(tapped); state.tappedNick = null; focus.requestFocus(); keyboard?.show() },
-                onWhisper = { state.setDraft("/w $tapped "); state.tappedNick = null; focus.requestFocus(); keyboard?.show() },
-                onIgnore = { onIgnore(tapped); state.tappedNick = null },
-                onHighlight = { onHighlight(tapped, tapped !in state.highlighted); state.tappedNick = null },
-                onRecent = { state.tappedNick = null; onSearchUser(tapped) },
-                onClose = { state.tappedNick = null },
-            )
             suggestions.isNotEmpty() -> SuggestionStrip(suggestions, emotes, ::take)
             focused && draft.text.isEmpty() && state.history.recent.isNotEmpty() -> HistoryStrip(state.history.recent) {
                 state.setDraft(it)
@@ -296,75 +274,6 @@ private fun HistoryStrip(recent: List<String>, onPick: (String) -> Unit) {
                     .clickable { onPick(text) }.padding(horizontal = 8.dp, vertical = 6.dp),
             )
         }
-    }
-}
-
-@Composable
-private fun NickActions(
-    nick: String,
-    highlighted: Boolean,
-    tag: String?,
-    note: String,
-    onTag: (String?) -> Unit,
-    onMention: () -> Unit,
-    onWhisper: () -> Unit,
-    onIgnore: () -> Unit,
-    onHighlight: () -> Unit,
-    onRecent: () -> Unit,
-    onClose: () -> Unit,
-) {
-    var picking by remember(nick) { mutableStateOf(false) }
-    if (note.isNotEmpty()) {
-        Text(
-            note,
-            color = Palette.TextDim,
-            fontSize = 12.sp,
-            maxLines = 2,
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 6.dp),
-        )
-    }
-    // Each set of actions starts at its beginning, the name in view.
-    val rowState = key(picking) { rememberLazyListState() }
-    LazyRow(
-        Modifier.fillMaxWidth().height(40.dp),
-        state = rowState,
-        contentPadding = PaddingValues(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 4.dp)) {
-                if (tag != null) Box(Modifier.padding(end = 6.dp).size(10.dp).background(tagColor(tag), CircleShape))
-                Text(nick, color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            }
-        }
-        if (picking) {
-            // chat-gui's colours; the one they have is ringed.
-            items(TAG_COLORS) { color ->
-                Box(
-                    Modifier.padding(horizontal = 4.dp).size(28.dp)
-                        .then(if (color == tag) Modifier.border(2.dp, Palette.White, CircleShape) else Modifier)
-                        .padding(4.dp).background(tagColor(color), CircleShape)
-                        .clickable(onClickLabel = "Tag $color") { onTag(color) },
-                )
-            }
-            if (tag != null) item { Action("Untag", { onTag(null) }) }
-            item { Action("Back", { picking = false }, Palette.TextDim) }
-        } else {
-            item { Action("Mention", onMention) }
-            item { Action("Whisper", onWhisper) }
-            item { Action("Recent messages", onRecent) }
-            item { Action(if (highlighted) "Unhighlight" else "Highlight", onHighlight) }
-            item { Action(if (tag != null) "Tag colour" else "Tag", { picking = true }) }
-            item { Action("Ignore", onIgnore) }
-            item { Action("Close", onClose, Palette.TextDim) }
-        }
-    }
-}
-
-@Composable
-private fun Action(label: String, onClick: () -> Unit, color: Color = Palette.Blue) {
-    TextButton(onClick = onClick, contentPadding = PaddingValues(horizontal = 10.dp)) {
-        Text(label, color = color, fontSize = 13.sp)
     }
 }
 

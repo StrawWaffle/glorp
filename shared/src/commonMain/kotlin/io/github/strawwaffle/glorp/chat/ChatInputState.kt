@@ -1,7 +1,9 @@
 package io.github.strawwaffle.glorp.chat
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import io.github.strawwaffle.glorp.ui.MAX_MESSAGE
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -24,8 +26,40 @@ class ChatInputState(
     val highlighted = NickSet(settings, "highlightnicks")
     val tags = Tags(settings)
 
-    /** A name tapped in chat, whose actions show above the input; null when none. */
+    /** Someone tapped in chat, whose sheet is open; null when none. */
     var tappedNick by mutableStateOf<String?>(null)
+        private set
+
+    /** The message long-pressed to open the sheet, if it was opened that way. */
+    var tappedLine by mutableStateOf<ChatLine?>(null)
+        private set
+
+    /** Bumped to ask the input to take focus and show the keyboard. */
+    var focusRequests by mutableIntStateOf(0)
+        private set
+
+    fun openUser(nick: String, line: ChatLine? = null) {
+        tappedNick = nick
+        tappedLine = line
+    }
+
+    fun closeUser() {
+        tappedNick = null
+        tappedLine = null
+    }
+
+    /** Puts [nick] in the draft at the caret, and the caret in the input. */
+    fun mention(nick: String) {
+        val (next, caret) = insertWord(draft.text, draft.selection.end, nick)
+        if (next.length <= MAX_MESSAGE) setDraft(next, caret)
+        focusRequests++
+    }
+
+    /** Starts a whisper to [nick] in the input. */
+    fun whisper(nick: String) {
+        setDraft("/w $nick ")
+        focusRequests++
+    }
 
     /** Who `/r` answers: the last whisperer, or the last one whispered. */
     var replyTo: String? = null

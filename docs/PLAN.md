@@ -256,6 +256,43 @@ open, and fall back to a link to the site when something changes.
   Mitch registers a client for it. Plan: read-only schedule, history and
   results screens first; voting once there's a client or API key.
 
+## From d.gg utilities (read 2026-11-23)
+
+vyneer's userscript (`dgg-chat-gui-scripts/dgg-utilities.user.js`, v1.9)
+was widely used; the site has since taken over its embeds list. Worth
+bringing to Glorp, in rough order:
+
+- **Nuke and mutelinks warnings.** A chip over the input while a nuke is on
+  (its word or `/regex/`, mute or ban, how long), and while mutelinks is on
+  (any link, or links naming someone). The input turns a warning colour when
+  the draft would be caught, and sending asks "send anyway?" instead of
+  going straight out. The data comes from `vyneer.me/tools/nukes` and
+  `/tools/mutelinks` (`{data:[...], updatedAt}`; `?ts=1` for the stamp
+  alone, polled cheaply); `/tools/providers` says which source to use for
+  each (today nukes and mutelinks from vyneer.me, phrases native). A
+  personal service: ask vyneer first, and poll only while chat is open.
+- **Banned phrases warning.** The same check against banned phrases
+  (`ADDPHRASE`/`REMOVEPHRASE` arrive on the socket; the full list from the
+  provider), before the server refuses the message.
+- **Alert phrases.** Your own hard and soft warning words for the input.
+- **Hide messages with phrases**, beyond chat-gui's ignore list.
+- **Hide individual flairs** (pick which flair icons not to draw).
+- **Sticky mentions and whispers.** A recent mention or whisper stays above
+  chat after you scroll past it, until dismissed.
+- **Live notification**, the app's version of its "change the tab title
+  when Destiny is live".
+- **Embeds list options**: top N, a viewer floor, latest instead of top,
+  Destiny's last VOD; YouTube and Rumble links shown as channel and title
+  (oEmbed) in messages and the player bar.
+- **The embedded stream's own chat** (Kick, Twitch, YouTube live chat) in
+  place of destiny.gg's, a toggle away.
+
+Already in Glorp: the embeds list, tap a name to mention.
+
+## Design (researched 2026-11-23)
+
+See [DESIGN.md](DESIGN.md).
+
 ## iOS
 
 Everything in `commonMain` is meant to run on iOS. What an iOS build still

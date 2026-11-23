@@ -188,7 +188,7 @@ private fun ConversationView(
             }
             LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true) {
                 items(lines, key = { it.first.id }) { (line, continued) ->
-                    ChatRow(line, continued, flairs, emotes, account.nick, null, false, onEmbed) {}
+                    ChatRow(line, continued, flairs, emotes, account.nick, null, false, onEmbed, onNick = {})
                 }
             }
         }
@@ -199,8 +199,6 @@ private fun ConversationView(
         ChatInput(
             input, emotes, account, connected,
             onSend = onSend,
-            onIgnore = {},
-            onHighlight = { _, _ -> },
             hint = "Whisper to ${conversation.nick} ...",
         )
     }

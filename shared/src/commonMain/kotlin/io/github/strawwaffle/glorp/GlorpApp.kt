@@ -21,6 +21,7 @@ import io.github.strawwaffle.glorp.ui.Bigscreen
 import io.github.strawwaffle.glorp.ui.ChatScreen
 import io.github.strawwaffle.glorp.ui.ChatLook
 import io.github.strawwaffle.glorp.ui.LocalChatLook
+import io.github.strawwaffle.glorp.ui.UserActions
 import io.github.strawwaffle.glorp.ui.Fullscreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
 import io.github.strawwaffle.glorp.ui.LocalFullscreen
@@ -133,10 +134,18 @@ fun GlorpApp(
             lines, flairs, emotes, state, account,
             onSend = chat::send,
             input = chat.input,
-            onIgnore = { chat.ignore(listOf(it)) },
-            onHighlight = chat::highlight,
             onEmbed = { chat.watch(it); playerShown = true },
-            onSearchUser = { communityArg = it; screen = "rustle" },
+            userActions = remember(chat) {
+                UserActions(
+                    lookUp = chat::lookUp,
+                    recent = { communityArg = it; screen = "rustle" },
+                    ignore = { chat.ignore(listOf(it)) },
+                    unignore = chat::unignore,
+                    highlight = chat::highlight,
+                    command = { chat.send(it) },
+                    watch = { chat.watch(it); playerShown = true },
+                )
+            },
             poll = poll,
             onVote = chat::vote,
             onClosePoll = chat::dismissPoll,

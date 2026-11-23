@@ -1,0 +1,254 @@
+package io.github.strawwaffle.glorp.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import io.github.strawwaffle.glorp.chat.ChatInputState
+import io.github.strawwaffle.glorp.chat.ChatLine
+import io.github.strawwaffle.glorp.chat.TAG_COLORS
+import io.github.strawwaffle.glorp.site.Account
+import io.github.strawwaffle.glorp.site.Embed
+import io.github.strawwaffle.glorp.site.Flairs
+import io.github.strawwaffle.glorp.site.UserLookup
+import io.github.strawwaffle.glorp.site.ageLabel
+import io.github.strawwaffle.glorp.site.genderLabel
+
+/** What the name sheet can do beyond the input's own lists. */
+class UserActions(
+    val lookUp: suspend (String) -> UserLookup,
+    /** Opens the chat log search for a name. */
+    val recent: (String) -> Unit,
+    val ignore: (String) -> Unit,
+    val unignore: (String) -> Unit,
+    val highlight: (String, Boolean) -> Unit,
+    /** Runs a typed command, as if sent from the input (moderators' mute and ban). */
+    val command: (String) -> Unit,
+    val watch: (Embed) -> Unit,
+)
+
+/**
+ * A person, as the site's user menu shows them: name, flairs, tag, when they
+ * joined and what they're watching; then what can be done about them. Opened
+ * by tapping a name or long-pressing a message (which adds the message's own
+ * actions).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UserSheet(
+    nick: String,
+    line: ChatLine?,
+    flairs: Flairs,
+    account: Account?,
+    input: ChatInputState,
+    actions: UserActions,
+    onDismiss: () -> Unit,
+) {
+    val sheet = rememberModalBottomSheetState()
+    val lookup by produceState<UserLookup?>(null, nick) { value = actions.lookUp(nick) }
+    val found = (lookup as? UserLookup.Found)?.info
+    val key = nick.lowercase()
+    val me = account?.nick?.lowercase()
+    val self = key == me
+    val tag = input.tags.colors[key]
+    val note = input.tags.notes[key].orEmpty()
+    val features = found?.features ?: line?.features.orEmpty()
+    val clipboard = LocalClipboardManager.current
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = Palette.Navy) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 8.dp)) {
+            // Who.
+            Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (tag != null) Box(Modifier.padding(end = 8.dp).size(12.dp).background(tagColor(tag), CircleShape))
+                for (badge in flairs.badges(features)) {
+                    AsyncImage(badge.url, badge.label, Modifier.padding(end = 4.dp).size(badge.width.dp, badge.height.dp))
+                }
+                Text(
+                    found?.nick ?: nick,
+                    color = flairs.nameColor(features)?.let { Color(it) } ?: Palette.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                )
+            }
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+                when (lookup) {
+                    null -> Detail("Looking them up…")
+                    UserLookup.NotFound -> Detail("No such user on the site.")
+                    UserLookup.Failed -> Detail("Couldn't reach the site for their details.")
+                    is UserLookup.Found -> Unit
+                }
+                found?.watching?.let { embed ->
+                    Detail("Watching ${embed.id} on ${embed.platform}", Palette.Blue) { actions.watch(embed); onDismiss() }
+                }
+                found?.createdDate?.let(::joined)?.let { Detail("Joined $it") }
+                found?.age?.let { Detail("Age: ${ageLabel(it)}") }
+                found?.gender?.let { Detail("Gender: ${genderLabel(it)}") }
+                found?.bio?.let { Detail("Bio: $it") }
+                if (note.isNotEmpty()) Detail("Tag: $note")
+                val badges = flairs.badges(features)
+                if (badges.isNotEmpty()) Detail(badges.joinToString(", ") { it.label })
+            }
+
+            // The message it was opened from.
+            if (line != null) {
+                Divider()
+                Text(
+                    line.text,
+                    color = Palette.TextDim,
+                    fontSize = 14.sp,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+                        .background(Palette.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+                Action("Copy message") { clipboard.setText(AnnotatedString(line.text)); onDismiss() }
+            }
+
+            Divider()
+            if (account != null && !self) {
+                Action("Mention") { input.mention(nick); onDismiss() }
+                Action("Whisper") { input.whisper(nick); onDismiss() }
+            }
+            Action("Recent messages") { onDismiss(); actions.recent(nick) }
+            if (account != null && !self) {
+                val highlighted = nick in input.highlighted
+                Action(if (highlighted) "Stop highlighting" else "Highlight their messages") {
+                    actions.highlight(nick, !highlighted); onDismiss()
+                }
+                TagRow(tag) { color ->
+                    if (color == null) input.tags.untag(key) else input.tags.tag(key, color, note)
+                }
+                val ignored = nick in input.ignored
+                Action(if (ignored) "Stop ignoring" else "Ignore", if (ignored) Palette.White else Palette.Orange) {
+                    if (ignored) actions.unignore(nick) else actions.ignore(nick)
+                    onDismiss()
+                }
+            }
+
+            if (account?.modPowers == true && !self) {
+                Divider()
+                Durations("Mute", listOf("1m", "10m", "1h", "1d"), confirm = false) {
+                    actions.command("/mute $nick $it"); onDismiss()
+                }
+                // As the site's menu bans: by IP, with its reason.
+                Durations("Ban", listOf("1d", "7d", "30d", "Perm"), confirm = true) {
+                    actions.command("/ipban $nick $it $nick banned by ${account.nick}."); onDismiss()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Detail(text: String, color: Color = Palette.TextDim, onClick: (() -> Unit)? = null) = Text(
+    text,
+    color = color,
+    fontSize = 13.sp,
+    modifier = Modifier.padding(vertical = 2.dp).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+)
+
+@Composable
+private fun Divider() = HorizontalDivider(Modifier.padding(vertical = 4.dp), color = Palette.NavyLight)
+
+/** A full-width row, at least 48 dp tall. */
+@Composable
+private fun Action(label: String, color: Color = Palette.White, onClick: () -> Unit) = Text(
+    label,
+    color = color,
+    fontSize = 15.sp,
+    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick)
+        .padding(horizontal = 20.dp, vertical = 13.dp),
+)
+
+/** chat-gui's tag colours; the one they have is ringed, and tapping it again takes the tag off. */
+@Composable
+private fun TagRow(tag: String?, onTag: (String?) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+        Text(if (tag == null) "Tag" else "Tagged $tag (tap it again to untag)", color = Palette.White, fontSize = 15.sp)
+        FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            for (color in TAG_COLORS) {
+                Box(
+                    Modifier.size(44.dp)
+                        .clickable(onClickLabel = if (color == tag) "Untag" else "Tag $color") { onTag(if (color == tag) null else color) }
+                        .padding(6.dp)
+                        .then(if (color == tag) Modifier.border(2.dp, Palette.White, CircleShape) else Modifier)
+                        .padding(4.dp)
+                        .background(tagColor(color), CircleShape),
+                )
+            }
+        }
+    }
+}
+
+/** A moderator's action with its lengths; a ban asks for a second tap. */
+@Composable
+private fun Durations(label: String, durations: List<String>, confirm: Boolean, onPick: (String) -> Unit) {
+    var armed by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+        Text(
+            armed?.let { "Tap $it again to ${label.lowercase()}" } ?: label,
+            color = if (armed != null) Palette.Orange else Palette.White,
+            fontSize = 15.sp,
+        )
+        Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (d in durations) {
+                Text(
+                    d,
+                    color = if (d == armed) Palette.Black else Palette.White,
+                    fontSize = 14.sp,
+                    modifier = Modifier.heightIn(min = 40.dp)
+                        .background(if (d == armed) Palette.Orange else Palette.NavyLight, RoundedCornerShape(8.dp))
+                        .clickable { if (!confirm || armed == d) onPick(d) else armed = d }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                )
+            }
+        }
+    }
+}
+
+private val months = listOf(
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+)
+
+/** `2013-03-08T…` as "8 March 2013". */
+internal fun joined(date: String): String? {
+    val parts = date.take(10).split('-').mapNotNull { it.toIntOrNull() }
+    if (parts.size != 3 || parts[1] !in 1..12) return null
+    return "${parts[2]} ${months[parts[1] - 1]} ${parts[0]}"
+}
