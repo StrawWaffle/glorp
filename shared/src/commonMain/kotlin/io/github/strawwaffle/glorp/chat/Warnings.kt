@@ -35,7 +35,7 @@ data class Mutelinks(val status: String, val by: String?, val duration: String) 
 
 /** Why a draft would get its sender in trouble. */
 data class Warning(val kind: Kind, val what: String, val type: String, val duration: String) {
-    enum class Kind { Phrase, Nuke, Links }
+    enum class Kind { Phrase, Nuke, Links, Alert }
 
     /** One line, for over the input. */
     val text: String
@@ -45,6 +45,7 @@ data class Warning(val kind: Kind, val what: String, val type: String, val durat
                 Kind.Phrase -> "\"$what\" is a banned phrase: $penalty."
                 Kind.Nuke -> "\"$what\" is nuked: $penalty."
                 Kind.Links -> "Mutelinks is on: a link gets you $penalty."
+                Kind.Alert -> "\"$what\" is one of your alert words."
             }
         }
 }
@@ -58,8 +59,9 @@ class ModWatch {
     var phrases by mutableStateOf(emptyList<BannedPhrase>())
     var mutelinks by mutableStateOf<Mutelinks?>(null)
 
-    /** What the draft would set off, the userscript's order: phrases, links, nukes. Null when nothing. */
-    fun check(draft: String): Warning? = checkDraft(draft, phrases, mutelinks, nukes)
+    /** What the draft would set off, the userscript's order: phrases, links, nukes, your own words. Null when nothing. */
+    fun check(draft: String, alertWords: List<String> = emptyList()): Warning? =
+        checkDraft(draft, phrases, mutelinks, nukes, alertWords)
 }
 
 private val whisperCommands = listOf("/w ", "/whisper ", "/msg ", "/message ", "/notify ", "/tell ", "/t ", "/r ", "/reply ")
@@ -67,7 +69,13 @@ private val whisperCommands = listOf("/w ", "/whisper ", "/msg ", "/message ", "
 // The userscript's link test: an address, or a word ending in a common top-level domain.
 private val link = Regex("""(?:https?://|www\.)\S|\b[\w-]+\.(?:com|org|ru|net|uk|au|in|de|ir|ca|gov|be|tv|it|gg|io|ly|co|me)\b""", RegexOption.IGNORE_CASE)
 
-internal fun checkDraft(draft: String, phrases: List<BannedPhrase>, mutelinks: Mutelinks?, nukes: List<Nuke>): Warning? {
+internal fun checkDraft(
+    draft: String,
+    phrases: List<BannedPhrase>,
+    mutelinks: Mutelinks?,
+    nukes: List<Nuke>,
+    alertWords: List<String> = emptyList(),
+): Warning? {
     val text = draft.trim()
     if (text.isEmpty()) return null
     val lower = text.lowercase()
@@ -79,5 +87,6 @@ internal fun checkDraft(draft: String, phrases: List<BannedPhrase>, mutelinks: M
         return Warning(Warning.Kind.Links, "links", "mute", mutelinks.duration)
     }
     nukes.firstOrNull { it.trap.catches(text) }?.let { return Warning(Warning.Kind.Nuke, it.word, it.type, it.duration) }
+    alertWords.firstOrNull { it.isNotBlank() && Trap(it).catches(text) }?.let { return Warning(Warning.Kind.Alert, it, "", "") }
     return null
 }

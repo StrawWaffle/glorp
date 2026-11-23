@@ -39,7 +39,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Checkbox
+import coil3.compose.AsyncImage
 import io.github.strawwaffle.glorp.chat.ChatSettings
+import io.github.strawwaffle.glorp.chat.LocalOptions
+import io.github.strawwaffle.glorp.site.Flairs
 import io.github.strawwaffle.glorp.chat.highlightWords
 
 /**
@@ -57,9 +63,13 @@ fun SettingsScreen(
     catchUp: Float,
     catchUpSpeeds: List<Float>,
     onCatchUp: (Float) -> Unit,
+    /** The options kept on this phone: hidden phrases and flairs, alert words. */
+    options: LocalOptions,
+    flairs: Flairs,
     warnings: Boolean,
     onWarnings: (Boolean) -> Unit,
 ) {
+    var choosingFlairs by remember { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize().background(Palette.Black)) {
         item {
             Text("Settings", color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(16.dp))
@@ -88,10 +98,69 @@ fun SettingsScreen(
                 onWarnings,
             )
         }
+        item {
+            WordsSetting(
+                "My alert words",
+                "None. Words to be warned about before sending, kept on this phone",
+                options.alertWords,
+                options::alertOn,
+            )
+        }
+
+        item { SettingsHeading("Hiding") }
+        item {
+            SwitchRow("Hide messages that mention people I ignore", null, settings.ignoreMentions) {
+                settings.setBool("ignorementions", it)
+            }
+        }
+        item { SwitchRow("Hide messages marked NSFW", null, settings.hideNsfw) { settings.setBool("hidensfw", it) } }
+        item { SwitchRow("Hide messages marked NSFL", null, settings.hideNsfl) { settings.setBool("hidensfl", it) } }
+        item {
+            WordsSetting(
+                "Hide messages with these words",
+                "None. Kept on this phone; a word can be a /pattern/",
+                options.hiddenPhrases,
+                options::hidePhrases,
+            )
+        }
+        item {
+            val hidden = options.hiddenFlairs.size
+            Column(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { choosingFlairs = !choosingFlairs }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text("Flair icons to hide", color = Palette.White, fontSize = 15.sp)
+                Text(
+                    (if (hidden == 0) "None hidden" else "$hidden hidden") + if (choosingFlairs) " · tap to close" else " · tap to choose",
+                    color = Palette.TextDim,
+                    fontSize = 12.sp,
+                )
+            }
+        }
+        if (choosingFlairs) {
+            items(flairs.allBadges, key = { "flair:" + it.name }) { badge ->
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .clickable { options.setFlairHidden(badge.name, badge.name !in options.hiddenFlairs) }
+                        .padding(start = 32.dp, end = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AsyncImage(badge.url, null, Modifier.size(badge.width.dp, badge.height.dp))
+                    Text(badge.label, color = Palette.White, fontSize = 14.sp, modifier = Modifier.weight(1f).padding(start = 12.dp))
+                    Checkbox(checked = badge.name in options.hiddenFlairs, onCheckedChange = null)
+                }
+            }
+        }
 
         item { SettingsHeading("Highlights and tags") }
         item { SwitchRow("Highlight messages that mention me", null, settings.highlightSelf) { settings.setBool("highlight", it) } }
-        item { HighlightWords(settings) }
+        item {
+            WordsSetting(
+                "Highlight words",
+                "None. Messages with these words stand out",
+                settings.list("customhighlight"),
+            ) { settings.setList("customhighlight", it) }
+        }
         item {
             SwitchRow(
                 "Make tagged users stand out",
@@ -180,10 +249,9 @@ private fun <T> Choices(title: String, detail: String?, values: List<T>, current
     }
 }
 
-/** `customhighlight`: words that highlight a message, written as the site's settings take them, between commas. */
+/** A list of words, written as the site's settings take them: between commas. */
 @Composable
-private fun HighlightWords(settings: ChatSettings) {
-    val words = settings.list("customhighlight")
+private fun WordsSetting(title: String, empty: String, words: List<String>, onSave: (List<String>) -> Unit) {
     var editing by remember { mutableStateOf<TextFieldValue?>(null) }
     val draft = editing
     if (draft == null) {
@@ -193,9 +261,9 @@ private fun HighlightWords(settings: ChatSettings) {
                 editing = TextFieldValue(text, TextRange(text.length))
             }.padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
-            Text("Highlight words", color = Palette.White, fontSize = 15.sp)
+            Text(title, color = Palette.White, fontSize = 15.sp)
             Text(
-                if (words.isEmpty()) "None. Messages with these words stand out" else words.joinToString(", "),
+                if (words.isEmpty()) empty else words.joinToString(", "),
                 color = Palette.TextDim,
                 fontSize = 12.sp,
             )
@@ -205,11 +273,11 @@ private fun HighlightWords(settings: ChatSettings) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     fun save() {
-        settings.setList("customhighlight", highlightWords(draft.text))
+        onSave(highlightWords(draft.text))
         editing = null
     }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Text("Highlight words, between commas", color = Palette.White, fontSize = 15.sp)
+        Text("$title, between commas", color = Palette.White, fontSize = 15.sp)
         BasicTextField(
             draft,
             onValueChange = { editing = it },

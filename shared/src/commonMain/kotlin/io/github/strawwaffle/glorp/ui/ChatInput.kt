@@ -144,7 +144,8 @@ fun ChatInput(
     // A draft that would set off a nuke, mutelinks or a banned phrase says so,
     // and the first Send only arms it; a second sends it anyway.
     val watch = state.watch
-    val warning = remember(draft.text, watch.nukes, watch.phrases, watch.mutelinks) { watch.check(draft.text) }
+    val alertWords = state.options.alertWords
+    val warning = remember(draft.text, watch.nukes, watch.phrases, watch.mutelinks, alertWords) { watch.check(draft.text, alertWords) }
     val send = {
         if (warning != null && state.armed != draft.text) {
             state.armed = draft.text

@@ -131,6 +131,7 @@ fun GlorpApp(
             LocalChatLook provides ChatLook(
                 settings.showTime, settings.timestampFormat, settings.hideFlairIcons,
                 settings.highlightSelf, chat.input.tags.colors, settings.taggedVisibility,
+                chat.input.options.hiddenFlairs,
             ),
         ) {
         ChatScreen(
@@ -216,6 +217,8 @@ fun GlorpApp(
                                 catchUp = it
                                 prefs.put(CATCH_UP, it.toString())
                             },
+                            options = chat.input.options,
+                            flairs = flairs,
                             warnings = chat.warnings,
                             onWarnings = chat::warnAbout,
                         )

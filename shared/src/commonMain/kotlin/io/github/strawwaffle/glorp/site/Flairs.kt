@@ -34,6 +34,9 @@ class Flairs private constructor(
         return colored.firstOrNull { it.first in features }?.second
     }
 
+    /** Every badge, in chat's order, for choosing which to hide. */
+    val allBadges: List<Badge> get() = badges.values.sortedBy { it.first }.map { it.second }
+
     /** The badges chat shows beside a name, in its order: by priority, lowest first. */
     fun badges(features: List<String>): List<Badge> =
         features.mapNotNull { badges[it] }.sortedBy { it.first }.map { it.second }

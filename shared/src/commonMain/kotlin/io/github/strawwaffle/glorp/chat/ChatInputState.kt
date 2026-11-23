@@ -26,6 +26,9 @@ class ChatInputState(
     val highlighted = NickSet(settings, "highlightnicks")
     val tags = Tags(settings)
 
+    /** What the site's settings have no place for, kept on this phone. */
+    val options = LocalOptions(prefs)
+
     /** Someone tapped in chat, whose sheet is open; null when none. */
     var tappedNick by mutableStateOf<String?>(null)
         private set

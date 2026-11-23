@@ -70,6 +70,7 @@ import io.github.strawwaffle.glorp.chat.ChatInputState
 import io.github.strawwaffle.glorp.chat.ChatLine
 import io.github.strawwaffle.glorp.chat.ChatViewModel
 import io.github.strawwaffle.glorp.chat.Highlighter
+import io.github.strawwaffle.glorp.chat.LineFilter
 import io.github.strawwaffle.glorp.chat.Poll
 import io.github.strawwaffle.glorp.chat.Segment
 import io.github.strawwaffle.glorp.chat.SocketState
@@ -174,10 +175,19 @@ private fun ChatBody(
         // composed, so only their emotes are drawn or animated.
         // A run of messages from one person shows their name once, as chat
         // does: the lines after the first are "continued".
-        val reversed = remember(lines) {
-            lines.mapIndexed { i, line -> Shown(line, i > 0 && continues(lines[i - 1], line)) }.asReversed()
-        }
         val me = account?.nick
+        // Messages hidden by settings (NSFW, mentions of ignored people, your
+        // hidden phrases) are left out before runs are worked out.
+        val settings = input.settings
+        val ignoredNicks = input.ignored.nicks
+        val hiddenPhrases = input.options.hiddenPhrases
+        val filter = remember(me, ignoredNicks, settings.ignoreMentions, settings.hideNsfw, settings.hideNsfl, hiddenPhrases) {
+            LineFilter(me, ignoredNicks, settings.ignoreMentions, settings.hideNsfw, settings.hideNsfl, hiddenPhrases)
+        }
+        val reversed = remember(lines, filter) {
+            val shownLines = if (filter.isEmpty) lines else lines.filter { !filter.hides(it) }
+            shownLines.mapIndexed { i, line -> Shown(line, i > 0 && continues(shownLines[i - 1], line)) }.asReversed()
+        }
         val mention = remember(me) { me?.let(::mentionPattern) }
         val embedHandler = rememberUpdatedState(onEmbed)
         val openEmbed: (Embed) -> Unit = remember { { embedHandler.value(it) } }
@@ -290,6 +300,8 @@ data class ChatLook(
     val highlightSelf: Boolean = true,
     val tags: Map<String, String> = emptyMap(),
     val taggedVisibility: Boolean = false,
+    /** Flair names whose icons aren't drawn. */
+    val hiddenFlairs: Set<String> = emptySet(),
 )
 
 /** chat-gui's tag colours. */
@@ -469,7 +481,7 @@ private fun render(
             // The rest of a run: no badges or name, a dim marker instead.
             withStyle(SpanStyle(color = Palette.TextDim)) { append("> ") }
         } else {
-            for (badge in if (look.hideFlairIcons) emptyList() else flairs.badges(line.features)) {
+            for (badge in if (look.hideFlairIcons) emptyList() else flairs.badges(line.features).filter { it.name !in look.hiddenFlairs }) {
                 val id = "badge:${badge.name}"
                 inline.getOrPut(id) {
                     InlineTextContent(placeholder(badge.width, badge.height)) {

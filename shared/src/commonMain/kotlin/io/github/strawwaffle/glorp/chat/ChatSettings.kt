@@ -49,6 +49,9 @@ class ChatSettings(private val prefs: ChatPrefs) {
     val hideFlairIcons: Boolean get() = bool("hideflairicons")
     val highlightSelf: Boolean get() = bool("highlight")
     val taggedVisibility: Boolean get() = bool("taggedvisibility")
+    val ignoreMentions: Boolean get() = bool("ignorementions")
+    val hideNsfw: Boolean get() = bool("hidensfw")
+    val hideNsfl: Boolean get() = bool("hidensfl")
     val timestampFormat: String get() = (get("timestampformat") as? JsonPrimitive)?.contentOrNull ?: "HH:mm"
 
     fun setBool(key: String, on: Boolean) = set(key, JsonPrimitive(on))
