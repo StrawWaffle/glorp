@@ -23,6 +23,10 @@ import io.github.strawwaffle.glorp.ui.ChatScreen
 import io.github.strawwaffle.glorp.ui.ChatLook
 import io.github.strawwaffle.glorp.ui.LocalChatLook
 import io.github.strawwaffle.glorp.ui.LocalOpenLink
+import io.github.strawwaffle.glorp.notify.AlertCheck
+import io.github.strawwaffle.glorp.notify.NotifyControls
+import io.github.strawwaffle.glorp.notify.NotifyOptions
+import io.github.strawwaffle.glorp.notify.OpenRequests
 import io.github.strawwaffle.glorp.community.rustleLinkOf
 import io.github.strawwaffle.glorp.ui.PlayerBar
 import io.github.strawwaffle.glorp.ui.SettingsScreen
@@ -62,6 +66,8 @@ fun GlorpApp(
     /** Glorp's own updates; null in builds that don't update themselves. */
     updates: io.github.strawwaffle.glorp.update.Updates? = null,
     pictureInPicture: PictureInPicture = PictureInPicture(),
+    /** Notifications for Destiny going live, mentions and whispers; null where there are none. */
+    notify: NotifyControls? = null,
 ) {
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
     // Keep a stream's sound going with the screen off: on unless turned off in the menu.
@@ -129,6 +135,23 @@ fun GlorpApp(
         SystemFullscreen(fullscreen && !pictureInPicture.active)
 
         val settings = chat.settings
+        // Notifications: the background check follows the options, wherever
+        // they changed (here, or on the site for the synced ones).
+        val notifyOptions = remember(chat) { NotifyOptions(prefs, settings) }
+        var notifyVersion by remember { mutableStateOf(0) }
+        val wantsNotifications = notifyOptions.mentions to notifyOptions.whispers
+        LaunchedEffect(notify, wantsNotifications, notifyVersion) { notify?.changed() }
+        // A tapped notification: the stream, a whisper conversation, or the chat around a mention.
+        val openRequest by OpenRequests.pending.collectAsStateWithLifecycle()
+        LaunchedEffect(openRequest) {
+            val target = openRequest ?: return@LaunchedEffect
+            OpenRequests.pending.value = null
+            when {
+                target == AlertCheck.OPEN_LIVE -> { chat.watch(null); playerShown = true; screen = "chat" }
+                target.startsWith(AlertCheck.OPEN_WHISPER) -> { communityArg = target.removePrefix(AlertCheck.OPEN_WHISPER); screen = "whispers" }
+                rustleLinkOf(target) != null -> { communityArg = target; screen = "rustle" }
+            }
+        }
         CompositionLocalProvider(
             LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it },
             // rustlesearch.dev links open the app's own log search on that query.
@@ -231,6 +254,10 @@ fun GlorpApp(
                             },
                             options = chat.input.options,
                             flairs = flairs,
+                            notify = notify,
+                            notifyOptions = notifyOptions,
+                            onNotifyChanged = { notifyVersion++ },
+                            signedInWithCookies = account != null && chat.whisperHistory,
                             warnings = chat.warnings,
                             onWarnings = chat::warnAbout,
                         )

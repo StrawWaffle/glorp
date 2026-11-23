@@ -281,6 +281,33 @@ open, and fall back to a link to the site when something changes.
   Mitch registers a client for it. Plan: read-only schedule, history and
   results screens first; voting once there's a client or API key.
 
+## Notifications (0.1.21)
+
+No chat connection is kept for them. Android's job scheduler runs
+`notify/AlertJob` every 15, 30 or 60 minutes (the user picks; needs a
+network, batched with other apps), and it asks the site once per kind
+turned on:
+
+- **Live:** `/api/info/stream`, anonymous; once per stream (its `started_at`).
+- **Mentions:** `/api/chat/mentions?username=&limit=` (chat-gui's `/mentions`),
+  which answers only with the login cookies (403 otherwise); chat-gui's
+  `notificationhighlight` setting turns it on, so it follows the account.
+  Tapping one opens the chat around it in the log search: by then it may
+  have left chat. The site gives whole seconds and rustlesearch wants the
+  millisecond, so the message is looked up first (`openAround`).
+- **Whispers:** `/api/messages/conversations`, cookies; `notificationwhisper`.
+
+The first look only takes note, so turning it on brings up nothing old.
+Each kind is its own Android channel (sound, vibration, silence set there).
+Nothing is shown while the app is on screen.
+
+A push server (one always-on process in chat, sending through Firebase)
+would make mentions instant with no checks from phones, but it would need
+every user's name, Google's push service in the app, and a host that keeps
+a connection open (Netlify's functions don't). For the live notification
+alone, a scheduled function polling `/api/info/stream` and sending to a
+topic would do; worth it if 15 minutes late is too late.
+
 ## From d.gg utilities (read 2026-11-23)
 
 vyneer's userscript (`dgg-chat-gui-scripts/dgg-utilities.user.js`, v1.9)

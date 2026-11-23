@@ -45,6 +45,8 @@ import androidx.compose.material3.Checkbox
 import coil3.compose.AsyncImage
 import io.github.strawwaffle.glorp.chat.ChatSettings
 import io.github.strawwaffle.glorp.chat.LocalOptions
+import io.github.strawwaffle.glorp.notify.NotifyControls
+import io.github.strawwaffle.glorp.notify.NotifyOptions
 import io.github.strawwaffle.glorp.site.Flairs
 import io.github.strawwaffle.glorp.chat.highlightWords
 
@@ -66,6 +68,12 @@ fun SettingsScreen(
     /** The options kept on this phone: hidden phrases and flairs, alert words. */
     options: LocalOptions,
     flairs: Flairs,
+    /** Notifications, where the platform has them. */
+    notify: NotifyControls? = null,
+    notifyOptions: NotifyOptions? = null,
+    onNotifyChanged: () -> Unit = {},
+    /** Mentions and whispers are read with the site's cookies; a login key can't. */
+    signedInWithCookies: Boolean = false,
     warnings: Boolean,
     onWarnings: (Boolean) -> Unit,
 ) {
@@ -182,6 +190,11 @@ fun SettingsScreen(
                 "A lighter background as well as the colour bar. Tag someone from their name, or with /tag",
                 settings.taggedVisibility,
             ) { settings.setBool("taggedvisibility", it) }
+        }
+
+        if (notify != null && notifyOptions != null) {
+            item { SettingsHeading("Notifications") }
+            item { NotificationSettings(notify, notifyOptions, settings, signedInWithCookies, onNotifyChanged) }
         }
 
         item { SettingsHeading("Player") }
@@ -307,6 +320,77 @@ private fun WordsSetting(title: String, empty: String, words: List<String>, onSa
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = { editing = null }) { Text("Cancel", color = Palette.TextDim) }
             TextButton(onClick = ::save) { Text("Save", color = Palette.Blue) }
+        }
+    }
+}
+
+/**
+ * Which notifications, how often Glorp looks, and Android's own settings for
+ * each kind's sound. Glorp checks the site in the background; it doesn't
+ * keep chat connected for this.
+ */
+@Composable
+private fun NotificationSettings(
+    notify: NotifyControls,
+    options: NotifyOptions,
+    settings: ChatSettings,
+    cookies: Boolean,
+    onChanged: () -> Unit,
+) {
+    var live by remember { mutableStateOf(options.live) }
+    var interval by remember { mutableStateOf(options.intervalMinutes) }
+    var permitted by remember { mutableStateOf(notify.permitted) }
+    // Turning one on asks Android's permission first, where it's needed.
+    fun turn(on: Boolean, apply: () -> Unit) {
+        if (on && !notify.permitted) {
+            notify.ask { granted ->
+                permitted = granted
+                if (granted) { apply(); onChanged() }
+            }
+        } else {
+            apply()
+            onChanged()
+        }
+    }
+    val signedOutNote = if (cookies) null else "Needs signing in with the site's cookies, as the site's own notifications do"
+    Column {
+        Text(
+            "Glorp looks at the site every so often in the background, without keeping chat connected.",
+            color = Palette.TextDim,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        SwitchRow("Destiny goes live", null, live) { on -> turn(on) { options.setLive(on); live = on } }
+        SwitchRow(
+            "Someone mentions me",
+            signedOutNote ?: "Tapping it opens the chat around the message, even once it has left chat. Follows your account, as on the site",
+            options.mentions,
+        ) { on -> turn(on) { settings.setBool("notificationhighlight", on) } }
+        SwitchRow(
+            "Whispers",
+            signedOutNote ?: "Tapping it opens the conversation. Follows your account, as on the site",
+            options.whispers,
+        ) { on -> turn(on) { settings.setBool("notificationwhisper", on) } }
+        Choices(
+            "Look every",
+            "Sooner means more checks: each is one small request per kind turned on",
+            NotifyOptions.INTERVALS,
+            interval,
+            label = { if (it < 60) "$it min" else "${it / 60} h" },
+        ) { options.setInterval(it); interval = it; onChanged() }
+        Column(
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { notify.openSystemSettings() }.padding(horizontal = 16.dp, vertical = 8.dp),
+        ) {
+            Text("Sound and vibration", color = Palette.White, fontSize = 15.sp)
+            Text("Android's settings for each kind: sound, vibration, silent, or off", color = Palette.TextDim, fontSize = 12.sp)
+        }
+        if (options.any && !permitted) {
+            Text(
+                "Android is blocking Glorp's notifications. Tap to allow them.",
+                color = Palette.Orange,
+                fontSize = 13.sp,
+                modifier = Modifier.fillMaxWidth().clickable { notify.ask { permitted = it; onChanged() } }.padding(horizontal = 16.dp, vertical = 10.dp),
+            )
         }
     }
 }

@@ -218,6 +218,10 @@ class ChatViewModel(
 
     init {
         settings.onChange = ::settingsChanged
+        // The background notification check runs without this view model:
+        // it reads the site and who is signed in from here.
+        prefs.put(io.github.strawwaffle.glorp.notify.NotifyOptions.ORIGIN, origin)
+        viewModelScope.launch { _account.collect { prefs.put(io.github.strawwaffle.glorp.notify.NotifyOptions.NICK, it?.nick) } }
         viewModelScope.launch {
             site = Site.discover(client, origin)
             launch { _flairs.value = Flairs.fetch(client, site) }

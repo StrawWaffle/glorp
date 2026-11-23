@@ -115,7 +115,7 @@ fun RustleSearchScreen(env: CommunityEnv) {
     // Opened for someone (a name in chat) or from a link: straight away.
     LaunchedEffect(Unit) {
         when (link) {
-            is RustleLink.Around -> search.open(link.message)
+            is RustleLink.Around -> search.openAround(link.message)
             else -> if (!env.argument.isNullOrBlank()) send()
         }
     }
@@ -307,6 +307,22 @@ internal class SearchState(
                 is RustleReply.Failed -> state.error = reply.message
                 is RustleReply.Limited -> state.error = limitText()
             }
+        }
+    }
+
+    /**
+     * The chat around [message], which may be known only to the second (the
+     * site's mentions, for one): rustlesearch wants the exact millisecond, so
+     * its messages up to the end of that second are looked up first.
+     */
+    fun openAround(message: LogMessage) {
+        if ('.' in message.ts || blocked()) return open(message)
+        scope.launch {
+            val second = message.at / 1000
+            val reply = api.search(RustleQuery(message.username, "", message.channel), searchAfter = (second + 1) * 1000)
+            noteQuota(reply)
+            val found = (reply as? RustleReply.Ok)?.value?.firstOrNull { it.at / 1000 == second }
+            open(found ?: message)
         }
     }
 

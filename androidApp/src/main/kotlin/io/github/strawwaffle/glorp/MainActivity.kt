@@ -19,6 +19,14 @@ import io.github.strawwaffle.glorp.chat.SharedChatPrefs
 import io.github.strawwaffle.glorp.ui.PictureInPicture
 import io.github.strawwaffle.glorp.update.androidUpdates
 import androidx.lifecycle.lifecycleScope
+import android.Manifest
+import android.content.Intent
+import androidx.activity.result.contract.ActivityResultContracts
+import io.github.strawwaffle.glorp.notify.Alert
+import io.github.strawwaffle.glorp.notify.AlertCheck
+import io.github.strawwaffle.glorp.notify.Notifier
+import io.github.strawwaffle.glorp.notify.NotifyControls
+import io.github.strawwaffle.glorp.notify.OpenRequests
 
 class MainActivity : ComponentActivity() {
     private var inPip by mutableStateOf(false)
@@ -26,6 +34,24 @@ class MainActivity : ComponentActivity() {
     private var videoBounds: android.graphics.Rect? = null
 
     private val pipListener = Consumer<PictureInPictureModeChangedInfo> { inPip = it.isInPictureInPictureMode }
+
+    // Android 13+ asks the user before an app may notify.
+    private var onPermission: ((Boolean) -> Unit)? = null
+    private val askPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        onPermission?.invoke(granted)
+        onPermission = null
+    }
+
+    private val notify = object : NotifyControls {
+        override val permitted: Boolean get() = Notifier.permitted(applicationContext)
+        override fun ask(onResult: (Boolean) -> Unit) {
+            if (permitted || Build.VERSION.SDK_INT < 33) return onResult(permitted)
+            onPermission = onResult
+            askPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        override fun changed() = Notifier.schedule(applicationContext)
+        override fun openSystemSettings() = Notifier.openSystemSettings(this@MainActivity)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,11 +67,14 @@ class MainActivity : ComponentActivity() {
         // trying players without posting links in chat.
         val embed = if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("embed") else null
         val frames = if (BuildConfig.DEV_IMPORT) devFrames() else emptyList()
+        // Dev builds: `--es notify-test mention|whisper|live` posts a sample notification, to try where tapping it goes.
+        if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("notify-test")?.let(::postTestNotification)
         // Releases check GitHub for a newer one; dev builds come over adb.
         val updates = if (!BuildConfig.SELF_UPDATE) null
         else androidUpdates(this, SharedChatPrefs(applicationContext), BuildConfig.VERSION_NAME, lifecycleScope)
         addOnPictureInPictureModeChangedListener(pipListener)
         inPip = isInPictureInPictureMode
+        takeOpenRequest(intent)
         setContent {
             GlorpApp(
                 origin = BuildConfig.SITE_ORIGIN,
@@ -59,8 +88,43 @@ class MainActivity : ComponentActivity() {
                     setAvailable = { showing -> videoShowing = showing; updatePipParams() },
                     setVideoBounds = ::onVideoBounds,
                 ),
+                notify = notify,
             )
         }
+    }
+
+    private fun postTestNotification(kind: String) {
+        val alert = when (kind) {
+            "live" -> Alert(Alert.Kind.Live, "Destiny is live on Kick", "chillin like a villain", AlertCheck.OPEN_LIVE)
+            "whisper" -> Alert(Alert.Kind.Whisper, "Whisper from StrawWaffle", "you there?", AlertCheck.OPEN_WHISPER + "StrawWaffle")
+            else -> Alert(
+                Alert.Kind.Mention, "mrmouton mentioned you", "YeeLaugh",
+                // As the site's mentions give it: to the second.
+                "https://rustlesearch.dev/surrounds?channel=Destinygg&date=2026-11-23T02%3A23%3A32Z&username=mrmouton",
+            )
+        }
+        Notifier.post(applicationContext, alert)
+    }
+
+    /** A tapped notification says where to go (see Notifier). */
+    private fun takeOpenRequest(intent: Intent?) {
+        intent?.getStringExtra(Notifier.EXTRA_OPEN)?.let { OpenRequests.pending.value = it }
+        intent?.removeExtra(Notifier.EXTRA_OPEN)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        takeOpenRequest(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Notifier.onScreen = true
+    }
+
+    override fun onStop() {
+        Notifier.onScreen = false
+        super.onStop()
     }
 
     override fun onDestroy() {
