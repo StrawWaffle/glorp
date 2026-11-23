@@ -162,6 +162,14 @@ fun SettingsScreen(
         item { SettingsHeading("Highlights and tags") }
         item { SwitchRow("Highlight messages that mention me", null, settings.highlightSelf) { settings.setBool("highlight", it) } }
         item {
+            SwitchRow(
+                "Keep my latest mention in view",
+                "After it scrolls past, it stays at the top of chat until you close it. Kept on this phone",
+                options.stickyMentions,
+                options::keepMentions,
+            )
+        }
+        item {
             WordsSetting(
                 "Highlight words",
                 "None. Messages with these words stand out",

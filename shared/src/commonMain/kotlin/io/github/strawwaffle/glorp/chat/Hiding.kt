@@ -17,6 +17,14 @@ class LocalOptions(private val prefs: ChatPrefs) {
         private set
     var alertWords by mutableStateOf(prefs.getList(ALERT_WORDS))
         private set
+    /** Keep the newest mention of you in view after it scrolls past (on unless turned off). */
+    var stickyMentions by mutableStateOf(prefs.get(STICKY_MENTIONS) != "false")
+        private set
+
+    fun keepMentions(on: Boolean) {
+        stickyMentions = on
+        prefs.put(STICKY_MENTIONS, on.toString())
+    }
 
     fun hidePhrases(list: List<String>) {
         hiddenPhrases = list
@@ -37,6 +45,7 @@ class LocalOptions(private val prefs: ChatPrefs) {
         const val HIDDEN_PHRASES = "hide.phrases"
         const val HIDDEN_FLAIRS = "hide.flairs"
         const val ALERT_WORDS = "alert.words"
+        const val STICKY_MENTIONS = "sticky.mentions"
     }
 }
 

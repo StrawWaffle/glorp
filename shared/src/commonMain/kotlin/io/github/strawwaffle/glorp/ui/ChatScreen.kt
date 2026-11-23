@@ -37,6 +37,9 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.material3.Icon
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -226,6 +229,32 @@ private fun ChatBody(
                     )
                 }
             }
+            // The newest mention of you stays in view once it has scrolled past
+            // (the d.gg utilities userscript's sticky mentions), until closed.
+            val look = LocalChatLook.current
+            var closedMention by remember { mutableStateOf<String?>(null) }
+            val latest = remember(reversed, mention, me, look.highlightSelf) {
+                if (mention == null || !look.highlightSelf) null
+                else reversed.indexOfFirst { s ->
+                    s.line.kind == ChatLine.Kind.User && !s.line.nick.equals(me, ignoreCase = true) && mention.containsMatchIn(s.line.text)
+                }.takeIf { it >= 0 }
+            }
+            val sticky by remember(latest) {
+                derivedStateOf {
+                    // Above what's on screen: older than the oldest row shown.
+                    latest != null && (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: Int.MAX_VALUE) < latest
+                }
+            }
+            val stuck = latest?.let { reversed.getOrNull(it)?.line }
+            if (input.options.stickyMentions && sticky && stuck != null && stuck.id != closedMention) {
+                val scope = rememberCoroutineScope()
+                StickyMention(
+                    stuck,
+                    Modifier.align(Alignment.TopCenter),
+                    onShow = { scope.launch { list.animateScrollToItem(latest); following = false } },
+                    onClose = { closedMention = stuck.id },
+                )
+            }
             Column(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalAlignment = Alignment.End) {
                 if (pinned != null && pinned.dismissed) Tab("Pinned message", Palette.NavyLight) { onShowPin(true) }
             }
@@ -240,6 +269,34 @@ private fun ChatBody(
         }
         if (account != null) {
             ChatInput(input, emotes, account, connected = state == SocketState.Connected, onSend)
+        }
+    }
+}
+
+/** A mention of you that scrolled past: who and what, tap to go to it, × to close. */
+@Composable
+private fun StickyMention(line: ChatLine, modifier: Modifier, onShow: () -> Unit, onClose: () -> Unit) {
+    Row(
+        modifier.fillMaxWidth().background(Palette.Navy)
+            .drawBehind { drawRect(Palette.Orange, size = Size(4.dp.toPx(), size.height)) }
+            .clickable(onClickLabel = "Go to the mention", onClick = onShow)
+            .padding(start = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(line.nick) }
+                append(": ")
+                append(line.text)
+            },
+            color = Palette.White,
+            fontSize = 13.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+        )
+        Box(Modifier.size(44.dp).clickable(onClickLabel = "Close", onClick = onClose), contentAlignment = Alignment.Center) {
+            Icon(GlorpIcons.Close, "Close", tint = Palette.TextDim, modifier = Modifier.size(18.dp))
         }
     }
 }
