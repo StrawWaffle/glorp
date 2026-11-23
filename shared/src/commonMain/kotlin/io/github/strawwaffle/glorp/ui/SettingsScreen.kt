@@ -27,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,11 +97,44 @@ fun SettingsScreen(
     onTestVersions: (Boolean) -> Unit = {},
 ) {
     var choosingFlairs by remember { mutableStateOf(false) }
+    // A list of categories, each its own page, as Android's settings are.
+    var section by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
+    OnBack(enabled = section != null) { section = null }
+    val sections = SettingsSection.entries.filter {
+        when (it) {
+            SettingsSection.Notifications -> notify != null && notifyOptions != null
+            SettingsSection.Updates -> testVersions != null
+            else -> true
+        }
+    }
     LazyColumn(Modifier.fillMaxSize().background(Palette.Black)) {
         item {
-            Text("Settings", color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)) {
+                if (section != null) TextButton(onClick = { section = null }) { Text("‹ Settings", color = Palette.Blue) }
+                Text(
+                    section?.title ?: "Settings",
+                    color = Palette.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    modifier = Modifier.padding(start = if (section == null) 12.dp else 4.dp),
+                )
+            }
         }
-        item { SettingsHeading("Look") }
+        if (section == null) {
+            items(sections, key = { it.name }) { s ->
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable { section = s }.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(s.title, color = Palette.White, fontSize = 16.sp)
+                        Text(s.summary, color = Palette.TextDim, fontSize = 13.sp)
+                    }
+                    Text("›", color = Palette.TextDim, fontSize = 22.sp)
+                }
+            }
+        }
+        if (section == SettingsSection.Look) {
         item {
             Choices(
                 "Theme",
@@ -123,7 +157,8 @@ fun SettingsScreen(
         }
         item { Choices("Font", null, AppFont.entries, appFont, label = { it.label }, onPick = onAppFont) }
 
-        item { SettingsHeading("Chat") }
+        }
+        if (section == SettingsSection.Chat) {
         item {
             Text(
                 if (synced) "Chat settings are saved with your destiny.gg account, as on the site."
@@ -182,7 +217,8 @@ fun SettingsScreen(
             )
         }
 
-        item { SettingsHeading("Hiding") }
+        }
+        if (section == SettingsSection.Hiding) {
         item {
             SwitchRow("Hide messages that mention people I ignore", null, settings.ignoreMentions) {
                 settings.setBool("ignorementions", it)
@@ -245,7 +281,8 @@ fun SettingsScreen(
             }
         }
 
-        item { SettingsHeading("Highlights and tags") }
+        }
+        if (section == SettingsSection.Highlights) {
         item { SwitchRow("Highlight messages that mention me", null, settings.highlightSelf) { settings.setBool("highlight", it) } }
         item {
             SwitchRow(
@@ -282,12 +319,12 @@ fun SettingsScreen(
             ) { settings.setBool("taggedvisibility", it) }
         }
 
-        if (notify != null && notifyOptions != null) {
-            item { SettingsHeading("Notifications") }
+        }
+        if (section == SettingsSection.Notifications && notify != null && notifyOptions != null) {
             item { NotificationSettings(notify, notifyOptions, settings, signedInWithCookies, mentionsService, onNotifyChanged) }
         }
 
-        item { SettingsHeading("Player") }
+        if (section == SettingsSection.Player) {
         item {
             Choices(
                 "Destiny's stream on",
@@ -316,8 +353,8 @@ fun SettingsScreen(
                 onPick = onCatchUp,
             )
         }
-        if (testVersions != null) {
-            item { SettingsHeading("Updates") }
+        }
+        if (section == SettingsSection.Updates && testVersions != null) {
             item {
                 SwitchRow(
                     "Get test versions",
@@ -330,6 +367,17 @@ fun SettingsScreen(
         }
         item { Spacer(Modifier.height(24.dp)) }
     }
+}
+
+/** The settings' categories, each a page of its own. */
+private enum class SettingsSection(val title: String, val summary: String) {
+    Look("Look", "Theme, chat text size and font"),
+    Chat("Chat", "Timestamps, link titles and previews, how much chat is kept, warnings"),
+    Hiding("Hiding", "Hidden words, messages and flair icons; chat from other streams"),
+    Highlights("Highlights and tags", "Mentions, highlight words and tagged people"),
+    Notifications("Notifications", "Destiny going live, mentions and whispers"),
+    Player("Player", "Destiny's platform, sound with the screen off, catching up"),
+    Updates("Updates", "Test versions"),
 }
 
 @Composable
