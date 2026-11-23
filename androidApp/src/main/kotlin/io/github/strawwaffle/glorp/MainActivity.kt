@@ -113,6 +113,10 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("expire-test")?.toLongOrNull()?.let {
             io.github.strawwaffle.glorp.video.Playback.expireTestMs = it * 1000
         }
+        // Dev builds: `--es chattext 0` draws chat the old way (a component per picture), to compare.
+        if (BuildConfig.DEV_IMPORT && intent?.getStringExtra("chattext") == "0") {
+            io.github.strawwaffle.glorp.ui.ChatRendering.singleNode = false
+        }
         // Dev builds: `--es crash-test 1` crashes a few seconds in, to try the crash report.
         if (BuildConfig.DEV_IMPORT && intent?.getStringExtra("crash-test") != null) {
             android.os.Handler(mainLooper).postDelayed({ error("Crash test from a dev build") }, 4_000)

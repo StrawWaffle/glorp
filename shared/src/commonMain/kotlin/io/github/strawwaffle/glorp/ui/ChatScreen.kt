@@ -69,6 +69,8 @@ import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.text.withAnnotation
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -616,7 +618,12 @@ internal fun ChatRow(
     }
     if (titles != null && media.isNotEmpty()) LaunchedEffect(line.id) { media.forEach(titles::request) }
     val knownTitles = media.map { titles?.titleOf(it) }
-    val rendered = remember(line, continued, flairs, emotes, density, me, look, censored, knownTitles) {
+    // The trial: one element per line (see ChatText); a line it can't draw keeps the old way.
+    val prepared = if (!ChatRendering.singleNode) null
+    else remember(line, continued, flairs, emotes, density, me, look, censored, knownTitles) {
+        prepare(line, continued, flairs, emotes, density, me, mention, look, censored, titleOf = { url -> titles?.titleOf(url) })
+    }
+    val renderedOld = if (prepared != null) null else remember(line, continued, flairs, emotes, density, me, look, censored, knownTitles) {
         render(
             line, continued, flairs, emotes, density, me, mention, look, censored,
             titleOf = { url -> titles?.titleOf(url) },
@@ -628,7 +635,8 @@ internal fun ChatRow(
     }
     // A tagged user's lines get a bar of their colour down the left, as chat-gui draws them.
     val tag = if (line.kind == ChatLine.Kind.User) line.nick?.lowercase()?.let { look.tags[it] } else null
-    val singled = (rendered.mentionsMe && look.highlightSelf) || highlighted
+    val mentionsMe = prepared?.mentionsMe ?: renderedOld!!.mentionsMe
+    val singled = (mentionsMe && look.highlightSelf) || highlighted
     val event = line.event?.kind
     val background = when {
         event != null -> eventColor(event).copy(alpha = 0.12f)
@@ -643,12 +651,39 @@ internal fun ChatRow(
     val bar = event?.let(::eventColor) ?: Palette.Orange.takeIf { line.spotlightedBy != null }
         ?: tag?.let(::tagColor) ?: Palette.MentionBar?.takeIf { singled }
     // From someone watching another stream: faded as the site's eye button does.
-    val faded = look.otherStreams == OtherStreams.Dim && !rendered.mentionsMe && !highlighted &&
+    val faded = look.otherStreams == OtherStreams.Dim && !mentionsMe && !highlighted &&
         fromOtherStream(line, me, look.playing)
     // A Tier 5 name: the text is drawn, then the moving rainbow is laid over
     // the name's letters only (SrcAtop, in a layer of its own). The name's
     // outline is worked out once per layout, and the colours move at 30
     // frames a second, which looks the same as 60 or 120 for a slow sweep.
+    if (prepared != null) {
+        val emoteTap = LocalEmoteTap.current
+        ChatText(
+            prepared,
+            // As Text would: the app's text style (its font, how lines are spaced) under chat's own.
+            LocalTextStyle.current.merge(TextStyle(color = Palette.White, fontSize = 14.sp, lineHeight = 20.sp)),
+            density,
+            Modifier.fillMaxWidth().then(if (faded) Modifier.alpha(0.3f) else Modifier).background(background)
+                .then(if (bar == null) Modifier else Modifier.drawBehind { drawRect(bar, size = Size(TAG_BAR.toPx(), size.height)) })
+                .padding(horizontal = 10.dp, vertical = 2.dp)
+                // A rainbow name is laid over its letters only (SrcAtop), in a layer of its own.
+                .then(if (prepared.rainbowName == null) Modifier else Modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)),
+            animate = look.animations,
+            onTap = { tap ->
+                when (tap) {
+                    is LineTap.Nick -> onNick(tap.nick)
+                    is LineTap.Url -> if (!openLink(tap.url) && !linkCard(tap.url, line.text)) runCatching { uri.openUri(tap.url) }
+                    is LineTap.EmbedTap -> onEmbed(tap.embed)
+                    LineTap.Reveal -> revealed = true
+                    is LineTap.EmoteTap -> emoteTap(tap.prefix)
+                }
+            },
+            onHold = onHold?.let { hold -> { hold(line) } },
+        )
+        return
+    }
+    val rendered = renderedOld!!
     val rainbowName = rendered.rainbowName
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val outline = remember(layout, rainbowName) {
@@ -923,6 +958,176 @@ private fun render(
         }
     }
     return RenderedLine(text, inline, mentionsMe, rainbowName)
+}
+
+/**
+ * The same line as [render], for [ChatText]: what can be tapped marked with
+ * string annotations instead of links, and pictures as placeholders with an
+ * item each. Null for a line with a GIF emote, which only the platform's own
+ * image view animates: that line keeps the old way.
+ */
+private fun prepare(
+    line: ChatLine,
+    continued: Boolean,
+    flairs: Flairs,
+    emotes: Emotes,
+    density: Density,
+    me: String?,
+    mention: Regex?,
+    look: ChatLook,
+    censored: Boolean,
+    titleOf: (String) -> LinkTitles.Title? = { null },
+): PreparedLine? {
+    val placeholders = ArrayList<AnnotatedString.Range<Placeholder>>()
+    val items = ArrayList<InlineItem>()
+    val embeds = HashMap<String, Embed>()
+    var mentionsMe = false
+    var rainbowName: IntRange? = null
+    var gif = false
+    fun AnnotatedString.Builder.picture(item: InlineItem, alternate: String) {
+        val start = length
+        append(alternate)
+        val size = with(density) { Placeholder(item.widthDp.dp.toSp(), item.heightDp.dp.toSp(), PlaceholderVerticalAlign.Center) }
+        placeholders += AnnotatedString.Range(size, start, length)
+        items += item
+    }
+    fun AnnotatedString.Builder.emote(emote: io.github.strawwaffle.glorp.site.Emote, sentAt: Long) {
+        if (emote.isWholePicture && emote.url.substringBefore('?').endsWith(".gif", ignoreCase = true)) gif = true
+        picture(InlineItem.EmoteItem(emote, sentAt), emote.prefix)
+    }
+    val nickLook = SpanStyle(textDecoration = TextDecoration.None)
+    val linkLook = SpanStyle(color = Palette.Blue, textDecoration = TextDecoration.Underline)
+
+    val text = buildAnnotatedString {
+        line.spotlightedBy?.let { by ->
+            withStyle(SpanStyle(color = Palette.Orange, fontWeight = FontWeight.Bold, fontSize = 12.sp)) {
+                append(if (by.isBlank()) "★ Spotlighted" else "★ Spotlighted by $by")
+            }
+            append('\n')
+        }
+        if (look.showTime && line.kind != ChatLine.Kind.Combo && line.at > 0) {
+            withStyle(SpanStyle(color = Palette.TextDim, fontSize = 12.sp)) { append(localTime(line.at, look.timeFormat)) }
+            append(' ')
+        }
+        when (line.kind) {
+            ChatLine.Kind.Broadcast -> {
+                withStyle(SpanStyle(color = Palette.Orange, fontWeight = FontWeight.Bold)) { append(line.text) }
+                return@buildAnnotatedString
+            }
+            ChatLine.Kind.Info -> {
+                withStyle(SpanStyle(color = Palette.TextDim, fontStyle = FontStyle.Italic)) { append(line.text) }
+                return@buildAnnotatedString
+            }
+            ChatLine.Kind.Combo -> {
+                val emote = emotes[line.text]?.let { emotes.inLine(LineModel.combo(it.prefix, line.comboCount)).firstOrNull() ?: it }
+                if (emote != null) emote(emote, line.lastHitAt.takeIf { it > 0 } ?: line.at) else append(line.text)
+                append("  ")
+                val n = line.comboCount
+                val size = when {
+                    n >= 50 -> 24.sp
+                    n >= 30 -> 22.sp
+                    n >= 20 -> 20.sp
+                    n >= 10 -> 18.sp
+                    n >= 5 -> 16.sp
+                    else -> 14.sp
+                }
+                withStyle(SpanStyle(color = Palette.White, fontWeight = FontWeight.Bold, fontSize = size)) { append("$n") }
+                withStyle(SpanStyle(color = Palette.TextDim, fontSize = 12.sp, fontStyle = FontStyle.Italic)) { append(" X Hits ") }
+                withStyle(SpanStyle(color = Palette.Orange, fontWeight = FontWeight.Bold, fontSize = 12.sp)) { append("C-C-C-COMBO") }
+                return@buildAnnotatedString
+            }
+            ChatLine.Kind.Whisper -> {
+                withStyle(SpanStyle(color = Palette.Blue)) { append("Whisper from ") }
+                withAnnotation("nick", line.nick!!) {
+                    withStyle(SpanStyle(color = Palette.White, fontWeight = FontWeight.Bold)) { append(line.nick) }
+                }
+                append(": ")
+                append(line.text)
+                return@buildAnnotatedString
+            }
+            ChatLine.Kind.Event -> {
+                val event = line.event!!
+                withStyle(SpanStyle(color = eventColor(event.kind), fontWeight = FontWeight.Bold)) { append(eventMark(event.kind)); append(' ') }
+                line.nick?.let { nick ->
+                    val color = flairs.nameColor(line.features)?.let { Color(it) } ?: Palette.White
+                    withAnnotation("nick", nick) {
+                        withStyle(SpanStyle(color = color, fontWeight = FontWeight.Bold)) { append(nick) }
+                    }
+                    append(' ')
+                }
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(event.header) }
+                event.link?.let { url ->
+                    append("  ")
+                    withAnnotation("url", url) { withStyle(linkLook) { append("Open") } }
+                }
+                if (line.text.isBlank()) return@buildAnnotatedString
+                append('\n')
+            }
+            ChatLine.Kind.User -> Unit
+        }
+        mentionsMe = mention != null && !line.nick.equals(me, ignoreCase = true) && mention.containsMatchIn(line.text)
+        val nameColor = flairs.nameColor(line.features)?.let { Color(it) } ?: Palette.White
+        if (line.kind == ChatLine.Kind.Event) {
+            // The name is in the event's header.
+        } else if (continued) {
+            withStyle(SpanStyle(color = Palette.TextDim)) { append("> ") }
+        } else {
+            for (badge in if (look.hideFlairIcons) emptyList() else flairs.badges(line.features).filter { it.name !in look.hiddenFlairs }) {
+                picture(InlineItem.BadgeItem(badge.url, badge.label, badge.width, badge.height), badge.label)
+                append(' ')
+            }
+            look.icons[line.nick!!.lowercase()]?.let { append(it); append(' ') }
+            withAnnotation("nick", line.nick!!) {
+                val start = length
+                withStyle(nickLook.merge(SpanStyle(color = nameColor, fontWeight = FontWeight.Bold))) { append(line.nick) }
+                if (flairs.rainbowName(line.features)) rainbowName = start until length
+            }
+            append(if (line.action) " " else ": ")
+        }
+        if (censored) {
+            withAnnotation("reveal", "") { withStyle(SpanStyle(color = Palette.Blue)) { append("<censored>") } }
+            return@buildAnnotatedString
+        }
+        val style = when {
+            line.action -> SpanStyle(fontStyle = FontStyle.Italic)
+            line.green -> SpanStyle(color = Palette.Greentext)
+            else -> SpanStyle()
+        }
+        val parts = segments(line, emotes)
+        val placed = emotes.inLine(
+            LineModel.message(
+                line.features, flairs.nameFlair(line.features), continued, line.green && !line.action,
+                elementsOf(parts), nick = line.nick,
+            ),
+        )
+        var emoteIndex = 0
+        withStyle(style) {
+            for (segment in parts) when (segment) {
+                is Segment.Text -> append(segment.text)
+                is Segment.Link -> withAnnotation("url", segment.url) {
+                    withStyle(linkLook) {
+                        val title = titleOf(segment.url)
+                        if (title == null) append(segment.text)
+                        else {
+                            picture(InlineItem.PlatformItem(title.platform), " ")
+                            append(title.title)
+                            if (title.channel != null) { append(" · "); append(title.channel) }
+                        }
+                    }
+                }
+                is Segment.EmbedLink -> withAnnotation("embed", segment.embed.key) {
+                    embeds[segment.embed.key] = segment.embed
+                    withStyle(linkLook) {
+                        picture(InlineItem.PlatformItem(segment.embed.platform), " ")
+                        append(segment.text)
+                    }
+                }
+                is Segment.EmoteRef -> emote(placed.getOrNull(emoteIndex++) ?: segment.emote, line.at)
+            }
+        }
+    }
+    if (gif) return null
+    return PreparedLine(text, placeholders, items, mentionsMe, rainbowName, embeds)
 }
 
 /**
