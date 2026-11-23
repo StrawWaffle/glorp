@@ -50,6 +50,8 @@ android {
             buildConfigField("String", "SITE_ORIGIN", "\"https://www.omniliberal.dev\"")
             buildConfigField("boolean", "DEV_IMPORT", "true")
             buildConfigField("boolean", "SELF_UPDATE", "false")
+            // The mentions service watches destiny.gg, not the test site.
+            buildConfigField("String", "MENTIONS_URL", "\"\"")
         }
         release {
             isMinifyEnabled = true
@@ -72,6 +74,7 @@ android {
             buildConfigField("String", "SITE_ORIGIN", "\"https://www.omniliberal.dev\"")
             buildConfigField("boolean", "DEV_IMPORT", "true")
             buildConfigField("boolean", "SELF_UPDATE", "false")
+            buildConfigField("String", "MENTIONS_URL", "\"\"")
         }
     }
 
