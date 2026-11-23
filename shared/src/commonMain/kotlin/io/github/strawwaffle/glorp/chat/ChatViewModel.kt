@@ -34,7 +34,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -229,7 +228,9 @@ class ChatViewModel(
     // applied in batches, so the list is redrawn a few times a second at most
     // instead of once per message. Notices from the app go the same way, so
     // only one coroutine ever touches the log.
-    private val events = Channel<Any>(capacity = 2_000, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    // Full, the socket waits rather than anything being dropped: the oldest
+    // could be who you are, the backlog, or a mute.
+    private val events = Channel<Any>(capacity = 2_000)
     private var connection: Job? = null
     private var wanted = false
     private val ready = CompletableDeferred<Unit>()
@@ -300,16 +301,15 @@ class ChatViewModel(
                     _socketState.value = it
                 }
             }
-            // Frames are read off the main thread (a backlog or the user list
-            // on connect is a lot of text); only applying them happens on it.
+            // Frames are read and parsed off the main thread (a backlog or the
+            // user list on connect is a lot of text, and busy chat is hundreds
+            // of frames a second); only applying them happens on it.
             val now = { Clock.System.now().toEpochMilliseconds() }
-            chat.run { raw ->
-                events.send(
-                    withContext(Dispatchers.Default) {
-                        val event = parseFrame(raw, now)
-                        Parsed(event, (event as? ChatEvent.Names)?.let { rosterNicks(it.payload) })
-                    },
-                )
+            withContext(Dispatchers.Default) {
+                chat.run { raw ->
+                    val event = parseFrame(raw, now)
+                    events.send(Parsed(event, (event as? ChatEvent.Names)?.let { rosterNicks(it.payload) }))
+                }
             }
         }
     }
@@ -602,11 +602,20 @@ class ChatViewModel(
         viewModelScope.launch {
             _socketState.first { it == SocketState.Connected }
             delay(2.seconds)
+            val started = Clock.System.now().toEpochMilliseconds()
+            var sent = 0
             for (frame in frames) {
                 val pause = frame.removePrefix("sleep ").takeIf { it != frame }?.trim()?.toLongOrNull()
                 if (pause != null) delay(pause.milliseconds)
-                else events.send(frame.replace("${'$'}NOW", Clock.System.now().toEpochMilliseconds().toString()))
+                else {
+                    // Parsed off the main thread, as frames from the socket are.
+                    val raw = frame.replace("${'$'}NOW", Clock.System.now().toEpochMilliseconds().toString())
+                    events.send(withContext(Dispatchers.Default) { Parsed(parseFrame(raw) { Clock.System.now().toEpochMilliseconds() }, null) })
+                    sent++
+                }
             }
+            val took = Clock.System.now().toEpochMilliseconds() - started
+            AppLog.note("chat", "replayed $sent frames in ${took / 1000.0} s (${if (took > 0) sent * 1000 / took else sent}/s)")
         }
     }
 
@@ -862,8 +871,18 @@ class ChatViewModel(
             }
             // `maxlines` may have changed here or on the site.
             settings.maxLines.let { if (it != log.capacity) { log.capacity = it; changed = true } }
+            // Back at the bottom after reading: down to the usual number again.
+            if (log.holding != readingBack) { log.holding = readingBack; changed = true }
             if (changed && !inBackground) _lines.value = log.snapshot()
-            delay(publishInterval)
+            // Reading back, new lines land out of view: once a second is
+            // plenty, but back at the bottom it's at once. (Bigger batches in
+            // a burst were tried: on a phone they made the slow frames slower.)
+            if (readingBack) {
+                var waited = 0.milliseconds
+                while (readingBack && waited < READING_INTERVAL) { delay(publishInterval); waited += publishInterval }
+            } else {
+                delay(publishInterval)
+            }
         }
     }
 
@@ -1019,7 +1038,8 @@ class ChatViewModel(
         val nick = line.nick ?: return
         val me = _account.value?.nick ?: return
         if (nick.equals(me, ignoreCase = true)) return
-        val options = io.github.strawwaffle.glorp.notify.NotifyOptions(prefs, settings)
+        // Read only for a message that is a whisper or a mention, not for every one.
+        val options by lazy { io.github.strawwaffle.glorp.notify.NotifyOptions(prefs, settings) }
         val alert = when {
             line.kind == ChatLine.Kind.Whisper -> io.github.strawwaffle.glorp.notify.Alert(
                 io.github.strawwaffle.glorp.notify.Alert.Kind.Whisper, "Whisper from $nick", line.text,
@@ -1126,8 +1146,16 @@ class ChatViewModel(
         client.close()
     }
 
+    /**
+     * Whether chat is scrolled up to read back (see ChatScreen): lines are
+     * then kept rather than trimmed, and updates come less often.
+     */
+    @kotlin.concurrent.Volatile
+    var readingBack = false
+
     private companion object {
         val publishInterval = 150.milliseconds
+        val READING_INTERVAL = 1.seconds
         const val PINS_CLOSED = "pins-closed"
         const val POLL_GRACE_MS = 15_000L
         /** chat-gui's `chat.settings.synced`: the user this device's settings last synced for. */

@@ -137,7 +137,8 @@ fun GlorpApp(
             // so whispers and mentions still notify at once.
             onStopOrDispose { chat.stopWhenIdle { chat.canNotifyLive() && nativePlaybackPlaying() } }
         }
-        val lines by chat.lines.collectAsStateWithLifecycle()
+        // Not read here: only chat redraws when a message comes (see ChatScreen).
+        val lines = chat.lines.collectAsStateWithLifecycle()
         val flairs by chat.flairs.collectAsStateWithLifecycle()
         val emotes by chat.emotes.collectAsStateWithLifecycle()
         val state by chat.socketState.collectAsStateWithLifecycle()
@@ -253,7 +254,7 @@ fun GlorpApp(
         }
         LaunchedEffect(banner) { if (banner != null) { delay(6_000); banner = null } }
         CompositionLocalProvider(
-            LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it },
+            LocalFullscreen provides remember(fullscreen) { Fullscreen(fullscreen) { fullscreenWanted = it } },
             LocalLinkTitles provides chat.linkTitles.takeIf { chat.input.options.linkTitles },
             LocalEmoteTap provides chat.input::openEmote,
             LocalLinkCard provides { url, text ->
@@ -278,11 +279,12 @@ fun GlorpApp(
             ),
         ) {
         ChatScreen(
-            lines, flairs, emotes, state, account,
+            { lines.value }, flairs, emotes, state, account,
             onSend = chat::send,
             input = chat.input,
             onEmbed = { chat.watch(it); playerShown = true },
             onSignIn = { screen = "signin" },
+            onReading = { chat.readingBack = it },
             userActions = remember(chat) {
                 UserActions(
                     lookUp = chat::lookUp,

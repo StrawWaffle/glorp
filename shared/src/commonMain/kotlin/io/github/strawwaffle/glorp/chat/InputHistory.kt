@@ -66,8 +66,15 @@ class InputHistory(private val prefs: ChatPrefs, private val max: Int = 20) {
  * ignored (`ignorenicks`), whose messages are highlighted (`highlightnicks`).
  */
 class NickSet(private val settings: ChatSettings, private val key: String) {
-    /** Lower case. */
-    val nicks: Set<String> get() = settings.list(key).map { it.lowercase() }.toSet()
+    /** Lower case. Kept until the list changes: asked about every message. */
+    val nicks: Set<String>
+        get() {
+            val list = settings[key]
+            cached?.takeIf { it.first === list }?.let { return it.second }
+            return settings.list(key).map { it.lowercase() }.toSet().also { cached = list to it }
+        }
+
+    private var cached: Pair<kotlinx.serialization.json.JsonElement?, Set<String>>? = null
 
     operator fun contains(nick: String?): Boolean = nick != null && nick.lowercase() in nicks
 

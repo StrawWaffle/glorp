@@ -68,6 +68,30 @@ class ChatTest {
     }
 
     @Test
+    fun keepsLinesWhileReadingBack() {
+        val log = ChatLog(capacity = ChatLog.MIN_CAPACITY)
+        val line = { n: Int -> ChatLine.user("n", emptyList(), "m$n", n.toLong()) }
+        (1..ChatLog.MIN_CAPACITY).forEach { log.add(line(it)) }
+        // Scrolled up: the oldest line, the one being read, stays however busy chat gets.
+        log.holding = true
+        (ChatLog.MIN_CAPACITY + 1..ChatLog.MIN_CAPACITY + 300).forEach { log.add(line(it)) }
+        assertEquals("m1", log.snapshot().first().text)
+        assertEquals(ChatLog.MIN_CAPACITY + 300, log.snapshot().size)
+        // Back at the bottom: the usual number again, the newest kept.
+        log.holding = false
+        assertEquals(ChatLog.MIN_CAPACITY, log.snapshot().size)
+        assertEquals("m${ChatLog.MIN_CAPACITY + 300}", log.snapshot().last().text)
+    }
+
+    @Test
+    fun readingBackHasACeiling() {
+        val log = ChatLog(capacity = ChatLog.MIN_CAPACITY)
+        log.holding = true
+        (1..ChatLog.HOLD_LIMIT + 10).forEach { log.add(ChatLine.user("n", emptyList(), "m$it", it.toLong())) }
+        assertEquals(ChatLog.HOLD_LIMIT, log.snapshot().size)
+    }
+
+    @Test
     fun maxLinesComesFromTheSettingWithinLimits() {
         val settings = ChatSettings(MemoryChatPrefs())
         assertEquals(250, settings.maxLines)

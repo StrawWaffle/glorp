@@ -35,6 +35,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -114,7 +115,8 @@ import io.github.strawwaffle.glorp.site.LineModel
 
 @Composable
 fun ChatScreen(
-    lines: List<ChatLine>,
+    /** Read only by chat itself, so a new message redraws chat and nothing around it. */
+    lines: () -> List<ChatLine>,
     flairs: Flairs,
     emotes: Emotes,
     state: SocketState,
@@ -142,6 +144,8 @@ fun ChatScreen(
     onClosePoll: () -> Unit = {},
     pinned: ChatViewModel.Pinned? = null,
     onShowPin: (Boolean) -> Unit = {},
+    /** Scrolled up to read back (true), or following the newest again. */
+    onReading: (Boolean) -> Unit = {},
 ) {
     // The player and what's beside it are each one piece of UI that moves
     // between the layouts (portrait, landscape, full screen, picture in
@@ -155,7 +159,7 @@ fun ChatScreen(
         if (instead != null) instead()
         else ChatBody(
             lines, flairs, emotes, state, account, onSend, input, onEmbed, userActions,
-            poll, onVote, onClosePoll, pinned, onShowPin, onSignIn,
+            poll, onVote, onClosePoll, pinned, onShowPin, onSignIn, onReading,
         )
     }
     val bodySlot = remember { movableContentOf { currentBody() } }
@@ -191,7 +195,7 @@ fun ChatScreen(
 
 @Composable
 private fun ChatBody(
-    lines: List<ChatLine>,
+    linesOf: () -> List<ChatLine>,
     flairs: Flairs,
     emotes: Emotes,
     state: SocketState,
@@ -206,7 +210,9 @@ private fun ChatBody(
     pinned: ChatViewModel.Pinned?,
     onShowPin: (Boolean) -> Unit,
     onSignIn: () -> Unit,
+    onReading: (Boolean) -> Unit,
 ) {
+    val lines = linesOf()
     Column(Modifier.fillMaxSize()) {
         // No bar: the connection shows only when something is wrong.
         // Empty, chat says what it's doing in the middle instead (see below).
@@ -232,11 +238,17 @@ private fun ChatBody(
         // Hiding other streams' chat keeps what mentions or highlights you, as the site's dimming does.
         val look = LocalChatLook.current
         val hideOthers = look.otherStreams == OtherStreams.Hide && look.playing != null
-        val reversed = remember(lines, filter, hideOthers, look.playing, mention, highlighter) {
+        // Each line is judged once, not again on every update: in busy chat
+        // that was every pattern against every kept line several times a second.
+        val facts = remember(filter, hideOthers, look.playing, mention, highlighter, me) { LineFacts() }
+        val reversed = remember(lines, facts) {
             val shownLines = lines.filter { line ->
-                !(!filter.isEmpty && filter.hides(line)) &&
-                    !(hideOthers && fromOtherStream(line, me, look.playing) && !singledOut(line, mention, highlighter))
+                !facts.hidden(line) {
+                    (!filter.isEmpty && filter.hides(it)) ||
+                        (hideOthers && fromOtherStream(it, me, look.playing) && !singledOut(it, mention, highlighter))
+                }
             }
+            facts.prune(lines)
             shownLines.mapIndexed { i, line -> Shown(line, i > 0 && continues(shownLines[i - 1], line)) }.asReversed()
         }
         val embedHandler = rememberUpdatedState(onEmbed)
@@ -263,7 +275,11 @@ private fun ChatBody(
             snapshotFlow { list.isScrollInProgress to list.canScrollBackward }
                 .collect { (scrolling, awayFromBottom) -> if (scrolling) following = !awayFromBottom }
         }
+        // Pinned to the newest in the same frame the rows arrive, rather than a
+        // frame later; a finger resting at the bottom doesn't come unpinned.
         LaunchedEffect(reversed) { if (following) list.scrollToItem(0) }
+        LaunchedEffect(following) { onReading(!following) }
+        DisposableEffect(Unit) { onDispose { onReading(false) } }
         Box(Modifier.fillMaxWidth().weight(1f)) {
             if (reversed.isEmpty()) {
                 Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -300,7 +316,8 @@ private fun ChatBody(
             val latest = remember(reversed, mention, me, look.highlightSelf) {
                 if (mention == null || !look.highlightSelf) null
                 else reversed.indexOfFirst { s ->
-                    s.line.kind == ChatLine.Kind.User && !s.line.nick.equals(me, ignoreCase = true) && mention.containsMatchIn(s.line.text)
+                    s.line.kind == ChatLine.Kind.User && !s.line.nick.equals(me, ignoreCase = true) &&
+                        facts.mentions(s.line) { mention.containsMatchIn(it.text) }
                 }.takeIf { it >= 0 }
             }
             val sticky by remember(latest) {
@@ -643,7 +660,9 @@ internal fun ChatRow(
     CompositionLocalProvider(LocalDensity provides density) { Text(
         rendered.text,
         inlineContent = rendered.inline,
-        onTextLayout = { layout = it },
+        // Kept only for a rainbow name: saving it redraws the row, which every
+        // row would otherwise do twice.
+        onTextLayout = if (rainbowName != null) { { layout = it } } else { {} },
         modifier = Modifier.fillMaxWidth().then(if (faded) Modifier.alpha(0.3f) else Modifier).background(background)
             .then(if (bar == null) Modifier else Modifier.drawBehind { drawRect(bar, size = Size(TAG_BAR.toPx(), size.height)) })
             .then(
@@ -668,9 +687,14 @@ private val linkStyle get() = TextLinkStyles(SpanStyle(color = Palette.Blue, tex
 // A name is tappable but looks like a name, not a link.
 private val nickStyle = TextLinkStyles(SpanStyle(textDecoration = TextDecoration.None))
 
-/** Matches [nick] as a word, the way chat highlights mentions. Built once per name. */
-internal fun mentionPattern(nick: String) =
-    Regex("""(^|[^\w])${Regex.escape(nick)}($|[^\w])""", RegexOption.IGNORE_CASE)
+/** Matches [nick] as a word, the way chat highlights mentions. Built once per name and kept. */
+internal fun mentionPattern(nick: String): Regex =
+    lastMention?.takeIf { it.first == nick }?.second
+        ?: Regex("""(^|[^\w])${Regex.escape(nick)}($|[^\w])""", RegexOption.IGNORE_CASE).also { lastMention = nick to it }
+
+// Asked for every message while signed in: the one name in use, its pattern built once.
+@kotlin.concurrent.Volatile
+private var lastMention: Pair<String, Regex>? = null
 
 internal fun mentions(text: String, nick: String): Boolean = mentionPattern(nick).containsMatchIn(text)
 
@@ -873,4 +897,31 @@ private fun render(
         }
     }
     return RenderedLine(text, inline, mentionsMe, rainbowName)
+}
+
+/**
+ * What the settings say about each line (hidden? mentions you?), worked out
+ * once per line. A line replaced by a new copy (censored, a combo grown) is
+ * judged again.
+ */
+private class LineFacts {
+    private val hidden = HashMap<String, Pair<ChatLine, Boolean>>()
+    private val mentions = HashMap<String, Pair<ChatLine, Boolean>>()
+
+    fun hidden(line: ChatLine, test: (ChatLine) -> Boolean) = memo(hidden, line, test)
+
+    fun mentions(line: ChatLine, test: (ChatLine) -> Boolean) = memo(mentions, line, test)
+
+    private fun memo(map: HashMap<String, Pair<ChatLine, Boolean>>, line: ChatLine, test: (ChatLine) -> Boolean): Boolean {
+        map[line.id]?.let { (seen, answer) -> if (seen === line) return answer }
+        return test(line).also { map[line.id] = line to it }
+    }
+
+    /** Forgets lines chat no longer keeps. */
+    fun prune(lines: List<ChatLine>) {
+        if (hidden.size + mentions.size <= lines.size * 3 + 200) return
+        val kept = lines.mapTo(HashSet()) { it.id }
+        hidden.keys.retainAll(kept)
+        mentions.keys.retainAll(kept)
+    }
 }

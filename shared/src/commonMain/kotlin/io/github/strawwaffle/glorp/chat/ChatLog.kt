@@ -18,8 +18,24 @@ class ChatLog(capacity: Int = DEFAULT_CAPACITY) {
     var capacity: Int = capacity.coerceIn(MIN_CAPACITY, MAX_CAPACITY)
         set(value) {
             field = value.coerceIn(MIN_CAPACITY, MAX_CAPACITY)
-            while (lines.size > field) forget(lines.removeFirst())
+            trim()
         }
+
+    /**
+     * Someone is reading back: nothing is dropped (up to [HOLD_LIMIT]), so the
+     * line they're reading isn't taken from under them, as on the site, which
+     * trims only at the bottom. Let go, it's back to [capacity] at once.
+     */
+    var holding = false
+        set(value) {
+            field = value
+            trim()
+        }
+
+    private fun trim() {
+        val limit = if (holding) maxOf(capacity, HOLD_LIMIT) else capacity
+        while (lines.size > limit) forget(lines.removeFirst())
+    }
 
     private val lines = ArrayDeque<ChatLine>(this.capacity)
     private val ids = HashSet<String>(this.capacity * 2)
@@ -50,7 +66,7 @@ class ChatLog(capacity: Int = DEFAULT_CAPACITY) {
             }
         }
         lines.addLast(line)
-        while (lines.size > capacity) forget(lines.removeFirst())
+        trim()
         return true
     }
 
@@ -130,5 +146,7 @@ class ChatLog(capacity: Int = DEFAULT_CAPACITY) {
         const val DEFAULT_CAPACITY = 250
         const val MIN_CAPACITY = 50
         const val MAX_CAPACITY = 1000
+        /** Kept while reading back: about 2.5 MB of text at most. */
+        const val HOLD_LIMIT = 5_000
     }
 }

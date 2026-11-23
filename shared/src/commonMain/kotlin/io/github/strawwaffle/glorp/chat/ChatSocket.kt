@@ -42,6 +42,8 @@ class ChatSocket(
     private val _state = MutableStateFlow(SocketState.Connecting)
     val state: StateFlow<SocketState> = _state.asStateFlow()
 
+    // Read on the socket's thread, set from the app's.
+    @kotlin.concurrent.Volatile
     private var current: DefaultClientWebSocketSession? = null
 
     /**
@@ -52,6 +54,7 @@ class ChatSocket(
     @kotlin.concurrent.Volatile
     var lastHeardMs = 0L
         private set
+    @kotlin.concurrent.Volatile
     private var halted = false
 
     suspend fun run(onFrame: suspend (String) -> Unit) {

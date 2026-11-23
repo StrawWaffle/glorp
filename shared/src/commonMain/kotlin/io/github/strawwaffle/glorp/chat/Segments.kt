@@ -74,11 +74,15 @@ fun segments(line: ChatLine, emotes: Emotes): List<Segment> {
  * use (ignoring a leading `/command`), as chat-gui decides what can combo.
  */
 fun soleEmote(line: ChatLine, emotes: Emotes): Emote? {
-    val word = line.text.replace(Regex("""^/[a-z0-9]+\s?""", RegexOption.IGNORE_CASE), "").trim()
+    // Called for every message, often twice: no pattern unless it starts with a command.
+    val text = line.text
+    val word = (if (text.startsWith("/")) text.replace(leadingCommand, "") else text).trim()
     val emote = emotes[word] ?: return null
     val mayUseAll = line.features.any { it in privileged }
     return if (mayUseAll || emote.minimumSubTier <= line.subTier) emote else null
 }
+
+private val leadingCommand = Regex("""^/[a-z0-9]+\s?""", RegexOption.IGNORE_CASE)
 
 private val schemeLink = Regex("""^https?://\S+$""", RegexOption.IGNORE_CASE)
 private val bareLink = Regex(
