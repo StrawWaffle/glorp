@@ -15,6 +15,10 @@ quickjs = "1.0.18"
 okio = "3.18.2"
 
 [libraries]
+# Google's code scanner (Play services): QR sign-in without a camera permission.
+code-scanner = { module = "com.google.android.gms:play-services-code-scanner", version = "16.1.0" }
+# The scanner brings an old Fragment; this one works with the Activity Result API the app uses.
+fragment = { module = "androidx.fragment:fragment", version = "1.8.5" }
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose" }

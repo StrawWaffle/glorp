@@ -31,6 +31,13 @@ android {
         // A test version is "Glorp Probe" on the phone, so it's plain which one
         // is installed; its release turns it back into Glorp.
         manifestPlaceholders["appLabel"] = if ("-test." in versionName!!) "Glorp Probe" else "Glorp"
+        // "Sign in with destiny.gg": Glorp's app on the site. The ID and secret
+        // live outside the repo (~/.secrets/glorp, like the release key); a
+        // build without them has no such button. Dev builds use the test site,
+        // where the app isn't registered.
+        manifestPlaceholders["oauthScheme"] = "io.github.strawwaffle.glorp"
+        buildConfigField("String", "DGG_CLIENT_ID", quoted(glorpSecret("dgg_oauth_client_id")))
+        buildConfigField("String", "DGG_CLIENT_SECRET", quoted(glorpSecret("dgg_oauth_client_secret")))
         // The mentions service (server/), for mention notifications without the
         // site's login; empty leaves them to the site's own list (cookies only).
         buildConfigField("String", "MENTIONS_URL", "\"${providers.gradleProperty("glorp.mentionsUrl").orElse("").get()}\"")
@@ -57,6 +64,9 @@ android {
         debug {
             applicationIdSuffix = ".dev"
             manifestPlaceholders["appLabel"] = "Glorp (dev)"
+            manifestPlaceholders["oauthScheme"] = "io.github.strawwaffle.glorp.dev"
+            buildConfigField("String", "DGG_CLIENT_ID", "\"\"")
+            buildConfigField("String", "DGG_CLIENT_SECRET", "\"\"")
             buildConfigField("String", "SITE_ORIGIN", "\"https://www.omniliberal.dev\"")
             buildConfigField("boolean", "DEV_IMPORT", "true")
             buildConfigField("boolean", "SELF_UPDATE", "false")
@@ -80,6 +90,9 @@ android {
             initWith(getByName("release"))
             applicationIdSuffix = ".dev"
             manifestPlaceholders["appLabel"] = "Glorp (dev)"
+            manifestPlaceholders["oauthScheme"] = "io.github.strawwaffle.glorp.dev"
+            buildConfigField("String", "DGG_CLIENT_ID", "\"\"")
+            buildConfigField("String", "DGG_CLIENT_SECRET", "\"\"")
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
             buildConfigField("String", "SITE_ORIGIN", "\"https://www.omniliberal.dev\"")
@@ -103,4 +116,13 @@ android {
 dependencies {
     implementation(project(":shared"))
     implementation(libs.activity.compose)
+    implementation(libs.code.scanner)
+    implementation(libs.fragment)
 }
+
+/** A value from ~/.secrets/glorp, or empty when it isn't there. */
+fun glorpSecret(name: String): String =
+    File(System.getProperty("user.home"), ".secrets/glorp/$name").takeIf { it.exists() }?.readText()?.trim().orEmpty()
+
+/** [value] as a Java string literal for a BuildConfig field. */
+fun quoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""

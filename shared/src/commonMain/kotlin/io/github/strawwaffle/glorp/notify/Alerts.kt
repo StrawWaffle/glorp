@@ -41,6 +41,9 @@ interface NotifyControls {
 /** Where a tapped notification asked the app to go (an [Alert.open]), until the app takes it. */
 object OpenRequests {
     val pending = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
+    /** The browser coming back from "Sign in with destiny.gg", with the address it came back to. */
+    val signIn = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 }
 
 /** Something worth a notification, and where tapping it goes. */

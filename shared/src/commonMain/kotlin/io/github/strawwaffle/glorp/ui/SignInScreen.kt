@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -38,14 +39,20 @@ import androidx.compose.ui.unit.sp
 import io.github.strawwaffle.glorp.auth.Session
 
 /**
- * Signing in with a login key made on the site's developer page, in the
- * phone's own browser.
+ * Signing in, three ways, easiest first:
+ *
+ * - "Sign in with destiny.gg": the site's OAuth flow in the phone's own
+ *   browser (see [io.github.strawwaffle.glorp.site.AppSignIn]). One tap, but
+ *   it only gives what a login key gives: chat and whispers.
+ * - "From a computer": the site's login cookies, which open everything else
+ *   (settings that follow the account, whisper history, notifications,
+ *   /stalk, what you're watching). The site keeps them out of reach of
+ *   pages, so Glorp's sign-in page (on GitHub Pages) has you copy them from
+ *   the browser on a computer and shows them as a QR code to scan here.
+ * - By hand: a login key from the developer page, or the cookies typed in.
  *
  * The site's login page can't run inside the app: Twitch's and Kick's bot
- * protection blank it in a web view, and Google refuses in-app sign-in. The
- * browser has none of those problems, and a login key lasts until it's
- * removed on that page. Pasting the browser's cookies stays as the way to
- * sign in for the parts of the site a key doesn't open.
+ * protection blank it in a web view, and Google refuses in-app sign-in.
  */
 @Composable
 fun SignInScreen(
@@ -54,19 +61,25 @@ fun SignInScreen(
     busy: Boolean,
     onSession: (Session, (String?) -> Unit) -> Unit,
     onClose: () -> Unit,
-    /** Opens on the cookie form, for what a login key can't open (whisper history). */
-    startWithCookies: Boolean = false,
+    /** Opens the site's sign-in for Glorp's app in the browser; null when this build has none. */
+    onSiteSignIn: (() -> Unit)? = null,
+    /** Scans a QR code; null where there's no scanner. */
+    scanCode: (((String?) -> Unit) -> Unit)? = null,
+    /** Reads a sign-in code from the computer page. */
+    readCode: (String) -> Session? = { null },
+    /** What went wrong coming back from the browser, if anything. */
+    error: String? = null,
 ) {
-    var cookies by remember { mutableStateOf(startWithCookies) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val submit: (Session) -> Unit = { session -> error = null; onSession(session) { error = it } }
+    var way by remember { mutableStateOf(Way.Choose) }
+    var problem by remember(error) { mutableStateOf(error) }
+    val submit: (Session) -> Unit = { session -> problem = null; onSession(session) { problem = it } }
 
     Column(Modifier.fillMaxSize().background(Palette.Black)) {
         Row(
             Modifier.fillMaxWidth().background(Palette.Navy).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onClose) { Text("Back", color = Palette.Blue) }
+            TextButton(onClick = { if (way == Way.Choose) onClose() else way = Way.Choose }) { Text("Back", color = Palette.Blue) }
             Text("Sign in to $host", color = Palette.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
         }
         Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -74,10 +87,17 @@ fun SignInScreen(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                error?.let { Text(it, color = Palette.Orange, fontSize = 14.sp) }
-                if (cookies) CookieForm(host, busy, submit) else LoginKeyForm(origin, host, busy, submit)
-                TextButton(onClick = { cookies = !cookies; error = null }) {
-                    Text(if (cookies) "Use a login key instead" else "Paste browser cookies instead", color = Palette.Blue)
+                problem?.let { Text(it, color = Palette.Orange, fontSize = 14.sp) }
+                when (way) {
+                    Way.Choose -> {
+                        if (onSiteSignIn != null) SiteSignIn(host, busy, onSiteSignIn)
+                        ComputerSignIn(host, busy, scanCode, readCode, submit) { problem = it }
+                        Text("Other ways", color = Palette.TextDim, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        TextButton(onClick = { way = Way.Key; problem = null }) { Text("Paste a login key", color = Palette.Blue) }
+                        TextButton(onClick = { way = Way.Cookies; problem = null }) { Text("Type in the browser's cookies", color = Palette.Blue) }
+                    }
+                    Way.Key -> LoginKeyForm(origin, host, busy, submit)
+                    Way.Cookies -> CookieForm(host, busy, submit)
                 }
             }
             if (busy) {
@@ -86,6 +106,90 @@ fun SignInScreen(
                 }
             }
         }
+    }
+}
+
+private enum class Way { Choose, Key, Cookies }
+
+/** Where the computer half of the QR sign-in lives. */
+const val SIGN_IN_PAGE = "https://strawwaffle.github.io/glorp/signin/"
+
+@Composable
+private fun Option(title: String, detail: String, content: @Composable () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().background(Palette.Navy, RoundedCornerShape(10.dp)).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(title, color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text(detail, color = Palette.TextDim, fontSize = 13.sp)
+        content()
+    }
+}
+
+@Composable
+private fun SiteSignIn(host: String, busy: Boolean, onSiteSignIn: () -> Unit) = Option(
+    "Sign in with $host",
+    "Opens $host in your browser: sign in there as usual if you aren't already, and tap Authorize. " +
+        "Gives chat and whispers.",
+) {
+    Button(
+        onClick = onSiteSignIn,
+        enabled = !busy,
+        colors = ButtonDefaults.buttonColors(containerColor = Palette.Blue, contentColor = Palette.OnAction),
+    ) { Text("Sign in with $host") }
+}
+
+@Composable
+private fun ComputerSignIn(
+    host: String,
+    busy: Boolean,
+    scanCode: (((String?) -> Unit) -> Unit)?,
+    readCode: (String) -> Session?,
+    submit: (Session) -> Unit,
+    onProblem: (String) -> Unit,
+) = Option(
+    "Sign in from a computer",
+    "For everything else too: settings that follow your account, whisper history, notifications, " +
+        "/stalk and /mentions, and what you're watching.",
+) {
+    @Suppress("DEPRECATION") // The newer clipboard API is suspend-only and platform-typed.
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    // The page signs in to destiny.gg unless told the test site.
+    val page = if (host == "destiny.gg") SIGN_IN_PAGE else "$SIGN_IN_PAGE?site=$host"
+    Step("1", "On a computer signed in to $host, open:")
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(page.removePrefix("https://"), color = Palette.Blue, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        TextButton(onClick = { clipboard.setText(AnnotatedString(page)); copied = true }) {
+            Text(if (copied) "Copied" else "Copy", color = Palette.Blue)
+        }
+    }
+    Step("2", "It shows how to copy two values from the browser, and turns them into a code.")
+    Step("3", "Scan the code here.")
+    val use: (String?) -> Unit = { text ->
+        if (text != null) {
+            val session = readCode(text)
+            if (session == null) onProblem("That isn't a Glorp sign-in code for $host.") else submit(session)
+        }
+    }
+    if (scanCode != null) {
+        Button(
+            onClick = { scanCode(use) },
+            enabled = !busy,
+            colors = ButtonDefaults.buttonColors(containerColor = Palette.Blue, contentColor = Palette.OnAction),
+        ) { Text("Scan the code") }
+    }
+    var typed by remember { mutableStateOf("") }
+    OutlinedTextField(
+        typed, { typed = it.trim() },
+        label = { Text(if (scanCode != null) "Or paste the code as text" else "Paste the code") },
+        singleLine = true, colors = fieldColors(),
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    if (typed.isNotEmpty()) {
+        OutlinedButton(onClick = { use(typed) }, enabled = !busy) { Text("Sign in with the code", color = Palette.White) }
     }
 }
 

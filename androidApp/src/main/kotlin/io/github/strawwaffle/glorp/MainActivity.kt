@@ -30,6 +30,10 @@ import io.github.strawwaffle.glorp.notify.Notifier
 import io.github.strawwaffle.glorp.notify.NotifyControls
 import io.github.strawwaffle.glorp.notify.NotifyOptions
 import io.github.strawwaffle.glorp.notify.OpenRequests
+import io.github.strawwaffle.glorp.site.AppClient
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 
 class MainActivity : ComponentActivity() {
     private var inPip by mutableStateOf(false)
@@ -101,6 +105,9 @@ class MainActivity : ComponentActivity() {
                 ),
                 notify = notify,
                 diagnostics = Crashes.diagnostics(applicationContext, BuildConfig.VERSION_NAME),
+                appClient = BuildConfig.DGG_CLIENT_ID.takeIf { it.isNotEmpty() && BuildConfig.DGG_CLIENT_SECRET.isNotEmpty() }
+                    ?.let { AppClient(it, BuildConfig.DGG_CLIENT_SECRET) },
+                scanCode = ::scanCode,
             )
         }
     }
@@ -118,8 +125,28 @@ class MainActivity : ComponentActivity() {
         Notifier.post(applicationContext, alert)
     }
 
-    /** A tapped notification says where to go (see Notifier). */
+    /**
+     * Google's code scanner, from Play services: its own camera screen, so
+     * Glorp asks for no camera permission. Null when it can't run (no Play
+     * services) or was closed.
+     */
+    private fun scanCode(onResult: (String?) -> Unit) {
+        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+        GmsBarcodeScanning.getClient(this, options).startScan()
+            .addOnSuccessListener { onResult(it.rawValue) }
+            .addOnCanceledListener { onResult(null) }
+            .addOnFailureListener { error ->
+                AppLog.note("signin", "code scanner failed", error)
+                onResult(null)
+            }
+    }
+
+    /** A tapped notification says where to go (see Notifier); the browser may be back from signing in. */
     private fun takeOpenRequest(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_VIEW && intent.data?.host == "oauth") {
+            OpenRequests.signIn.value = intent.data.toString()
+            intent.data = null
+        }
         intent?.getStringExtra(Notifier.EXTRA_OPEN)?.let { OpenRequests.pending.value = it }
         intent?.removeExtra(Notifier.EXTRA_OPEN)
     }

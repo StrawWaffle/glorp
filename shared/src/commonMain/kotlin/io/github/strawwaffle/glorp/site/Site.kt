@@ -18,6 +18,9 @@ data class Site(
     val chatSocketUrl: String,
     val cdn: String,
 ) {
+    /** The site's name as people write it: `destiny.gg`, `omniliberal.dev`. */
+    val host: String get() = origin.substringAfter("://").removePrefix("www.").trimEnd('/')
+
     companion object {
         /** A guess from the origin, used until (or if) the chat page can't be read. */
         fun guess(origin: String): Site {

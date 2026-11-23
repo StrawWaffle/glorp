@@ -8,3 +8,9 @@
 # mapping file (uploaded with each release) give the place in the code.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# Google's code scanner (ML Kit): it builds its parts by reflection, and
+# crashes in GmsBarcodeScanning.getClient when R8 strips them.
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_code_scanner.** { *; }
+-keep class * implements com.google.firebase.components.ComponentRegistrar { *; }

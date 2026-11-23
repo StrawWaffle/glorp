@@ -36,6 +36,9 @@ import io.github.strawwaffle.glorp.ui.Fullscreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
 import io.github.strawwaffle.glorp.ui.AppFont
 import io.github.strawwaffle.glorp.ui.ColorTheme
+import io.github.strawwaffle.glorp.site.AppClient
+import io.github.strawwaffle.glorp.site.readSignInCode
+import androidx.compose.ui.platform.LocalUriHandler
 import io.github.strawwaffle.glorp.ui.Palette
 import io.github.strawwaffle.glorp.ui.TagsScreen
 import io.github.strawwaffle.glorp.ui.textScales
@@ -79,6 +82,10 @@ fun GlorpApp(
     notify: NotifyControls? = null,
     /** Problem reports and the last crash; null where there are none. */
     diagnostics: Diagnostics? = null,
+    /** Glorp's app on the site, for "Sign in with destiny.gg"; null in builds without it. */
+    appClient: AppClient? = null,
+    /** Scans a QR code (the computer sign-in); null where there's no scanner. */
+    scanCode: (((String?) -> Unit) -> Unit)? = null,
 ) {
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
     // Keep a stream's sound going with the screen off: on unless turned off in the menu.
@@ -103,7 +110,7 @@ fun GlorpApp(
         LocalBackgroundAudio provides backgroundAudio,
         LocalCatchUp provides catchUp,
     ) { GlorpTheme(colorTheme, appFont) {
-        val chat = viewModel { ChatViewModel(origin, sessions, prefs).also { vm ->
+        val chat = viewModel { ChatViewModel(origin, sessions, prefs, appClient).also { vm ->
             initialEmbed?.let(Embed::parse)?.let(vm::watch)
             if (devFrames.isNotEmpty()) vm.play(devFrames)
         } }
@@ -179,6 +186,19 @@ fun GlorpApp(
                 onReport = { crashAsked = true; screen = "report" },
                 onDismiss = { crashAsked = true; diagnostics.clearCrash() },
             )
+        }
+        // The browser back from "Sign in with destiny.gg".
+        val signInReturn by OpenRequests.signIn.collectAsStateWithLifecycle()
+        var signInError by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(signInReturn) {
+            val redirect = signInReturn ?: return@LaunchedEffect
+            OpenRequests.signIn.value = null
+            screen = "signin"
+            signInError = null
+            chat.finishAppSignIn(redirect) { error ->
+                signInError = error
+                if (error == null) screen = "chat"
+            }
         }
         CompositionLocalProvider(
             LocalFullscreen provides Fullscreen(fullscreen) { fullscreenWanted = it },
@@ -316,8 +336,8 @@ fun GlorpApp(
                 "signin", "signin-cookies" -> {
                     {
                         val forWhispers = screen == "signin-cookies"
+                        val browser = LocalUriHandler.current
                         SignInScreen(
-                            startWithCookies = forWhispers,
                             origin = origin,
                             host = chat.host,
                             busy = signingIn,
@@ -327,7 +347,13 @@ fun GlorpApp(
                                     if (error == null) screen = if (forWhispers) "whispers" else "chat"
                                 }
                             },
-                            onClose = { screen = "menu" },
+                            onClose = { screen = "menu"; signInError = null },
+                            onSiteSignIn = if (!chat.canSignInWithSite) null else {
+                                { chat.appSignInUrl()?.let { runCatching { browser.openUri(it) } } }
+                            },
+                            scanCode = scanCode,
+                            readCode = { readSignInCode(it, chat.site) },
+                            error = signInError,
                         )
                     }
                 }
