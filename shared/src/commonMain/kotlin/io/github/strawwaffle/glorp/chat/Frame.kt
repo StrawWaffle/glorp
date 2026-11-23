@@ -19,8 +19,16 @@ import kotlin.time.Instant
  */
 sealed interface ChatEvent {
     data class Message(val line: ChatLine) : ChatEvent
-    data class History(val lines: List<ChatLine>) : ChatEvent
-    data class Removal(val nick: String) : ChatEvent
+    /** The backlog on connect: its lines, and who in it was muted or banned (their earlier lines are censored). */
+    data class History(val lines: List<ChatLine>, val removed: List<String> = emptyList()) : ChatEvent
+
+    /** A moderation notice; [removed] is who was muted or banned, if anyone. */
+    data class Moderation(val removed: String?, val notice: ChatLine) : ChatEvent
+
+    /** A message spotlighted, its spotlight taken off, or the spotlights there are (sent on connect). */
+    data class Spotlight(val spot: Spot) : ChatEvent
+    data class Unspotlight(val key: String) : ChatEvent
+    data class Spotlights(val spots: List<Spot>) : ChatEvent
 
     /** Who the server thinks you are, sent first on every connect; null when signed out. */
     data class Me(val account: Account?) : ChatEvent
@@ -181,13 +189,23 @@ fun parseFrame(raw: String, now: () -> Long): ChatEvent? {
                 else ChatEvent.Message(ChatLine.broadcast(text.data, text.timestamp ?: now()))
             }
             "HISTORY" -> {
-                val lines = chatJson.decodeFromString<List<String>>(payload)
-                ChatEvent.History(lines.mapNotNull { (parseFrame(it, now) as? ChatEvent.Message)?.line })
+                val lines = ArrayList<ChatLine>()
+                val removed = ArrayList<String>()
+                for (frame in chatJson.decodeFromString<List<String>>(payload)) {
+                    when (val e = parseFrame(frame, now)) {
+                        is ChatEvent.Message -> lines += e.line
+                        is ChatEvent.Moderation -> { lines += e.notice; e.removed?.let(removed::add) }
+                        else -> Unit
+                    }
+                }
+                ChatEvent.History(lines, removed)
             }
-            "MUTE", "BAN" -> {
-                val target = chatJson.decodeFromString<WireText>(payload).data
-                if (target.isEmpty()) null else ChatEvent.Removal(target)
-            }
+            "MUTE", "BAN", "UNMUTE", "UNBAN", "ADDPHRASE", "REMOVEPHRASE" -> parseModeration(event, payload, now)
+            "SUBSCRIPTION", "GIFTSUB", "MASSGIFT", "DONATION", "DEATH", "XPOST",
+            "VESTABOARD_HOURLY", "VESTABOARD_LEAD", "VESTABOARD_RESET" -> parseEventLine(event, payload, now)?.let(ChatEvent::Message)
+            "SPOTLIGHT" -> parseSpot(payload)?.let(ChatEvent::Spotlight)
+            "UNSPOTLIGHT" -> parseUnspot(payload)?.let(ChatEvent::Unspotlight)
+            "SPOTLIGHTS" -> ChatEvent.Spotlights(parseSpots(payload))
             "ME" -> ChatEvent.Me(
                 chatJson.decodeFromString<WireUser?>(payload)?.takeIf { it.nick.isNotEmpty() }
                     ?.let { Account(it.nick, it.features, it.subscription?.tier ?: 0, it.roles) },

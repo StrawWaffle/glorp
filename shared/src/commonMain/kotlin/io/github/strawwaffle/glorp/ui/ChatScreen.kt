@@ -91,6 +91,7 @@ import io.github.strawwaffle.glorp.chat.ChatLine
 import io.github.strawwaffle.glorp.chat.ChatViewModel
 import io.github.strawwaffle.glorp.chat.Highlighter
 import io.github.strawwaffle.glorp.chat.LineFilter
+import io.github.strawwaffle.glorp.chat.EventLine
 import io.github.strawwaffle.glorp.site.LinkTitles
 import io.github.strawwaffle.glorp.site.mediaOf
 import io.github.strawwaffle.glorp.chat.OtherStreams
@@ -425,6 +426,26 @@ data class ChatLook(
     val theme: ColorTheme = ColorTheme.Glorp,
 )
 
+/** An event card's colour: its bar, its tint and its mark. */
+internal fun eventColor(kind: EventLine.Kind): Color = when (kind) {
+    EventLine.Kind.Subscription -> Color(0xFF00C2E0)
+    EventLine.Kind.Gift -> Color(0xFFC377E0)
+    EventLine.Kind.MassGift -> Color(0xFFFF80CE)
+    EventLine.Kind.Donation -> Color(0xFF61BD4F)
+    EventLine.Kind.Death -> Color(0xFFEB5A46)
+    EventLine.Kind.XPost -> Color(0xFF9EA3AD)
+    EventLine.Kind.Vestaboard -> Color(0xFFFFAB4A)
+}
+
+private fun eventMark(kind: EventLine.Kind): String = when (kind) {
+    EventLine.Kind.Subscription -> "★"
+    EventLine.Kind.Gift, EventLine.Kind.MassGift -> "🎁"
+    EventLine.Kind.Donation -> "$"
+    EventLine.Kind.Death -> "☠"
+    EventLine.Kind.XPost -> "𝕏"
+    EventLine.Kind.Vestaboard -> "▦"
+}
+
 /** chat-gui's tag colours. */
 internal fun tagColor(name: String): Color = when (name) {
     "green" -> Color(0xFF61BD4F)
@@ -545,7 +566,10 @@ internal fun ChatRow(
     // A tagged user's lines get a bar of their colour down the left, as chat-gui draws them.
     val tag = if (line.kind == ChatLine.Kind.User) line.nick?.lowercase()?.let { look.tags[it] } else null
     val singled = (rendered.mentionsMe && look.highlightSelf) || highlighted
+    val event = line.event?.kind
     val background = when {
+        event != null -> eventColor(event).copy(alpha = 0.12f)
+        line.spotlightedBy != null -> Palette.Orange.copy(alpha = 0.12f)
         line.kind == ChatLine.Kind.Whisper -> Palette.Blue.copy(alpha = 0.12f)
         singled -> Palette.Mention
         tag != null && look.taggedVisibility -> Palette.Tagged
@@ -553,7 +577,8 @@ internal fun ChatRow(
     }
     // The tag's colour down the left, as chat-gui draws it; otherwise the
     // theme's mention bar, where it has one (Aerith's teal).
-    val bar = tag?.let(::tagColor) ?: Palette.MentionBar?.takeIf { singled }
+    val bar = event?.let(::eventColor) ?: Palette.Orange.takeIf { line.spotlightedBy != null }
+        ?: tag?.let(::tagColor) ?: Palette.MentionBar?.takeIf { singled }
     // From someone watching another stream: faded as the site's eye button does.
     val faded = look.otherStreams == OtherStreams.Dim && !rendered.mentionsMe && !highlighted &&
         fromOtherStream(line, me, look.playing)
@@ -639,6 +664,13 @@ private fun render(
     var rainbowName: IntRange? = null
 
     val text = buildAnnotatedString {
+        // A spotlighted message says so above it, as chat-gui's frame does.
+        line.spotlightedBy?.let { by ->
+            withStyle(SpanStyle(color = Palette.Orange, fontWeight = FontWeight.Bold, fontSize = 12.sp)) {
+                append(if (by.isBlank()) "★ Spotlighted" else "★ Spotlighted by $by")
+            }
+            append('\n')
+        }
         // The time first, as chat-gui puts it, for everything but a combo.
         if (look.showTime && line.kind != ChatLine.Kind.Combo && line.at > 0) {
             withStyle(SpanStyle(color = Palette.TextDim, fontSize = 12.sp)) { append(localTime(line.at, look.timeFormat)) }
@@ -693,11 +725,32 @@ private fun render(
                 append(line.text)
                 return@buildAnnotatedString
             }
+            ChatLine.Kind.Event -> {
+                // chat-gui's event card: its mark, who, what they did; their message below.
+                val event = line.event!!
+                withStyle(SpanStyle(color = eventColor(event.kind), fontWeight = FontWeight.Bold)) { append(eventMark(event.kind)); append(' ') }
+                line.nick?.let { nick ->
+                    val color = flairs.nameColor(line.features)?.let { Color(it) } ?: Palette.White
+                    withLink(LinkAnnotation.Clickable("nick", nickStyle) { onNick(nick) }) {
+                        withStyle(SpanStyle(color = color, fontWeight = FontWeight.Bold)) { append(nick) }
+                    }
+                    append(' ')
+                }
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(event.header) }
+                event.link?.let { url ->
+                    append("  ")
+                    withLink(LinkAnnotation.Clickable(url, linkStyle) { onUrl(url) }) { append("Open") }
+                }
+                if (line.text.isBlank()) return@buildAnnotatedString
+                append('\n')
+            }
             ChatLine.Kind.User -> Unit
         }
         mentionsMe = mention != null && !line.nick.equals(me, ignoreCase = true) && mention.containsMatchIn(line.text)
         val nameColor = flairs.nameColor(line.features)?.let { Color(it) } ?: Palette.White
-        if (continued) {
+        if (line.kind == ChatLine.Kind.Event) {
+            // The name is in the event's header.
+        } else if (continued) {
             // The rest of a run: no badges or name, a dim marker instead.
             withStyle(SpanStyle(color = Palette.TextDim)) { append("> ") }
         } else {

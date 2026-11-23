@@ -803,13 +803,25 @@ class ChatViewModel(
         val parsed = item as? Parsed ?: Parsed(parseFrame(item as String, now), null)
         return when (val event = parsed.event) {
             is ChatEvent.Message -> received(event.line)
-            is ChatEvent.History -> event.lines.fold(false) { changed, line -> received(line) or changed }
+            is ChatEvent.History -> {
+                val added = event.lines.fold(false) { changed, line -> received(line) or changed }
+                val censored = event.removed.fold(false) { changed, nick -> log.moderate(nick) or changed }
+                // Spotlights sent on connect may name messages the backlog just brought.
+                val marked = log.respotlight()
+                added or censored or marked
+            }
             is ChatEvent.Names -> {
                 // Only someone who can type needs names to complete.
                 if (_account.value != null) input.completer.setRoster(parsed.roster ?: rosterNicks(event.payload))
                 false
             }
-            is ChatEvent.Removal -> log.moderate(event.nick)
+            is ChatEvent.Moderation -> {
+                val censored = event.removed?.let(log::moderate) ?: false
+                log.add(event.notice) or censored
+            }
+            is ChatEvent.Spotlight -> log.spotlight(event.spot)
+            is ChatEvent.Unspotlight -> log.unspotlight(event.key)
+            is ChatEvent.Spotlights -> log.setSpotlights(event.spots)
             is ChatEvent.Notice -> log.add(ChatLine.info(event.text, now()))
             is ChatEvent.Me -> {
                 val me = event.account

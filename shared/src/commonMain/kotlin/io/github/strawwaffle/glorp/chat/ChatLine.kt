@@ -31,6 +31,10 @@ data class ChatLine(
     val moderated: Boolean = false,
     /** What the sender was watching on bigscreen when they sent it, as `platform/id` in lower case. */
     val watching: String? = null,
+    /** For [Kind.Event]: what happened (a subscription, a donation…). */
+    val event: EventLine? = null,
+    /** A moderator spotlighted this message (chat-gui's framed messages); who did. */
+    val spotlightedBy: String? = null,
 ) {
     enum class Kind {
         /** A chat message. */
@@ -47,6 +51,9 @@ data class ChatLine(
 
         /** Several people in a row sending the same single emote: [text] is the emote. */
         Combo,
+
+        /** A paid or site event chat-gui shows as a card: a subscription, a donation, a death… [event] says which. */
+        Event,
     }
 
     companion object {
@@ -106,6 +113,31 @@ data class ChatLine(
             comboCount = count,
         )
 
+        /** A moderation notice from the server ("x muted by y."), the same line again when the backlog replays it. */
+        fun notice(text: String, at: Long) = ChatLine(
+            id = "notice\u0000$at\u0000$text",
+            kind = Kind.Info,
+            nick = null,
+            features = emptyList(),
+            text = text,
+            at = at,
+            action = false,
+            green = false,
+        )
+
+        /** An event card: [nick] did [EventLine.header], with [text] as their message, if any. */
+        fun event(event: EventLine, nick: String?, features: List<String>, text: String, at: Long, uuid: String?) = ChatLine(
+            id = "event\u0000${uuid ?: "$at\u0000${event.header}"}",
+            kind = Kind.Event,
+            nick = nick,
+            features = features,
+            text = text,
+            at = at,
+            action = false,
+            green = false,
+            event = event,
+        )
+
         /** Each notice is its own line, even when the same one repeats. */
         fun info(text: String, at: Long) = ChatLine(
             id = "info\u0000$at\u0000${Random.nextLong()}",
@@ -118,4 +150,12 @@ data class ChatLine(
             green = false,
         )
     }
+}
+
+/**
+ * One of chat-gui's event cards, as a line: who did what ([header], after
+ * the name if there is one) and a link to follow, if any.
+ */
+data class EventLine(val kind: Kind, val header: String, val link: String? = null) {
+    enum class Kind { Subscription, Gift, MassGift, Donation, Death, XPost, Vestaboard }
 }

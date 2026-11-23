@@ -54,6 +54,48 @@ class ChatLog(capacity: Int = DEFAULT_CAPACITY) {
         return true
     }
 
+    // Spotlights by key, kept so a message they name can be marked when it
+    // arrives after them (the list comes on connect, before the backlog).
+    private val spots = LinkedHashMap<String, Spot>()
+
+    /** Frames the message [spot] names, as chat-gui does; true if it's here. */
+    fun spotlight(spot: Spot): Boolean {
+        spots[spot.key] = spot
+        return mark(spot, spot.by ?: "")
+    }
+
+    /** Takes a spotlight off. */
+    fun unspotlight(key: String): Boolean {
+        val spot = spots.remove(key) ?: return false
+        return mark(spot, null)
+    }
+
+    /** The server's list on connect: these and no others. */
+    fun setSpotlights(list: List<Spot>): Boolean {
+        val gone = spots.keys - list.map { it.key }.toSet()
+        var changed = gone.fold(false) { c, key -> unspotlight(key) or c }
+        list.forEach { changed = spotlight(it) or changed }
+        return changed
+    }
+
+    /** Marks again the messages spotlights name, for lines that came after the spotlights. */
+    fun respotlight(): Boolean = spots.values.fold(false) { c, spot -> mark(spot, spot.by ?: "") or c }
+
+    private fun mark(spot: Spot, by: String?): Boolean {
+        var changed = false
+        for (i in lines.indices) {
+            val line = lines[i]
+            val raw = if (line.action) "/me ${line.text}" else line.text
+            if (line.kind == ChatLine.Kind.User && line.at == spot.messageAt && line.nick.equals(spot.nick, ignoreCase = true) &&
+                (raw == spot.text || line.text == spot.text) && line.spotlightedBy != by
+            ) {
+                lines[i] = line.copy(spotlightedBy = by)
+                changed = true
+            }
+        }
+        return changed
+    }
+
     /** Marks every chat message by [nick] so far as moderated: a mute or ban, which chat-gui censors. */
     fun moderate(nick: String): Boolean {
         var changed = false
