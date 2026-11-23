@@ -71,6 +71,9 @@ class NotifyOptions(private val prefs: ChatPrefs, private val settings: ChatSett
         /** Left by the running app for the background check: the site's address and the signed-in name. */
         const val ORIGIN = "notify.origin"
         const val NICK = "notify.nick"
+
+        /** The mentions service's base URL (server/), when the build has one. */
+        const val SERVER = "notify.server"
         private const val LIVE = "notify.live"
         private const val INTERVAL = "notify.interval"
     }
@@ -90,11 +93,18 @@ class AlertCheck(
     private val cookies: Session.Cookies?,
     /** The signed-in name, for mentions. */
     private val nick: String?,
+    /** Glorp's mentions service (server/), which needs no login; null to use the site's list. */
+    private val server: String? = null,
 ) {
     suspend fun run(): List<Alert> = buildList {
         if (options.live) live()?.let(::add)
         if (cookies != null && options.whispers) addAll(whispers(cookies))
-        if (cookies != null && nick != null && options.mentions) addAll(mentions(nick))
+        if (nick != null && options.mentions) {
+            when {
+                server != null -> addAll(serverMentions(server, nick))
+                cookies != null -> addAll(mentions(nick))
+            }
+        }
     }
 
     private suspend fun live(): Alert? {
@@ -143,6 +153,24 @@ class AlertCheck(
             }
     }
 
+    /**
+     * Mentions from Glorp's own service, which watches chat for everyone:
+     * any sign-in, and exact times, so tapping one opens straight to it.
+     */
+    private suspend fun serverMentions(server: String, nick: String): List<Alert> {
+        val seen = prefs.get(SERVER_SEEN)?.toLongOrNull()
+        val body = get("${server.trimEnd('/')}/mentions") {
+            parameter("nick", nick)
+            seen?.let { parameter("since", it) }
+        } ?: return emptyList()
+        val found = parseServerMentions(body) ?: return emptyList()
+        prefs.put(SERVER_SEEN, maxOf(found.maxOfOrNull { it.at } ?: 0, seen ?: kotlin.time.Clock.System.now().toEpochMilliseconds()).toString())
+        if (seen == null) return emptyList()
+        return found.filter { it.at > seen }.takeLast(MAX_EACH).map {
+            Alert(Alert.Kind.Mention, "${it.username} mentioned you", it.text, it.siteLink())
+        }
+    }
+
     private suspend fun get(url: String, more: io.ktor.client.request.HttpRequestBuilder.() -> Unit = {}): String? = try {
         val response = client.get(url) {
             header(HttpHeaders.UserAgent, ChatSocket.USER_AGENT)
@@ -166,6 +194,7 @@ class AlertCheck(
         private const val LIVE_SEEN = "notify.live.seen"
         private const val WHISPERS_SEEN = "notify.whispers.seen"
         private const val MENTIONS_SEEN = "notify.mentions.seen"
+        private const val SERVER_SEEN = "notify.server.seen"
         private const val MENTIONS_LIMIT = 10
         private const val MAX_EACH = 5
     }
@@ -182,6 +211,16 @@ internal fun parseMentions(body: String): List<Mention>? = runCatching {
         val at = (o["date"] as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
         val nick = (o["nick"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
         Mention(at, nick, (o["text"] as? JsonPrimitive)?.contentOrNull.orEmpty())
+    }
+}.getOrNull()
+
+/** `{"mentions":[{"nick","text","at"}]}` from the mentions service, as log messages (exact times). */
+internal fun parseServerMentions(body: String): List<LogMessage>? = runCatching {
+    chatJson.parseToJsonElement(body).jsonObject["mentions"]!!.jsonArray.mapNotNull { item ->
+        val o = item as? JsonObject ?: return@mapNotNull null
+        val at = (o["at"] as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
+        val nick = (o["nick"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+        LogMessage("Destinygg", (o["text"] as? JsonPrimitive)?.contentOrNull.orEmpty(), Instant.fromEpochMilliseconds(at).toString(), nick, at)
     }
 }.getOrNull()
 

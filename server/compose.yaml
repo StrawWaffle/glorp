@@ -1,0 +1,21 @@
+# Glorp's mentions service. Komodo (or plain `docker compose up -d --build`)
+# builds it from this folder of the repo; see README.md here.
+services:
+  glorp-mentions:
+    build: .
+    image: glorp-mentions:latest
+    container_name: glorp-mentions
+    restart: unless-stopped
+    environment:
+      # How long chat is kept in memory; the app asks for the last hour or less.
+      KEEP: 2h
+    ports:
+      # Put a reverse proxy with HTTPS in front; this only listens locally.
+      - "127.0.0.1:8087:8080"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 128m

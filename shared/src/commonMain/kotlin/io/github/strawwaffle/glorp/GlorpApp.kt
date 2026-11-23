@@ -258,6 +258,7 @@ fun GlorpApp(
                             notifyOptions = notifyOptions,
                             onNotifyChanged = { notifyVersion++ },
                             signedInWithCookies = account != null && chat.whisperHistory,
+                            mentionsService = prefs.get(NotifyOptions.SERVER) != null,
                             warnings = chat.warnings,
                             onWarnings = chat::warnAbout,
                         )

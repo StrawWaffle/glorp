@@ -26,6 +26,7 @@ import io.github.strawwaffle.glorp.notify.Alert
 import io.github.strawwaffle.glorp.notify.AlertCheck
 import io.github.strawwaffle.glorp.notify.Notifier
 import io.github.strawwaffle.glorp.notify.NotifyControls
+import io.github.strawwaffle.glorp.notify.NotifyOptions
 import io.github.strawwaffle.glorp.notify.OpenRequests
 
 class MainActivity : ComponentActivity() {
@@ -75,6 +76,8 @@ class MainActivity : ComponentActivity() {
         addOnPictureInPictureModeChangedListener(pipListener)
         inPip = isInPictureInPictureMode
         takeOpenRequest(intent)
+        // Where the background check asks for mentions (see Notifier).
+        SharedChatPrefs(applicationContext).put(NotifyOptions.SERVER, BuildConfig.MENTIONS_URL.ifBlank { null })
         setContent {
             GlorpApp(
                 origin = BuildConfig.SITE_ORIGIN,

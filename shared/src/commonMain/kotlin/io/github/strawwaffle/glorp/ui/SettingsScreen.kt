@@ -74,6 +74,8 @@ fun SettingsScreen(
     onNotifyChanged: () -> Unit = {},
     /** Mentions and whispers are read with the site's cookies; a login key can't. */
     signedInWithCookies: Boolean = false,
+    /** Glorp's mentions service is there: mentions work with any sign-in. */
+    mentionsService: Boolean = false,
     warnings: Boolean,
     onWarnings: (Boolean) -> Unit,
 ) {
@@ -194,7 +196,7 @@ fun SettingsScreen(
 
         if (notify != null && notifyOptions != null) {
             item { SettingsHeading("Notifications") }
-            item { NotificationSettings(notify, notifyOptions, settings, signedInWithCookies, onNotifyChanged) }
+            item { NotificationSettings(notify, notifyOptions, settings, signedInWithCookies, mentionsService, onNotifyChanged) }
         }
 
         item { SettingsHeading("Player") }
@@ -335,6 +337,7 @@ private fun NotificationSettings(
     options: NotifyOptions,
     settings: ChatSettings,
     cookies: Boolean,
+    mentionsService: Boolean,
     onChanged: () -> Unit,
 ) {
     var live by remember { mutableStateOf(options.live) }
@@ -363,7 +366,8 @@ private fun NotificationSettings(
         SwitchRow("Destiny goes live", null, live) { on -> turn(on) { options.setLive(on); live = on } }
         SwitchRow(
             "Someone mentions me",
-            signedOutNote ?: "Tapping it opens the chat around the message, even once it has left chat. Follows your account, as on the site",
+            (if (mentionsService) null else signedOutNote)
+                ?: "Tapping it opens the chat around the message, even once it has left chat. Follows your account, as on the site",
             options.mentions,
         ) { on -> turn(on) { settings.setBool("notificationhighlight", on) } }
         SwitchRow(

@@ -22,6 +22,9 @@ android {
         // 1.2.3 becomes version code 10203, so every release counts up.
         versionName = providers.gradleProperty("glorp.version").get()
         versionCode = versionName!!.split('.').map { it.toInt() }.let { (major, minor, patch) -> major * 10_000 + minor * 100 + patch }
+        // The mentions service (server/), for mention notifications without the
+        // site's login; empty leaves them to the site's own list (cookies only).
+        buildConfigField("String", "MENTIONS_URL", "\"${providers.gradleProperty("glorp.mentionsUrl").orElse("").get()}\"")
     }
 
     // The release key lives outside the repo (see AGENTS.md). Every release

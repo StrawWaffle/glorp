@@ -23,6 +23,7 @@ class AlertsTest {
     private var mentions = "[]"
     private var conversations = "[]"
     private val requests = mutableListOf<String>()
+    private var served = "[]"
 
     private val client = HttpClient(MockEngine { request ->
         requests += request.url.encodedPath
@@ -32,6 +33,7 @@ class AlertsTest {
                 headers = json,
             )
             "/api/chat/mentions" -> respond("""{"success":true,"data":$mentions}""", headers = json)
+            "/m/mentions" -> respond("""{"mentions":$served}""", headers = json)
             "/api/messages/conversations" -> respond("""{"data":{"results":$conversations}}""", headers = json)
             else -> respond("", io.ktor.http.HttpStatusCode.NotFound)
         }
@@ -85,6 +87,23 @@ class AlertsTest {
         val alerts = check().run()
         assertEquals(listOf("Whisper from Pal"), alerts.map { it.title })
         assertEquals(AlertCheck.OPEN_WHISPER + "Pal", alerts[0].open)
+    }
+
+    @Test
+    fun theServiceFindsMentionsWithoutTheSitesLogin() = runTest {
+        settings.set("notificationhighlight", JsonPrimitive(true))
+        val check = { AlertCheck(client, site, prefs, options, null, "Me", server = "https://glorp.example/m/") }
+        // Said after the first look, which starts from now.
+        val first = kotlin.time.Clock.System.now().toEpochMilliseconds() + 60_000
+        val second = first + 60_123
+        served = """[{"nick":"Friend","text":"hey Me","at":$first}]"""
+        assertEquals(emptyList(), check().run())
+        served = """[{"nick":"Friend","text":"hey Me","at":$first},{"nick":"Pal","text":"Me?","at":$second}]"""
+        val alerts = check().run()
+        assertEquals(listOf("Pal mentioned you"), alerts.map { it.title })
+        // The exact time: the link goes straight to the message.
+        assertEquals(second, (rustleLinkOf(alerts[0].open) as RustleLink.Around).message.at)
+        assertTrue(requests.all { it == "/m/mentions" })
     }
 
     @Test

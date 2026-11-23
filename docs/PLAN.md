@@ -301,12 +301,13 @@ The first look only takes note, so turning it on brings up nothing old.
 Each kind is its own Android channel (sound, vibration, silence set there).
 Nothing is shown while the app is on screen.
 
-A push server (one always-on process in chat, sending through Firebase)
-would make mentions instant with no checks from phones, but it would need
-every user's name, Google's push service in the app, and a host that keeps
-a connection open (Netlify's functions don't). For the live notification
-alone, a scheduled function polling `/api/info/stream` and sending to a
-topic would do; worth it if 15 minutes late is too late.
+**Mentions service** (`server/`, Go, Docker): one anonymous connection to
+chat with chat-gui's backoff, two hours of messages in memory, and
+`GET /mentions?nick=&since=` (exact times, any sign-in, no login held,
+nothing stored about who asks). Runs on a VPS through Komodo, rebuilt from
+`server/` on new commits. The app uses it when `glorp.mentionsUrl` is set in
+gradle.properties, else the site's list with cookies. Pull, not push: no
+Google push service, and no list of users anywhere.
 
 ## From d.gg utilities (read 2026-11-23)
 

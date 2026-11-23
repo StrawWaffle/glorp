@@ -76,7 +76,7 @@ object Notifier {
         val cookies = KeystoreSessionStore(context).load() as? Session.Cookies
         val client = createHttpClient()
         try {
-            val alerts = AlertCheck(client, Site.guess(origin), prefs, options, cookies, prefs.get(NotifyOptions.NICK)).run()
+            val alerts = AlertCheck(client, Site.guess(origin), prefs, options, cookies, prefs.get(NotifyOptions.NICK), prefs.get(NotifyOptions.SERVER)).run()
             if (!onScreen && permitted(context)) alerts.forEach { post(context, it) }
         } finally {
             client.close()
