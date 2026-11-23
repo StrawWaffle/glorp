@@ -6,7 +6,8 @@
 #
 #   scripts/release.sh notes.md
 #
-# notes.md becomes the release text. Needs the release key in
+# notes.md becomes the release text. A version ending in -test.N (set in
+# gradle.properties) is published as a test version. Needs the release key in
 # ~/.secrets/glorp/ and StrawWaffle's GitHub login in Git Credential Manager.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -53,7 +54,9 @@ auth=(-H "Authorization: Bearer $token" -H "Accept: application/vnd.github+json"
 git tag -a "$tag" -m "Glorp $version"
 GCM_INTERACTIVE=never git push -q origin main "$tag"
 
-body=$(python -c 'import json,sys; print(json.dumps({"tag_name":sys.argv[1],"name":"Glorp "+sys.argv[2],"body":open(sys.argv[3],encoding="utf-8").read()}))' "$tag" "$version" "$notes")
+# A test version (0.1.23-test.1) is a pre-release: only the app's "Get test
+# versions" switch offers it; Obtainium and everyone else stay on releases.
+body=$(python -c 'import json,sys; v=sys.argv[2]; print(json.dumps({"tag_name":sys.argv[1],"name":"Glorp "+v+(" (test)" if "-test." in v else ""),"prerelease":"-test." in v,"body":open(sys.argv[3],encoding="utf-8").read()}))' "$tag" "$version" "$notes")
 id=$(curl -sf "${auth[@]}" -X POST "https://api.github.com/repos/$repo/releases" -d "$body" | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 for file in "$name" "$name.sha256" "glorp-$version-mapping.txt"; do
   type=$([ "${file##*.}" = apk ] && echo application/vnd.android.package-archive || echo text/plain)

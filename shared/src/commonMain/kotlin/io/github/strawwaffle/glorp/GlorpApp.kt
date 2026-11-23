@@ -120,6 +120,7 @@ fun GlorpApp(
         val inbox by chat.inbox.collectAsStateWithLifecycle()
         val update = updates?.state?.collectAsStateWithLifecycle()?.value
         LaunchedEffect(updates) { updates?.check() }
+        var testVersions by remember(updates) { mutableStateOf(updates?.testVersions) }
         val opening by chat.opening.collectAsStateWithLifecycle()
         // `/open nick` shows that conversation.
         LaunchedEffect(opening) {
@@ -276,6 +277,8 @@ fun GlorpApp(
                             mentionsService = prefs.get(NotifyOptions.SERVER) != null,
                             warnings = chat.warnings,
                             onWarnings = chat::warnAbout,
+                            testVersions = testVersions,
+                            onTestVersions = { on -> testVersions = on; updates?.testVersions = on },
                         )
                     }
                 }

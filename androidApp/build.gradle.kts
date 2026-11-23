@@ -21,7 +21,16 @@ android {
         // Set in gradle.properties (`glorp.version`); scripts/release.sh tags it.
         // 1.2.3 becomes version code 10203, so every release counts up.
         versionName = providers.gradleProperty("glorp.version").get()
-        versionCode = versionName!!.split('.').map { it.toInt() }.let { (major, minor, patch) -> major * 10_000 + minor * 100 + patch }
+        // 0.1.23-test.2 → 12302, 0.1.23 → 12399: a test version installs over
+        // the release before it, and its own release installs over it.
+        versionCode = versionName!!.let { name ->
+            val (major, minor, patch) = name.substringBefore('-').split('.').map { it.toInt() }
+            val test = name.substringAfter("-test.", "").toIntOrNull()?.also { require(it in 1..98) } ?: 99
+            ((major * 100 + minor) * 100 + patch) * 100 + test
+        }
+        // A test version is "Glorp Probe" on the phone, so it's plain which one
+        // is installed; its release turns it back into Glorp.
+        manifestPlaceholders["appLabel"] = if ("-test." in versionName!!) "Glorp Probe" else "Glorp"
         // The mentions service (server/), for mention notifications without the
         // site's login; empty leaves them to the site's own list (cookies only).
         buildConfigField("String", "MENTIONS_URL", "\"${providers.gradleProperty("glorp.mentionsUrl").orElse("").get()}\"")
@@ -47,6 +56,7 @@ android {
         // MainActivity).
         debug {
             applicationIdSuffix = ".dev"
+            manifestPlaceholders["appLabel"] = "Glorp (dev)"
             buildConfigField("String", "SITE_ORIGIN", "\"https://www.omniliberal.dev\"")
             buildConfigField("boolean", "DEV_IMPORT", "true")
             buildConfigField("boolean", "SELF_UPDATE", "false")
@@ -69,6 +79,7 @@ android {
         create("dev") {
             initWith(getByName("release"))
             applicationIdSuffix = ".dev"
+            manifestPlaceholders["appLabel"] = "Glorp (dev)"
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
             buildConfigField("String", "SITE_ORIGIN", "\"https://www.omniliberal.dev\"")

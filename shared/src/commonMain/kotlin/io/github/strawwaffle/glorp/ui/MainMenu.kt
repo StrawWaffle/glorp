@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -72,15 +73,37 @@ fun MainMenu(
 ) {
     LazyColumn(Modifier.fillMaxSize().background(Palette.Black)) {
         item {
-            Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                Text("Glorp", color = Palette.Glorp, fontWeight = FontWeight.Bold, fontSize = 22.sp)
-                val status = when (state) {
-                    SocketState.Connected -> "Receiving transmission from $host"
-                    SocketState.Connecting -> "Establishing contact with $host…"
-                    SocketState.Waiting -> "Signal lost, retrying"
-                    SocketState.Stopped -> "Transmission ended"
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).padding(vertical = 16.dp)) {
+                    Text("Glorp", color = Palette.Glorp, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                    val status = when (state) {
+                        SocketState.Connected -> "Receiving transmission from $host"
+                        SocketState.Connecting -> "Establishing contact with $host…"
+                        SocketState.Waiting -> "Signal lost, retrying"
+                        SocketState.Stopped -> "Transmission ended"
+                    }
+                    Text(status, color = Palette.TextDim, fontSize = 13.sp)
                 }
-                Text(status, color = Palette.TextDim, fontSize = 13.sp)
+                // The version and the update check, where they're seen first.
+                if (version != null) {
+                    Column(
+                        Modifier.heightIn(min = 48.dp).clickable(onClickLabel = "Check for updates", onClick = onCheckUpdate)
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            when (update) {
+                                UpdateState.Checking -> "Checking…"
+                                UpdateState.UpToDate -> "Up to date"
+                                else -> "Check for updates"
+                            },
+                            color = Palette.Blue,
+                            fontSize = 13.sp,
+                        )
+                        Text("v$version", color = Palette.TextDim, fontSize = 12.sp)
+                    }
+                }
             }
         }
         // A new version is offered at the top, where it's seen.
@@ -104,17 +127,6 @@ fun MainMenu(
         item { Heading("App") }
         item { Item("Settings", "Timestamps, highlights and tags, the player", onSettings) }
         if (onReport != null) item { Item("Report a problem", "Opens a GitHub issue with the details filled in, for you to check and send", onReport) }
-        if (version != null) item {
-            Item(
-                "Glorp $version",
-                when (update) {
-                    UpdateState.Checking -> "Checking for updates…"
-                    UpdateState.UpToDate -> "Up to date"
-                    else -> "Check for updates"
-                },
-                onCheckUpdate,
-            )
-        }
         item {
             Text(
                 "Glorp is an unofficial community app. It is not made by or affiliated with destiny.gg or Destiny. " +

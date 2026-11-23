@@ -34,4 +34,28 @@ class UpdatesTest {
         assertNull(readRelease("""{"tag_name":"v1","prerelease":true,"assets":[{"name":"glorp-1.apk","browser_download_url":"x"}]}"""))
         assertNull(readRelease("""{"tag_name":"v1","assets":[]}"""))
     }
+
+    @Test
+    fun testVersionsComeBeforeTheirRelease() {
+        assertTrue(isNewer("0.1.23-test.1", "0.1.22"))
+        assertTrue(isNewer("0.1.23-test.2", "0.1.23-test.1"))
+        assertTrue(isNewer("0.1.23-test.10", "0.1.23-test.9"))
+        assertTrue(isNewer("0.1.23", "0.1.23-test.4"))
+        assertFalse(isNewer("0.1.23-test.4", "0.1.23"))
+        assertFalse(isNewer("0.1.22", "0.1.23-test.1"))
+    }
+
+    @Test
+    fun theNewestOfAListIncludesTestVersions() {
+        fun release(tag: String, pre: Boolean, draft: Boolean = false) =
+            """{"tag_name":"v$tag","prerelease":$pre,"draft":$draft,"assets":[{"name":"glorp-$tag.apk","browser_download_url":"https://example/$tag"}]}"""
+        val list = "[" + listOf(
+            release("0.1.24-test.1", pre = true, draft = true),
+            release("0.1.23-test.2", pre = true),
+            release("0.1.22", pre = false),
+            release("0.1.23-test.1", pre = true),
+        ).joinToString(",") + "]"
+        assertEquals("0.1.23-test.2", newestRelease(list)?.version)
+        assertNull(newestRelease("[]"))
+    }
 }

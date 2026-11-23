@@ -64,6 +64,21 @@ class Updates(
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
 
+    /**
+     * Whether test versions (pre-releases, `0.1.23-test.1`) are offered too,
+     * for people who want to try what's next and report what breaks.
+     */
+    var testVersions: Boolean
+        get() = prefs.get(TEST_VERSIONS) == "true"
+        set(value) {
+            prefs.put(TEST_VERSIONS, value.toString())
+            // What the last check found may not fit any more.
+            prefs.put(CHECKED, null)
+            prefs.put(FOUND, null)
+            _state.value = UpdateState.Idle
+            check(force = true)
+        }
+
     /** Checks unless one was done in the last day; [force] checks anyway. */
     fun check(force: Boolean = false) {
         val now = Clock.System.now().toEpochMilliseconds()
@@ -105,11 +120,19 @@ class Updates(
     }
 
     private suspend fun latest(): Release? = try {
-        val response = client.get("https://api.github.com/repos/$REPO/releases/latest") {
+        // GitHub's "latest" is never a pre-release; test versions need the list.
+        val tests = testVersions
+        val response = client.get("https://api.github.com/repos/$REPO/releases" + if (tests) "?per_page=20" else "/latest") {
             header(HttpHeaders.UserAgent, ChatSocket.USER_AGENT)
             header(HttpHeaders.Accept, "application/vnd.github+json")
         }
-        if (!response.status.isSuccess()) null else readRelease(response.bodyAsText())?.let { found ->
+        val body = if (response.status.isSuccess()) response.bodyAsText() else null
+        val newest = when {
+            body == null -> null
+            tests -> newestRelease(body)
+            else -> readRelease(body)
+        }
+        newest?.let { found ->
             if (found.sha256 != null) found
             else found.copy(sha256 = checksumFile(found))
         }
@@ -132,6 +155,7 @@ class Updates(
         const val REPO = "StrawWaffle/glorp"
         private const val CHECKED = "update-checked"
         private const val FOUND = "update-found"
+        private const val TEST_VERSIONS = "update-test-versions"
         private const val DAY_MS = 24 * 60 * 60 * 1000L
     }
 }
@@ -148,18 +172,33 @@ private class GitHubRelease(
 @Serializable
 private class GitHubAsset(val name: String = "", val browser_download_url: String = "", val digest: String? = null)
 
-/** The release's version and its Glorp APK; null when it has none. */
-internal fun readRelease(json: String): Release? {
-    val release = chatJson.decodeFromString<GitHubRelease>(json)
-    if (release.draft || release.prerelease) return null
+/** The release's version and its Glorp APK; null when it has none, or it's a pre-release. */
+internal fun readRelease(json: String): Release? = asRelease(chatJson.decodeFromString<GitHubRelease>(json), prereleases = false)
+
+/** The newest release in a list of them, test versions included. */
+internal fun newestRelease(json: String): Release? =
+    chatJson.decodeFromString<List<GitHubRelease>>(json)
+        .mapNotNull { asRelease(it, prereleases = true) }
+        .reduceOrNull { a, b -> if (isNewer(b.version, a.version)) b else a }
+
+private fun asRelease(release: GitHubRelease, prereleases: Boolean): Release? {
+    if (release.draft || (release.prerelease && !prereleases)) return null
     val apk = release.assets.firstOrNull { it.name.startsWith("glorp") && it.name.endsWith(".apk") } ?: return null
     val digest = apk.digest?.removePrefix("sha256:")?.lowercase()?.takeIf { it.length == 64 }
     return Release(release.tag_name.removePrefix("v"), apk.browser_download_url, digest, release.html_url)
 }
 
-/** Whether [candidate] (`1.2.0`) is later than [current]; a pre-release suffix (`-dev`) is ignored. */
+/**
+ * Whether [candidate] (`1.2.0`) is later than [current]. A test version
+ * (`1.2.0-test.3`) comes before its release and after the test versions
+ * numbered lower; another suffix (`-dev`) is ignored.
+ */
 fun isNewer(candidate: String, current: String): Boolean {
-    fun parts(v: String) = v.substringBefore('-').split('.').map { it.toIntOrNull() ?: 0 }
+    fun parts(v: String): List<Int> {
+        val numbers = v.substringBefore('-').split('.').map { it.toIntOrNull() ?: 0 }
+        val test = v.substringAfter("-test.", "").toIntOrNull()
+        return List(3) { numbers.getOrElse(it) { 0 } } + numbers.drop(3) + (test ?: Int.MAX_VALUE)
+    }
     val a = parts(candidate)
     val b = parts(current)
     for (i in 0 until maxOf(a.size, b.size)) {

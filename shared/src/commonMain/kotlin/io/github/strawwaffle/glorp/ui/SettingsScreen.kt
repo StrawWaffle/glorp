@@ -78,6 +78,9 @@ fun SettingsScreen(
     mentionsService: Boolean = false,
     warnings: Boolean,
     onWarnings: (Boolean) -> Unit,
+    /** Whether test versions are offered; null in builds that don't update themselves. */
+    testVersions: Boolean? = null,
+    onTestVersions: (Boolean) -> Unit = {},
 ) {
     var choosingFlairs by remember { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize().background(Palette.Black)) {
@@ -217,6 +220,18 @@ fun SettingsScreen(
                 label = { if (it <= 1f) "Off" else "${it.toString().removeSuffix(".0")}×" },
                 onPick = onCatchUp,
             )
+        }
+        if (testVersions != null) {
+            item { SettingsHeading("Updates") }
+            item {
+                SwitchRow(
+                    "Get test versions",
+                    "Try what's next before everyone else. Test versions show as Glorp Probe on your phone and may break; " +
+                        "Menu → Report a problem tells us what did. Turned off, you're back on releases with the next one",
+                    testVersions,
+                    onTestVersions,
+                )
+            }
         }
         item { Spacer(Modifier.height(24.dp)) }
     }
