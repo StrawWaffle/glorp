@@ -46,29 +46,18 @@ import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.site.LiveState
 
 /**
- * The menu, reached with Back from chat. It takes chat's place under the
- * player, so whatever is playing keeps playing.
+ * The menu: places to go. Reached from the bar's menu button or with Back
+ * from chat; it takes chat's place under the player, so whatever is playing
+ * keeps playing. Settings have their own screen.
  */
 @Composable
 fun MainMenu(
     host: String,
     state: SocketState,
     account: Account?,
-    live: LiveState,
-    playerShown: Boolean,
-    picked: Embed?,
-    onChat: () -> Unit,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
-    onWatch: (Embed?) -> Unit,
-    onTogglePlayer: () -> Unit,
-    backgroundAudio: Boolean = false,
-    onToggleBackgroundAudio: () -> Unit = {},
-    /** The catch-up speed; 1 is off. */
-    catchUp: Float = 1.5f,
-    onToggleCatchUp: () -> Unit = {},
-    /** Chat's settings, saved with the account when signed in with cookies. */
-    chatSettings: ChatSettings? = null,
+    onSettings: () -> Unit,
     /** Opens a community screen: "rustle", "polls" or "dinkdonk". */
     onCommunity: (String) -> Unit = {},
     unreadWhispers: Int = 0,
@@ -79,8 +68,6 @@ fun MainMenu(
     onCheckUpdate: () -> Unit = {},
     onInstallUpdate: (Release) -> Unit = {},
 ) {
-    val streams = live.liveStreams
-    val embeds = live.embeds.filter { !live.isBanned(it.embed) }
     LazyColumn(Modifier.fillMaxSize().background(Palette.Black)) {
         item {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
@@ -98,8 +85,6 @@ fun MainMenu(
         if (update != null && update !is UpdateState.Idle && update !is UpdateState.UpToDate && update !is UpdateState.Checking) {
             item { UpdateItem(update, onInstallUpdate) }
         }
-        item { Item("Back to chat", null, onChat) }
-
         item { Heading("Account") }
         item {
             if (account == null) Item("Sign in", "To chat, whisper and be mentioned", onSignIn)
@@ -109,70 +94,13 @@ fun MainMenu(
             Item(if (unreadWhispers > 0) "Whispers ($unreadWhispers new)" else "Whispers", null, onWhispers)
         }
 
-        if (chatSettings != null) {
-            item { Heading("Chat") }
-            item {
-                Item(
-                    "Timestamps: " + if (chatSettings.showTime) "on" else "off",
-                    "The time before each message (/timestampformat changes how it's written)",
-                ) { chatSettings.setBool("showtime", !chatSettings.showTime) }
-            }
-            item {
-                Item("Flair icons: " + if (chatSettings.hideFlairIcons) "hidden" else "shown", null) {
-                    chatSettings.setBool("hideflairicons", !chatSettings.hideFlairIcons)
-                }
-            }
-            item {
-                Item(
-                    "Highlight mentions of me: " + if (chatSettings.highlightSelf) "on" else "off",
-                    null,
-                ) { chatSettings.setBool("highlight", !chatSettings.highlightSelf) }
-            }
-            item { HighlightWords(chatSettings) }
-            item {
-                Item(
-                    "Tagged users stand out: " + if (chatSettings.taggedVisibility) "on" else "off",
-                    "Their messages get a lighter background as well as the colour bar (tag from a name, or /tag)",
-                ) { chatSettings.setBool("taggedvisibility", !chatSettings.taggedVisibility) }
-            }
-        }
-
-        item { Heading("Watch") }
-        item { Item(if (playerShown) "Hide the player" else "Show the player", null, onTogglePlayer) }
-        item {
-            Item(
-                if (backgroundAudio) "Sound with the screen off: on" else "Sound with the screen off: off",
-                "Kick, Twitch and YouTube live keep playing their sound when you lock the phone",
-                onToggleBackgroundAudio,
-            )
-        }
-        item {
-            Item(
-                "Catch-up speed: " + if (catchUp <= 1f) "off" else "${catchUp.toString().removeSuffix(".0")}×",
-                "How fast a live stream that fell behind plays until it's back. Tap to change",
-                onToggleCatchUp,
-            )
-        }
-        if (picked != null) item { Item("Back to Destiny", "Follow what bigscreen shows", { onWatch(null) }) }
-        items(streams, key = { "d:" + it.embed.key }) { stream ->
-            Entry("Destiny on ${stream.embed.platform}", stream.title, null) { onWatch(stream.embed) }
-        }
-        if (embeds.isNotEmpty()) item { Heading("What chat is watching") }
-        items(embeds, key = { "e:" + it.embed.key }) { listing ->
-            Entry(listing.displayName ?: listing.embed.key, listing.title ?: listing.embed.key, listing.watchers) {
-                onWatch(listing.embed)
-            }
-        }
-        if (streams.isEmpty() && embeds.isEmpty()) {
-            item { Text("Nothing live right now.", color = Palette.TextDim, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) }
-        }
-
         item { Heading("Community") }
         item { Item("Chat log search", "rustlesearch.dev", { onCommunity("rustle") }) }
         item { Item("Poll archive", "mitchdev.net", { onCommunity("polls") }) }
         item { Item("Movie nights", "dinkdonk.mov", { onCommunity("dinkdonk") }) }
 
-        item { Heading("About") }
+        item { Heading("App") }
+        item { Item("Settings", "Timestamps, highlights and tags, the player", onSettings) }
         if (version != null) item {
             Item(
                 "Glorp $version",
@@ -220,48 +148,6 @@ private fun UpdateItem(update: UpdateState, onInstall: (Release) -> Unit) {
     ) {
         Text(title, color = Palette.Glorp, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
         detail?.let { Text(it, color = Palette.TextDim, fontSize = 12.sp) }
-    }
-}
-
-/** `customhighlight`: words that highlight a message, written as the site's settings take them, between commas. */
-@Composable
-private fun HighlightWords(settings: ChatSettings) {
-    val words = settings.list("customhighlight")
-    var editing by remember { mutableStateOf<TextFieldValue?>(null) }
-    val draft = editing
-    if (draft == null) {
-        Item(
-            "Highlight words",
-            if (words.isEmpty()) "None: messages with these words stand out" else words.joinToString(", "),
-        ) {
-            val text = words.joinToString(", ")
-            editing = TextFieldValue(text, TextRange(text.length))
-        }
-        return
-    }
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
-    fun save() {
-        settings.setList("customhighlight", highlightWords(draft.text))
-        editing = null
-    }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Text("Highlight words, between commas", color = Palette.White, fontSize = 15.sp)
-        BasicTextField(
-            draft,
-            onValueChange = { editing = it },
-            textStyle = TextStyle(color = Palette.White, fontSize = 15.sp),
-            cursorBrush = SolidColor(Palette.White),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { save() }),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).focusRequester(focus)
-                .background(Palette.Navy, RoundedCornerShape(6.dp)).padding(10.dp),
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = { editing = null }) { Text("Cancel", color = Palette.TextDim) }
-            TextButton(onClick = ::save) { Text("Save", color = Palette.Blue) }
-        }
     }
 }
 

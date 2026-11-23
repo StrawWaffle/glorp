@@ -97,6 +97,8 @@ fun ChatScreen(
     userActions: UserActions,
     /** The player, shown above chat; null when hidden. */
     player: (@Composable () -> Unit)?,
+    /** The bar between the player and chat, there with the player hidden too. */
+    bar: @Composable () -> Unit = {},
     /**
      * Something shown in chat's place (the menu, signing in), under the same
      * player, so a stream keeps playing. Null shows chat.
@@ -108,8 +110,6 @@ fun ChatScreen(
     onClosePoll: () -> Unit = {},
     pinned: ChatViewModel.Pinned? = null,
     onShowPin: (Boolean) -> Unit = {},
-    unreadWhispers: Int = 0,
-    onWhispers: () -> Unit = {},
 ) {
     // The player and what's beside it are each one piece of UI that moves
     // between the layouts (portrait, landscape, full screen, picture in
@@ -123,7 +123,7 @@ fun ChatScreen(
         if (instead != null) instead()
         else ChatBody(
             lines, flairs, emotes, state, account, onSend, input, onEmbed, userActions,
-            poll, onVote, onClosePoll, pinned, onShowPin, unreadWhispers, onWhispers,
+            poll, onVote, onClosePoll, pinned, onShowPin,
         )
     }
     val bodySlot = remember { movableContentOf { currentBody() } }
@@ -136,10 +136,14 @@ fun ChatScreen(
             // Sideways: the video beside chat.
             wide -> Row(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) { playerSlot() }
-                Box(Modifier.width(chatWidth).fillMaxHeight().imePadding()) { bodySlot() }
+                Column(Modifier.width(chatWidth).fillMaxHeight().imePadding()) {
+                    bar()
+                    Box(Modifier.fillMaxWidth().weight(1f)) { bodySlot() }
+                }
             }
             else -> Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
                 playerSlot()
+                bar()
                 Box(Modifier.fillMaxWidth().weight(1f)) { bodySlot() }
             }
         }
@@ -162,8 +166,6 @@ private fun ChatBody(
     onClosePoll: () -> Unit,
     pinned: ChatViewModel.Pinned?,
     onShowPin: (Boolean) -> Unit,
-    unreadWhispers: Int,
-    onWhispers: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         // No bar: the connection shows only when something is wrong.
@@ -215,7 +217,6 @@ private fun ChatBody(
                 }
             }
             Column(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalAlignment = Alignment.End) {
-                if (unreadWhispers > 0) Tab(if (unreadWhispers == 1) "1 new whisper" else "$unreadWhispers new whispers", Palette.Orange, onWhispers)
                 if (pinned != null && pinned.dismissed) Tab("Pinned message", Palette.NavyLight) { onShowPin(true) }
             }
             if (!following) {

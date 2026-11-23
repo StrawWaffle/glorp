@@ -39,8 +39,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.produceState
 
 /**
- * The player above chat: what was picked, or what bigscreen would show, with
- * the list of what chat is watching one tap away.
+ * The player above chat: what was picked, or what bigscreen would show. The
+ * bar under it ([PlayerBar]) picks.
  */
 @Composable
 fun Bigscreen(
@@ -48,12 +48,8 @@ fun Bigscreen(
     playerUrl: String?,
     origin: String,
     live: LiveState,
-    picked: Boolean,
-    onPick: (Embed?) -> Unit,
-    onHide: () -> Unit,
     resolve: suspend (Embed) -> Resolution,
 ) {
-    var listOpen by remember { mutableStateOf(false) }
     val pip = LocalPictureInPicture.current
     val fullscreen = LocalFullscreen.current
     val videoOnly = pip.active || fullscreen.active
@@ -74,26 +70,7 @@ fun Bigscreen(
                 else -> Player(embed, playerUrl, origin, resolve)
             }
         }
-        if (videoOnly) return@Column
-        Row(
-            Modifier.fillMaxWidth().background(Palette.Navy).padding(start = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                embed?.let { label(it, live) } ?: "Nothing on",
-                color = Palette.White,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            if (picked) TextButton(onClick = { onPick(null) }) { Text("Destiny", color = Palette.Blue, fontSize = 13.sp) }
-            TextButton(onClick = { listOpen = true }) { Text("Embeds", color = Palette.Blue, fontSize = 13.sp) }
-            if (embed != null) TextButton(onClick = { fullscreen.set(true) }) { Text("Full screen", color = Palette.Blue, fontSize = 13.sp) }
-            TextButton(onClick = onHide) { Text("Hide", color = Palette.TextDim, fontSize = 13.sp) }
-        }
     }
-    if (listOpen) EmbedList(live, onPick = { listOpen = false; onPick(it) }, onDismiss = { listOpen = false })
 }
 
 @Composable
@@ -138,46 +115,12 @@ private fun Player(embed: Embed, playerUrl: String, origin: String, resolve: sus
 @Composable
 private fun Note(text: String) = Text(text, color = Palette.TextDim, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
 
-private fun label(embed: Embed, live: LiveState): String {
+internal fun label(embed: Embed, live: LiveState): String {
     live.streams.firstOrNull { it.embed == embed }?.let { return "Destiny on ${embed.platform}" + (it.title?.let { t -> ": $t" } ?: "") }
     live.embeds.firstOrNull { it.embed.key.equals(embed.key, ignoreCase = true) }?.let { listing ->
         return (listing.displayName ?: embed.key) + (listing.title?.let { ": $it" } ?: "")
     }
     return embed.key
-}
-
-@Composable
-private fun EmbedList(live: LiveState, onPick: (Embed) -> Unit, onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            Modifier.fillMaxWidth().heightIn(max = 520.dp)
-                .background(Palette.Navy, RoundedCornerShape(10.dp)).padding(vertical = 8.dp),
-        ) {
-            Text(
-                "What chat is watching",
-                color = Palette.White,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-            val streams = live.liveStreams
-            val embeds = live.embeds.filter { !live.isBanned(it.embed) }
-            if (streams.isEmpty() && embeds.isEmpty()) {
-                Text("Nothing right now.", color = Palette.TextDim, modifier = Modifier.padding(16.dp))
-            }
-            LazyColumn {
-                items(streams, key = { "d:" + it.embed.key }) { stream ->
-                    Entry("Destiny on ${stream.embed.platform}", stream.title, null) { onPick(stream.embed) }
-                }
-                items(embeds, key = { "e:" + it.embed.key }) { listing ->
-                    Entry(
-                        listing.displayName ?: listing.embed.key,
-                        listing.title ?: listing.embed.key,
-                        listing.watchers,
-                    ) { onPick(listing.embed) }
-                }
-            }
-        }
-    }
 }
 
 @Composable

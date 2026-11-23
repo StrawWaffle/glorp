@@ -89,11 +89,15 @@ with memory and battery throughout.
    (`customhighlight`, read as chat-gui reads them: each word can be a
    pattern) and tags (`taggednicks`, `taggednotes`, `taggedvisibility`,
    `/tag`, `/untag`, `/untagall`; a bar of the tag's colour down the left
-   of the line, as chat-gui draws it). Tapping a name offers mention,
-   whisper, highlight, tag (a row of chat-gui's colours) and ignore, and
-   shows a tagged user's note.
+   of the line, as chat-gui draws it). Tapping a name or holding a message
+   opens a sheet like the site's user menu (`/api/chat/userinfo`: joined,
+   watching, flairs; the tag note; copy the message; mention, whisper,
+   recent messages, highlight, tag colours, ignore; mute and ban for
+   moderators). The screens follow docs/DESIGN.md: a bar under the player
+   (menu, what's playing, whispers, full screen, hide), a menu of places,
+   and a settings screen of grouped switches.
    Whispers have their own screen (menu → Whispers, `/open nick`, or the
-   "new whispers" tab over chat): conversations newest first with unread
+   bar's whispers button with its unread count): conversations newest first with unread
    counts, each with a reply box. A whisper shows as sent only once the
    server takes it (`PRIVMSGSENT`); a refusal shows in the conversation.
    They're kept in memory only. With the site's cookies the site's

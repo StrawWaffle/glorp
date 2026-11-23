@@ -21,6 +21,8 @@ import io.github.strawwaffle.glorp.ui.Bigscreen
 import io.github.strawwaffle.glorp.ui.ChatScreen
 import io.github.strawwaffle.glorp.ui.ChatLook
 import io.github.strawwaffle.glorp.ui.LocalChatLook
+import io.github.strawwaffle.glorp.ui.PlayerBar
+import io.github.strawwaffle.glorp.ui.SettingsScreen
 import io.github.strawwaffle.glorp.ui.UserActions
 import io.github.strawwaffle.glorp.ui.Fullscreen
 import io.github.strawwaffle.glorp.ui.GlorpTheme
@@ -115,6 +117,7 @@ fun GlorpApp(
         val canShrink = playerShown && embed != null
         LaunchedEffect(canShrink) { pictureInPicture.setAvailable(canShrink) }
         if (screen == "signin" && account != null) screen = "menu"
+        // Back: from anywhere to the menu, from the menu out of the app.
         OnBack(enabled = screen != "menu") { screen = "menu" }
         // Full screen while a player shows; Back leaves it first.
         var fullscreenWanted by rememberSaveable { mutableStateOf(false) }
@@ -151,8 +154,6 @@ fun GlorpApp(
             onClosePoll = chat::dismissPoll,
             pinned = pinned,
             onShowPin = chat::showPin,
-            unreadWhispers = inbox.unread,
-            onWhispers = { communityArg = inbox.sorted.firstOrNull { it.unread > 0 }?.nick; screen = "whispers" },
             player = if (!playerShown) null else {
                 {
                     Bigscreen(
@@ -160,12 +161,24 @@ fun GlorpApp(
                         playerUrl = embed?.let(chat::playerUrl),
                         origin = chat.playerOrigin,
                         live = live,
-                        picked = picked != null,
-                        onPick = chat::watch,
-                        onHide = { playerShown = false },
                         resolve = chat::resolve,
                     )
                 }
+            },
+            bar = {
+                PlayerBar(
+                    embed = embed,
+                    live = live,
+                    picked = picked != null,
+                    playerShown = playerShown,
+                    menuOpen = screen != "chat",
+                    unreadWhispers = if (account != null) inbox.unread else null,
+                    onMenu = { screen = if (screen == "chat") "menu" else "chat" },
+                    onPick = { chat.watch(it); playerShown = true },
+                    onTogglePlayer = { playerShown = !playerShown },
+                    onFullscreen = { fullscreenWanted = true },
+                    onWhispers = { communityArg = inbox.sorted.firstOrNull { it.unread > 0 }?.nick; screen = "whispers" },
+                )
             },
             instead = when (screen) {
                 "menu" -> {
@@ -174,25 +187,9 @@ fun GlorpApp(
                             host = chat.host,
                             state = state,
                             account = account,
-                            live = live,
-                            playerShown = playerShown,
-                            picked = picked,
-                            onChat = { screen = "chat" },
                             onSignIn = { screen = "signin" },
                             onSignOut = chat::signOut,
-                            onWatch = { chat.watch(it); playerShown = true; screen = "chat" },
-                            onTogglePlayer = { playerShown = !playerShown },
-                            backgroundAudio = backgroundAudio,
-                            onToggleBackgroundAudio = {
-                                backgroundAudio = !backgroundAudio
-                                prefs.put(BACKGROUND_AUDIO, backgroundAudio.toString())
-                            },
-                            catchUp = catchUp,
-                            onToggleCatchUp = {
-                                catchUp = catchUpSpeeds[(catchUpSpeeds.indexOf(catchUp) + 1) % catchUpSpeeds.size]
-                                prefs.put(CATCH_UP, catchUp.toString())
-                            },
-                            chatSettings = settings,
+                            onSettings = { screen = "settings" },
                             onCommunity = { communityArg = null; screen = it },
                             unreadWhispers = inbox.unread,
                             onWhispers = { communityArg = null; screen = "whispers" },
@@ -200,6 +197,25 @@ fun GlorpApp(
                             update = update,
                             onCheckUpdate = { updates?.check(force = true) },
                             onInstallUpdate = { updates?.install(it) },
+                        )
+                    }
+                }
+                "settings" -> {
+                    {
+                        SettingsScreen(
+                            settings = settings,
+                            synced = account != null && chat.whisperHistory,
+                            backgroundAudio = backgroundAudio,
+                            onBackgroundAudio = {
+                                backgroundAudio = it
+                                prefs.put(BACKGROUND_AUDIO, it.toString())
+                            },
+                            catchUp = catchUp,
+                            catchUpSpeeds = catchUpSpeeds,
+                            onCatchUp = {
+                                catchUp = it
+                                prefs.put(CATCH_UP, it.toString())
+                            },
                         )
                     }
                 }
