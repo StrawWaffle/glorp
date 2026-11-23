@@ -78,12 +78,19 @@ data class Inbox(
 
     fun refused(nick: String, why: String): Inbox = with(nick) { it.copy(problem = why) }
 
-    /** The site's conversation list: adds what this session hadn't heard of, keeps what it had. */
+    /**
+     * The site's conversation list: adds what this session hadn't heard of, keeps what it had.
+     * A conversation the site has newer whispers in (sent while chat was away) needs its
+     * history fetched again.
+     */
     fun listed(entries: List<Conversation>): Inbox = entries.fold(this) { inbox, entry ->
         val known = inbox.conversations[entry.key]
         if (known == null) inbox.copy(conversations = inbox.conversations + (entry.key to entry))
         else if (entry.lastAt > known.lastAt) inbox.with(entry.nick) {
-            it.copy(lastAt = entry.lastAt, preview = entry.preview, previewMine = entry.previewMine, unread = maxOf(it.unread, entry.unread))
+            it.copy(
+                lastAt = entry.lastAt, preview = entry.preview, previewMine = entry.previewMine,
+                unread = maxOf(it.unread, entry.unread), loaded = false,
+            )
         }
         else inbox
     }

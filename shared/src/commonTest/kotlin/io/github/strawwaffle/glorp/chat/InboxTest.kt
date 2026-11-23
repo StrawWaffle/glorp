@@ -3,6 +3,7 @@ package io.github.strawwaffle.glorp.chat
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -56,5 +57,18 @@ class InboxTest {
     fun readsWhisperSentAndOpen() {
         assertIs<ChatEvent.WhisperSent>(parseFrame("PRIVMSGSENT {}", { 0L }))
         assertEquals(Command.Open("glorp"), parseCommand("/open glorp", mod = false))
+    }
+
+    @Test
+    fun newerWhispersOnTheSiteMeanTheHistoryIsFetchedAgain() {
+        val first = Whisper("1", "Pal", "test", 1_000, mine = false)
+        val opened = Inbox().received("Pal", "test", 1_000, "1").history("Pal", listOf(first))
+        assertTrue(opened["Pal"]!!.loaded)
+        // test2 and test3 came while chat was disconnected; the list says so.
+        val listed = opened.listed(listOf(Conversation("Pal", lastAt = 3_000, preview = "test3")))
+        assertEquals("test3", listed["Pal"]!!.preview)
+        assertFalse(listed["Pal"]!!.loaded)
+        val again = listed.history("Pal", listOf(first, Whisper("2", "Pal", "test2", 2_000, false), Whisper("3", "Pal", "test3", 3_000, false)))
+        assertEquals(listOf("test", "test2", "test3"), again["Pal"]!!.messages.map { it.text })
     }
 }
