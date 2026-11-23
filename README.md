@@ -56,7 +56,7 @@ Logins are kept on the phone, encrypted with a key in Android's keystore.
 ## Thanks
 
 - [rustlesearch.dev](https://rustlesearch.dev/), [mitchdev.net](https://mitchdev.net/dgg/)
-  (by Mitchdev) and [dinkdonk.mov](https://dinkdonk.mov/) (by Mitch), whose
+  and [dinkdonk.mov](https://dinkdonk.mov/) (both by Mitch), whose
   data the community screens show.
 - The "AngelThump Edge Picker" userscript, whose way of choosing and
   falling back between AngelThump's servers Glorp follows.

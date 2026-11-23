@@ -265,7 +265,7 @@ open, and fall back to a link to the site when something changes.
   site's own bundle, 2026-11-23).
   Plan: a search screen rendered as chat lines, a user sheet from tapping a
   nick, and mentions from destiny.gg's API so the shared quota isn't spent.
-- **mitchdev.net/dgg** (by Mitchdev). Poll archive and embed history.
+- **mitchdev.net/dgg** (by Mitch). Poll archive and embed history.
   `https://api.mitchdev.net/dgg/polls?before=&search=&startedBy=&sort=`,
   `/dgg/poll/<id>`, `/dgg/polls/makers`, `/dgg/polls/yeevpepe`, and
   `/dgg/embeds/chart?from=&to=` (a compact chart format with outages,

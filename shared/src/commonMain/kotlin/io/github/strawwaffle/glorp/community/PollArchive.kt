@@ -74,7 +74,7 @@ import kotlin.math.round
 import kotlin.time.Clock
 
 /**
- * destiny.gg chat's polls, from Mitchdev's archive at mitchdev.net: newest
+ * destiny.gg chat's polls, from Mitch's archive at mitchdev.net: newest
  * first, searchable, filtered by who started them. Fetches only while open.
  * Opened with a numeric argument it shows that poll; with a name, that
  * person's polls.
