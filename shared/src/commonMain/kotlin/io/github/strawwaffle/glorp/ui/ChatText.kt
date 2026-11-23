@@ -41,7 +41,9 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -285,7 +287,7 @@ internal fun ChatText(
                 is InlineItem.EmoteItem -> ChatImages.get(item.emote.url, context)?.let { p ->
                     val elapsed = if (!animate || item.sentAt <= 0 || now == SETTLED_MS) SETTLED_MS else now - item.sentAt
                     val at = emoteRect(item.emote, rect)
-                    drawEmote(item.emote, p, at.left, at.top, at.height, elapsed, still = !animate)
+                    drawEmote(item.emote, p, at.left, at.top, at.height, elapsed, still = !animate, measurer)
                 }
             }
         }
@@ -356,7 +358,7 @@ private fun DrawScope.drawRainbow(outline: Pair<Path, androidx.compose.ui.geomet
  * An emote as [EmoteImage] draws it: the frame of its strip for [elapsedMs],
  * placed by its background, moved, turned and scaled about its origin.
  */
-private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top: Float, heightPx: Float, elapsedMs: Long, still: Boolean) {
+private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top: Float, heightPx: Float, elapsedMs: Long, still: Boolean, measurer: TextMeasurer) {
     val sprite = emote.sprite
     val scale = heightPx / emote.height
     val h = heightPx
@@ -382,7 +384,8 @@ private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top
     val filter = stages.firstOrNull()?.let { ColorFilter.colorMatrix(ColorMatrix(it)) }
     // A keyframe's own pivot (BLADE stabs from its corner) over the emote's.
     val pivot = Offset((if (pose.ox.isNaN()) emote.originX else pose.ox) * w, (if (pose.oy.isNaN()) emote.originY else pose.oy) * h)
-    val dx = left + pose.tx.dp.toPx() + pose.dml * scale
+    // `left` keyframes move it from where it stands (GIGACHAD's BLADE sliding in).
+    val dx = left + pose.tx.dp.toPx() + (pose.dml + pose.dleft) * scale
     val dy = top + pose.ty.dp.toPx()
     withTransform({
         translate(dx, dy)
@@ -398,6 +401,42 @@ private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top
         }
         if (shape != null) clipPath(shape) { drawSheet(emote, painter, w, h, offset, scale, pose, filter, stages) }
         else drawSheet(emote, painter, w, h, offset, scale, pose, filter, stages)
+        if (emote.overlays.isNotEmpty()) clipRect(0f, 0f, w, h) {
+            for (overlay in emote.overlays) drawOverlay(overlay, at, still, scale, w, measurer)
+        }
+    }
+}
+
+/** Overlay text laid out once per look, shared by every line: an emoji at a size. */
+private val overlayLayouts = HashMap<String, androidx.compose.ui.text.TextLayoutResult>()
+
+/** A `::before` or `::after`: its text where and as its rules and keyframes put it. */
+private fun DrawScope.drawOverlay(overlay: io.github.strawwaffle.glorp.site.Overlay, at: Long, still: Boolean, scale: Float, boxWidth: Float, measurer: TextMeasurer) {
+    val pose = if (still) overlay.rest else overlay.motions.fold(overlay.rest) { p, m -> m.apply(at, p) }
+    if (pose.opacity <= 0f || pose.sx == 0f || pose.sy == 0f) return
+    val px = overlay.fontSize * scale
+    val color = overlay.argb?.let { androidx.compose.ui.graphics.Color(it.toInt()) } ?: androidx.compose.ui.graphics.Color.White
+    val key = "${overlay.text}|$px|${overlay.argb}|$density|$fontScale"
+    val layout = overlayLayouts.getOrPut(key) {
+        if (overlayLayouts.size > 200) overlayLayouts.clear()
+        measurer.measure(overlay.text, TextStyle(color = color, fontSize = (px / fontScale / density).sp, lineHeight = (px * 1.2f / fontScale / density).sp), softWrap = false, density = this)
+    }
+    val bw = layout.size.width.toFloat()
+    val bh = layout.size.height.toFloat()
+    val x = (overlay.left?.let { it * scale } ?: overlay.right?.let { boxWidth - it * scale - bw } ?: 0f) + (pose.tx + pose.dleft) * scale
+    val y = overlay.top * scale + (pose.ty + pose.dtop) * scale
+    val pivot = Offset((if (pose.ox.isNaN()) overlay.originX else pose.ox) * bw, (if (pose.oy.isNaN()) overlay.originY else pose.oy) * bh)
+    val stages = pose.filter.colorStages()
+    withTransform({
+        translate(x, y)
+        if (pose.rotate != 0f) rotate(pose.rotate, pivot)
+        if (pose.sx != 1f || pose.sy != 1f) scale(pose.sx, pose.sy, pivot)
+    }) {
+        for (stage in stages.asReversed()) {
+            drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, bw, bh), Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(stage)) })
+        }
+        drawText(layout, alpha = pose.opacity.coerceIn(0f, 1f))
+        repeat(stages.size) { drawContext.canvas.restore() }
     }
 }
 
@@ -415,7 +454,7 @@ private fun DrawScope.drawSheet(emote: Emote, painter: Painter, w: Float, h: Flo
         for ((ring, angle) in points) {
             translate(glow.dx * scale + ring * kotlin.math.cos(angle), glow.dy * scale + ring * kotlin.math.sin(angle)) {
                 clipRect(0f, 0f, w, h) {
-                    translate(left = -offset + pose.bx * scale, top = pose.by * scale) {
+                    translate(left = -offset + pose.bx * scale, top = (emote.offsetY + pose.by) * scale) {
                         with(painter) { draw(Size(emote.sheetWidth * scale, emote.sheetHeight * scale), alpha = each, colorFilter = tint) }
                     }
                 }
@@ -430,7 +469,7 @@ private fun DrawScope.drawSheet(emote: Emote, painter: Painter, w: Float, h: Flo
     run {
         clipRect(0f, 0f, w, h) {
             // A picture slid inside its box (GIGACHAD arriving) as well.
-            translate(left = -offset + pose.bx * scale, top = pose.by * scale) {
+            translate(left = -offset + pose.bx * scale, top = (emote.offsetY + pose.by) * scale) {
                 with(painter) { draw(Size(emote.sheetWidth * scale, emote.sheetHeight * scale), alpha = pose.opacity.coerceIn(0f, 1f), colorFilter = filter) }
             }
         }

@@ -33,6 +33,8 @@ data class Emote(
     val sheetWidth: Int = width,
     val sheetHeight: Int = height,
     val offsetX: Int = 0,
+    /** How far down its own `background-position` puts the picture (BoomerSippy's `0 5px`), in px. */
+    val offsetY: Int = 0,
     /** The stylesheet's hand-made movements: shakes, turns, bounces, fades, glows. */
     val motions: List<Motion> = emptyList(),
     /** `transform-origin`, as fractions of the emote's size. */
@@ -45,14 +47,37 @@ data class Emote(
     val marginRight: Float = 0f,
     /** `vertical-align` in px: negative lowers it (BUTTSTINY's -5px). */
     val verticalAlign: Float = 0f,
+    /** What its `::before` and `::after` draw over it: GSN's dolphins, BEARSLEEP's 💤. */
+    val overlays: List<Overlay> = emptyList(),
 ) {
     /** Whether the picture is drawn whole, scaled to the emote's size, and still. */
-    val isWholePicture: Boolean get() = sprite == null && motions.isEmpty() && rest == Pose.Rest && offsetX == 0 && sheetWidth == width && sheetHeight == height
+    val isWholePicture: Boolean get() = sprite == null && motions.isEmpty() && overlays.isEmpty() && rest == Pose.Rest && offsetX == 0 && offsetY == 0 && sheetWidth == width && sheetHeight == height
 
     /** When the last finite movement or sprite run ends, after the message; [Long.MAX_VALUE] if one never does. */
     val settlesAfterMs: Long
-        get() = maxOf(sprite?.totalMs ?: 0, motions.maxOfOrNull { it.endMs } ?: 0)
+        get() = maxOf(sprite?.totalMs ?: 0, motions.maxOfOrNull { it.endMs } ?: 0, overlays.maxOfOrNull { o -> o.motions.maxOfOrNull { it.endMs } ?: 0 } ?: 0)
 }
+
+/**
+ * A `::before` or `::after` with text in it (an emoji, a few characters),
+ * placed absolutely in the emote's box and clipped to it as the site's
+ * `overflow: hidden` does. Sizes are px; [originX], [originY] are fractions
+ * of the text's own box.
+ */
+data class Overlay(
+    val text: String,
+    val fontSize: Float,
+    /** 0xAARRGGBB; null for the text's own colours (an emoji). */
+    val argb: Long?,
+    val left: Float?,
+    val right: Float?,
+    val top: Float,
+    /** Its still transform, opacity and filter, under any movement. */
+    val rest: Pose,
+    val originX: Float,
+    val originY: Float,
+    val motions: List<Motion>,
+)
 
 /** A sprite strip animation, as the stylesheet runs it. */
 data class Sprite(
@@ -141,7 +166,7 @@ class Emotes private constructor(
                 image.startsWith("data:") -> base.url
                 else -> base.url.substringBeforeLast('/') + "/" + image
             }
-            return build(base.prefix, url, w, h, base.minimumSubTier, decls, keyframes, moving)
+            return build(base.prefix, url, w, h, base.minimumSubTier, decls, keyframes, moving, overlayRules(own, base.prefix))
         }
     }
     val size: Int get() = byPrefix.size
@@ -197,7 +222,7 @@ class Emotes private constructor(
                 if (entry.prefix.isEmpty() || entry.twitch) continue
                 val decls = rules[entry.prefix].orEmpty()
                 images[entry.prefix] = image.width to image.height
-                map[entry.prefix] = build(entry.prefix, url, image.width, image.height, entry.minimumSubTier, decls, keyframes, moving)
+                map[entry.prefix] = build(entry.prefix, url, image.width, image.height, entry.minimumSubTier, decls, keyframes, moving, overlayRules(rules, entry.prefix))
                 infos[entry.prefix] = EmoteInfo(entry.creator?.trim()?.takeIf { it.isNotEmpty() }, entry.minimumSubTier, entry.patreonOnly == true)
             }
             return Emotes(map, Builder(rules, images, keyframes, moving, context), infos)
@@ -254,6 +279,7 @@ private fun build(
     decls: Decls,
     keyframes: Map<String, StripKeyframes>,
     moving: Map<String, List<KeyFrame>>,
+    overlayDecls: List<Decls> = emptyList(),
 ): Emote {
     var width = decls.px("width") ?: imageWidth.toDouble()
     var height = decls.px("height") ?: imageHeight.toDouble()
@@ -261,18 +287,21 @@ private fun build(
     var sheetWidth = size?.first ?: imageWidth.toDouble()
     var sheetHeight = size?.second ?: if (size != null && imageWidth > 0) size.first * imageHeight / imageWidth else imageHeight.toDouble()
     var offset = decls.backgroundX()
+    var offsetY = decls.backgroundY()
     // No emote may be bigger than a line can take: a stylesheet this parser
     // misreads must not draw a picture over chat.
     val shrink = minOf(1.0, MAX_HEIGHT / height, MAX_WIDTH / width)
-    width *= shrink; height *= shrink; sheetWidth *= shrink; sheetHeight *= shrink; offset *= shrink
+    width *= shrink; height *= shrink; sheetWidth *= shrink; sheetHeight *= shrink; offset *= shrink; offsetY *= shrink
     val animation = decls.value("animation")?.let { listOf(it) }
-    var sprite = animation?.let { spriteOf(it, sheetWidth.toInt(), width.toInt(), keyframes) { token -> decls.resolvePx(token) } }
+    var sprite = animation?.let { spriteOf(it, sheetWidth.toInt(), width.toInt(), keyframes, -decls.backgroundX()) { token -> decls.resolvePx(token) } }
         ?.let { sp -> sp.copy(startX = sp.startX?.let { (it * shrink).toInt() }, stepX = sp.stepX?.let { (it * shrink).toInt() }?.takeIf { it != width.toInt() }) }
     var motions = animation?.let { motionsOf(topLevelParts(it.last()), moving) }.orEmpty()
     // Longhands after the shorthand change every animation in it (`.emote.SOY + .emote.Clap`).
     decls.value("animation-duration")?.let(::cssMillis)?.takeIf { it > 0 }?.let { ms ->
         sprite = sprite?.copy(durationMs = ms); motions = motions.map { it.copy(durationMs = ms) }
     }
+    // A strip whose shorthand left its time to a longhand that never came doesn't play.
+    if (sprite?.durationMs == 0L) sprite = null
     decls.value("animation-delay")?.let(::cssMillis)?.let { ms -> motions = motions.map { it.copy(delayMs = ms) } }
     decls.value("animation-iteration-count")?.trim()?.let { v ->
         val n = if (v == "infinite") Int.MAX_VALUE else v.toDoubleOrNull()?.toInt()?.coerceAtLeast(1)
@@ -290,13 +319,14 @@ private fun build(
     val verticalAlign = decls.px("vertical-align")?.toFloat() ?: 0f
     return Emote(
         prefix, url, width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1), minimumSubTier, sprite,
-        sheetWidth = sheetWidth.toInt().coerceAtLeast(1), sheetHeight = sheetHeight.toInt().coerceAtLeast(1), offsetX = offset.toInt(),
+        sheetWidth = sheetWidth.toInt().coerceAtLeast(1), sheetHeight = sheetHeight.toInt().coerceAtLeast(1), offsetX = offset.toInt(), offsetY = offsetY.toInt(),
         // A motion whose keyframes this can't read moves nothing; kept, an endless
         // one would redraw the emote every frame for nothing (EatFresh's x5 combo).
-        motions = motions.map { m -> m.slidingFrom(offset, shrink).withOrigins(width / shrink, height / shrink, originX to originY).withBox(width / shrink, marginLeft.toDouble(), shrink) }
-            .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.filter != null || it.background != null || it.origin != null || it.clip != null || it.width != null || it.marginLeft != null } },
+        motions = motions.map { m -> m.slidingFrom(offset, offsetY, shrink).withOrigins(width / shrink, height / shrink, originX to originY).withBox(width / shrink, marginLeft.toDouble(), shrink) }
+            .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.filter != null || it.background != null || it.origin != null || it.clip != null || it.width != null || it.marginLeft != null || it.left != null } },
         originX = originX, originY = originY, rest = rest,
         marginLeft = marginLeft, marginRight = marginRight, verticalAlign = verticalAlign,
+        overlays = overlayDecls.mapNotNull { overlayOf(it, moving) },
     )
 }
 
@@ -307,11 +337,11 @@ private fun build(
  * (GIGACHAD arriving from the left). A stepped one is a sprite strip, which
  * [Sprite] plays: its positions are dropped here.
  */
-private fun Motion.slidingFrom(offset: Double, shrink: Double): Motion {
+private fun Motion.slidingFrom(offset: Double, offsetY: Double, shrink: Double): Motion {
     if (frames.none { it.background != null }) return this
     return copy(frames = frames.map { f ->
         val (x, y) = f.background ?: return@map f
-        val background = if (easing is Easing.Steps) null else ((x * shrink + offset).toFloat() to (y * shrink).toFloat())
+        val background = if (easing is Easing.Steps) null else ((x * shrink + offset).toFloat() to (y * shrink - offsetY).toFloat())
         f.copy(background = background)
     })
 }
@@ -388,6 +418,12 @@ private fun Decls.backgroundSize(): Pair<Double, Double?>? {
 }
 
 /** How far left `background-position` shifts the picture, in px (0 for keywords like `center`). */
+/** The `background-position` y in px (down), when given as a length. */
+private fun Decls.backgroundY(): Double {
+    val second = value("background-position")?.trim()?.split(Regex("""\s+"""))?.getOrNull(1) ?: return 0.0
+    return if (second == "0") 0.0 else pxRegex.find(second)?.groupValues?.get(1)?.toDouble() ?: 0.0
+}
+
 private fun Decls.backgroundX(): Double {
     val first = value("background-position")?.split(Regex("""\s+"""))?.firstOrNull() ?: return 0.0
     return pxRegex.find(first)?.groupValues?.get(1)?.toDouble()?.let { -it }?.coerceAtLeast(0.0) ?: 0.0
@@ -403,9 +439,11 @@ private fun baseRules(css: String): Map<String, Decls> {
     val out = HashMap<String, HashMap<String, MutableList<String>>>()
     // The `}` before a rule is looked at, not taken, or a rule straight after
     // another would be missed.
-    for (match in Regex("""(?:^|(?<=\}))\s*(?:\.text\s*>\s*)?\.emote\.([A-Za-z0-9_-]+)\s*\{([^{}]*)\}""").findAll(clean)) {
-        val decls = out.getOrPut(match.groupValues[1]) { HashMap() }
-        for (decl in match.groupValues[2].split(';')) {
+    for (match in Regex("""(?:^|(?<=\}))\s*(?:\.text\s*>\s*)?\.emote\.([A-Za-z0-9_-]+)(::?(?:before|after))?\s*\{([^{}]*)\}""").findAll(clean)) {
+        // `.emote.GSN:before` and `::before` alike, kept as `GSN::before`.
+        val pseudo = match.groupValues[2].trimStart(':').takeIf { it.isNotEmpty() }?.let { "::$it" }.orEmpty()
+        val decls = out.getOrPut(match.groupValues[1] + pseudo) { HashMap() }
+        for (decl in match.groupValues[3].split(';')) {
             val colon = decl.indexOf(':')
             if (colon <= 0) continue
             val name = decl.substring(0, colon).trim().lowercase()
@@ -420,7 +458,7 @@ private fun baseRules(css: String): Map<String, Decls> {
  * written (`-2880px`, or `var(--end)` for each emote to fill in), and the one
  * at `0%`/`from`, if it says where the strip starts.
  */
-data class StripKeyframes(val positions: List<String>, val start: String?)
+data class StripKeyframes(val positions: List<String>, val start: String?, val end: String? = null)
 
 /** For each `@keyframes`, the `background-position` values it moves through. */
 private fun keyframeOffsets(css: String): Map<String, StripKeyframes> {
@@ -432,13 +470,15 @@ private fun keyframeOffsets(css: String): Map<String, StripKeyframes> {
     for (match in block.findAll(clean)) {
         val positions = ArrayList<String>()
         var start: String? = null
+        var end: String? = null
         for (s in step.findAll(match.groupValues[2])) {
             val value = position.find(s.groupValues[2])?.groupValues?.get(1) ?: continue
             positions += value
             val selectors = s.groupValues[1].split(',').map { it.trim() }
             if ("0%" in selectors || "from" in selectors) start = value
+            if ("100%" in selectors || "to" in selectors) end = value
         }
-        if (positions.isNotEmpty()) out[match.groupValues[1]] = StripKeyframes(positions, start)
+        if (positions.isNotEmpty()) out[match.groupValues[1]] = StripKeyframes(positions, start, end)
     }
     return out
 }
@@ -480,6 +520,8 @@ private fun spriteOf(
     sheetWidth: Int,
     frameWidth: Int,
     keyframes: Map<String, StripKeyframes>,
+    /** Where the emote's own rules put the strip (`background-position` x): where keyframes that leave an end out go to. */
+    ownX: Double,
     resolve: (String) -> Double?,
 ): Sprite? {
     for (part in topLevelParts(values.last())) {
@@ -488,10 +530,10 @@ private fun spriteOf(
         val strip = keyframes.getValue(name)
         // Keyframes written with variables only move a strip once this emote fills them in.
         if (strip.positions.none { resolve(it) != null }) continue
-        val startX = strip.start?.let(resolve)?.let { kotlin.math.abs(it).toInt() }
         if (frameWidth <= 0 || sheetWidth <= frameWidth || steps <= 0) continue
         val times = timeRegex.findAll(part).map { t -> t.groupValues[1].toDouble().let { if (t.groupValues[2] == "s") it * 1000 else it }.toLong() }.toList()
-        val durationMs = times.firstOrNull() ?: continue
+        // No time: a longhand gives it (WOOF's `animation-duration`).
+        val durationMs = times.firstOrNull() ?: 0L
         // What's left once the name, times and steps are taken out is the
         // iteration count and the fill mode.
         val rest = part.replace(Regex("""calc\(.*\)"""), " ").replace(timeRegex, " ")
@@ -500,11 +542,44 @@ private fun spriteOf(
             "infinite" in rest -> Int.MAX_VALUE
             else -> Regex("""(?:^|\s)(\d+)(?:\s|$)""").find(rest)?.groupValues?.get(1)?.toInt() ?: 1
         }
-        // Each step moves the strip by its whole travel over the steps.
-        val from = strip.start?.let(resolve) ?: 0.0
-        val to = strip.positions.lastOrNull()?.let(resolve)
-        val stepX = to?.let { kotlin.math.abs(it - from) / steps }?.takeIf { it > 0 }?.let { kotlin.math.round(it).toInt() }
-        return Sprite(sheetWidth, steps, durationMs.coerceAtLeast(1), iterations, "forwards" in rest || "both" in rest, startX, times.getOrElse(1) { 0L }, stepX)
+        // From the 0% position to the 100% one, where a keyframe left out is
+        // the emote's own (WOOF runs back from -1020px to its own 0), each step
+        // moving the strip by the travel over the steps.
+        val from = strip.start?.let(resolve) ?: ownX
+        val to = strip.end?.let(resolve) ?: ownX.takeIf { it != from } ?: strip.positions.lastOrNull()?.let(resolve) ?: ownX
+        val startX = kotlin.math.round(-from).toInt()
+        val stepX = ((from - to) / steps).takeIf { it != 0.0 }?.let { kotlin.math.round(it).toInt() }
+        return Sprite(sheetWidth, steps, durationMs.coerceAtLeast(0), iterations, "forwards" in rest || "both" in rest, startX, times.getOrElse(1) { 0L }, stepX)
     }
     return null
+}
+
+/** The `::before` and `::after` rules of an emote, in that order, as far as there are any. */
+private fun overlayRules(rules: Map<String, Decls>, prefix: String): List<Decls> =
+    listOfNotNull(rules["$prefix::before"], rules["$prefix::after"])
+
+/** A pseudo-element with text to draw, or null (an empty `content`, a picture, nothing). */
+private fun overlayOf(decls: Decls, moving: Map<String, List<KeyFrame>>): Overlay? {
+    val content = decls.value("content")?.trim() ?: return null
+    val text = Regex("""^["'](.*)["']$""").find(content)?.groupValues?.get(1)?.takeIf { it.isNotBlank() } ?: return null
+    if (decls.value("display")?.trim() == "none") return null
+    fun len(name: String) = decls.value(name)?.trim()?.let { if (it == "0") 0.0 else pxRegex.find(it)?.groupValues?.get(1)?.toDouble() }?.toFloat()
+    val fontSize = len("font-size") ?: 13f
+    val argb = decls.value("color")?.let { readFilter("drop-shadow(0 0 0 $it)")?.glows?.firstOrNull()?.argb }
+    var rest = decls.value("transform")?.let(::readTransform) ?: Pose.Rest
+    decls.value("opacity")?.trim()?.toFloatOrNull()?.let { rest = rest.copy(opacity = it) }
+    decls.value("filter")?.let(::readFilter)?.takeIf { !it.isNone }?.let { rest = rest.copy(filter = it) }
+    val box = fontSize * 1.2
+    val (originX, originY) = readOrigin(decls.value("transform-origin"), (len("width") ?: (fontSize * 1.2f)).toDouble(), box)
+    val top = len("top") ?: 0f
+    val left = len("left")
+    var motions = decls.value("animation")?.let { motionsOf(topLevelParts(it), moving) }.orEmpty()
+    decls.value("animation-delay")?.let(::cssMillis)?.let { ms -> motions = motions.map { it.copy(delayMs = ms) } }
+    // Its `top` and `left` keyframes as changes from where it stands.
+    motions = motions.map { m ->
+        m.copy(restOrigin = originX to originY, frames = m.frames.map { f ->
+            f.copy(top = f.top?.let { it - top }, left = f.left?.let { it - (left ?: 0f) }, origin = f.originText?.let { readOrigin(it, box, box) })
+        })
+    }
+    return Overlay(text, fontSize, argb, left, len("right"), top, rest, originX, originY, motions)
 }

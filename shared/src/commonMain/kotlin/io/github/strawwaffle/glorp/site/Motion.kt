@@ -28,6 +28,9 @@ data class Pose(
     /** How much wider than its own box it's drawn, and how far its margin moves it, in px (PepoPunch's punch). */
     val dw: Float = 0f,
     val dml: Float = 0f,
+    /** For an [Overlay]: how far its `top` and `left` keyframes move it, in px. */
+    val dtop: Float = 0f,
+    val dleft: Float = 0f,
 ) {
     companion object {
         val Rest = Pose()
@@ -50,6 +53,9 @@ data class KeyFrame(
     /** `width` and `margin-left` in px as written; in an emote's [Motion], the change from its own. */
     val width: Float? = null,
     val marginLeft: Float? = null,
+    /** `top` and `left` in px as written (an overlay falling); in an [Overlay]'s motion, the change from where it stands. */
+    val top: Float? = null,
+    val left: Float? = null,
 )
 
 /** A timing function, as CSS has them. */
@@ -151,6 +157,8 @@ data class Motion(
         if (frames.any { it.clip != null }) pose = pose.copy(clip = clipAt(p))
         interpolate(p, { it.width }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dw = it) }
         interpolate(p, { it.marginLeft }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dml = it) }
+        interpolate(p, { it.top }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dtop = it) }
+        interpolate(p, { it.left }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dleft = it) }
         return pose
     }
 
@@ -221,14 +229,16 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
             fun px(name: String) = decls[name]?.trim()?.let { if (it == "0") 0f else it.takeIf { v -> v.endsWith("px") }?.removeSuffix("px")?.toFloatOrNull() }
             val width = px("width")
             val marginLeft = px("margin-left")
-            if (transform == null && opacity == null && filter == null && background == null && origin == null && clip == null && width == null && marginLeft == null) continue
+            val top = px("top")
+            val left = px("left")
+            if (transform == null && opacity == null && filter == null && background == null && origin == null && clip == null && width == null && marginLeft == null && top == null && left == null) continue
             for (at in s.groupValues[1].split(',')) {
                 val offset = when (val word = at.trim().lowercase()) {
                     "from" -> 0f
                     "to" -> 1f
                     else -> word.removeSuffix("%").toFloatOrNull()?.div(100f)
                 } ?: continue
-                frames += KeyFrame(offset, transform, opacity, filter, background, origin, clip = clip, width = width, marginLeft = marginLeft)
+                frames += KeyFrame(offset, transform, opacity, filter, background, origin, clip = clip, width = width, marginLeft = marginLeft, top = top, left = left)
             }
         }
         if (frames.isNotEmpty()) out[match.groupValues[1]] = frames.sortedBy { it.at }
@@ -301,6 +311,8 @@ internal fun readTransform(written: String): Pose? {
             "translatex" -> moved(px(0), 0f)
             "translatey" -> moved(0f, px(0))
             "rotate", "rotatez" -> pose.copy(rotate = pose.rotate + (args.firstOrNull()?.let(::angle) ?: 0f))
+            // A turn about the z axis only, written in 3D (PARDNER's spinning gun).
+            "rotate3d" -> if (args.size == 4 && number(args[0]) == 0f && number(args[1]) == 0f) pose.copy(rotate = pose.rotate + (angle(args[3]) ?: 0f) * (if ((number(args[2]) ?: 1f) < 0) -1 else 1)) else return null
             "scale" -> {
                 val x = args.getOrNull(0)?.let(::number) ?: 1f
                 val y = args.getOrNull(1)?.let(::number) ?: x

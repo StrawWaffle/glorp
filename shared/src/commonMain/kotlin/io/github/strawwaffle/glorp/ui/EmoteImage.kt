@@ -123,7 +123,7 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
         val offset = (base + frame * (sprite?.stepX ?: emote.width)) * scale
         clipRect {
             // A picture slid inside its box (GIGACHAD arriving) as well.
-            translate(left = -offset + now.bx * scale, top = now.by * scale) {
+            translate(left = -offset + now.bx * scale, top = (emote.offsetY + now.by) * scale) {
                 with(painter) { draw(Size(emote.sheetWidth * scale, emote.sheetHeight * scale), colorFilter = filter) }
             }
         }
