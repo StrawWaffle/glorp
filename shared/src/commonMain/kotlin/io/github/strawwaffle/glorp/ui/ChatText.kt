@@ -68,6 +68,16 @@ import kotlin.time.Clock
  */
 object ChatRendering {
     var singleNode = true
+
+    /** Dev builds (`--es emote-cdn https://r2cdn.destiny.gg`): emotes from another copy of the site than chat's, to compare them. */
+    var emoteCdn: String? = null
+
+    /**
+     * Dev builds (`--es emote-clock <ms>`): every line drawn as at this moment,
+     * standing still, so a line sent [n] ms before it shows its emotes [n] ms
+     * in. For comparing emotes frame by frame with the site's.
+     */
+    var clockAt: Long? = null
 }
 
 /** Something drawn in a line's text, at a placeholder the size of it. */
@@ -198,8 +208,9 @@ internal fun ChatText(
     }
     // The clock everything moving in this line reads while drawing; only a
     // line with something moving keeps it going, and stops it when settled.
-    val clock = remember(prepared) { mutableLongStateOf(SETTLED_MS) }
-    if (animate && prepared.moves(Clock.System.now().toEpochMilliseconds())) {
+    val fixed = ChatRendering.clockAt
+    val clock = remember(prepared) { mutableLongStateOf(fixed ?: SETTLED_MS) }
+    if (fixed == null && animate && prepared.moves(Clock.System.now().toEpochMilliseconds())) {
         LaunchedEffect(prepared) {
             val rainbowOnly = prepared.items.none { it is InlineItem.EmoteItem && it.sentAt > 0 }
             while (true) {

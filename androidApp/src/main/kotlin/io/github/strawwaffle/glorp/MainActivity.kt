@@ -117,6 +117,8 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.DEV_IMPORT && intent?.getStringExtra("chattext") == "0") {
             io.github.strawwaffle.glorp.ui.ChatRendering.singleNode = false
         }
+        if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("emote-cdn")?.let { io.github.strawwaffle.glorp.ui.ChatRendering.emoteCdn = it }
+        if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("emote-clock")?.toLongOrNull()?.let { io.github.strawwaffle.glorp.ui.ChatRendering.clockAt = it }
         // Dev builds: `--es crash-test 1` crashes a few seconds in, to try the crash report.
         if (BuildConfig.DEV_IMPORT && intent?.getStringExtra("crash-test") != null) {
             android.os.Handler(mainLooper).postDelayed({ error("Crash test from a dev build") }, 4_000)

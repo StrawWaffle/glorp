@@ -252,7 +252,8 @@ class ChatViewModel(
             launch { _flairs.value = Flairs.fetch(client, site) }
             launch {
                 // Chat starts with each emote's own rules; how emotes look beside others follows.
-                _emotes.value = Emotes.fetch(client, site) { first -> _emotes.value = first; emotesLoaded.complete(Unit) }
+                val emoteSite = io.github.strawwaffle.glorp.ui.ChatRendering.emoteCdn?.let { site.copy(cdn = it) } ?: site
+                _emotes.value = Emotes.fetch(client, emoteSite) { first -> _emotes.value = first; emotesLoaded.complete(Unit) }
                 emotesLoaded.complete(Unit)
             }
             // Like chat-gui on page load: ask who the cookies belong to first,
