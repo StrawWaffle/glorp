@@ -154,6 +154,16 @@ with memory and battery throughout.
    whose addresses expire is looked up again and carries on from where it
    was.
 
+   **Delay (0.1.15).** Kick (Amazon IVS) and Twitch declare 6 s segments
+   (`#EXT-X-TARGETDURATION:6`) for 2 s ones, and Media3 with no other hint
+   stays three target durations behind: about 20 s against the segments'
+   own clock. Their web players also play `#EXT-X-PREFETCH` (Twitch:
+   `#EXT-X-TWITCH-PREFETCH`, asked for with `fast_bread=true`), the next
+   segments while they're made. Live HLS playlists are now rewritten before
+   Media3 reads them (`video/LowLatency.kt`): prefetches become segments, the
+   target duration the longest segment. Measured: Kick 19.9 s -> 4.0 s on a
+   Pixel, Twitch about 4.7 s, steady, no stalls. A stall still moves the
+   target 2 s back.
    **Stalls (0.1.7).** An error or 25 s of loading marks the player failed:
    a dropped connection is retried in place twice, then the screen looks
    the stream up again with growing waits (3 s doubling to a minute) and

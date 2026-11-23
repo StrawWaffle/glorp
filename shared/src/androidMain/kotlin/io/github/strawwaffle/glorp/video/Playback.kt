@@ -10,6 +10,13 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
+import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.hls.playlist.DefaultHlsPlaylistParserFactory
+import androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist
+import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
+import androidx.media3.exoplayer.hls.playlist.HlsPlaylist
+import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParserFactory
+import androidx.media3.exoplayer.upstream.ParsingLoadable
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.LivePlaybackSpeedControl
@@ -89,15 +96,12 @@ object Playback {
         // AngelThump streams come from one of several edges; requests go to
         // the chosen one and fall over to its neighbours (see EdgeFailover).
         val edges = EdgeChoice(AngelThumpEdges.hostOf(playable.hlsUrl)?.takeIf(AngelThumpEdges::isEdge))
+        val dataSources = EdgeFailoverDataSource.Factory(DefaultDataSource.Factory(app), edges).let {
+            // YouTube's recordings (a manifest of separate files) are read by byte range.
+            if (playable.format == Playable.Format.Dash) YouTubeRangesDataSource.Factory(it, playable.headers) else it
+        }
         val player = ExoPlayer.Builder(app)
-            .setMediaSourceFactory(
-                DefaultMediaSourceFactory(
-                    EdgeFailoverDataSource.Factory(DefaultDataSource.Factory(app), edges).let {
-                        // YouTube's recordings (a manifest of separate files) are read by byte range.
-                        if (playable.format == Playable.Format.Dash) YouTubeRangesDataSource.Factory(it, playable.headers) else it
-                    },
-                ),
-            )
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSources))
             // Pauses for calls and other apps' sound, as a video app should.
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
@@ -149,6 +153,10 @@ object Playback {
             .build()
         val start = playable.startSeconds
         when {
+            // Live HLS reads its playlists rewritten to stay closer to live (see lowLatencyPlaylist).
+            playable.live && playable.format == Playable.Format.Hls -> player.setMediaSource(
+                HlsMediaSource.Factory(dataSources).setPlaylistParserFactory(LowLatencyPlaylists()).createMediaSource(item),
+            )
             playable.live -> player.setMediaItem(item)
             resumeAt != null -> player.setMediaItem(item, resumeAt)
             start != null -> player.setMediaItem(item, start * 1000L)
@@ -225,6 +233,23 @@ object Playback {
 
     /** The highest the setting offers; the media item allows up to this, the setting picks below it. */
     private const val FASTEST_CATCH_UP = 2f
+
+    /** Media3's own playlist parsing, given [lowLatencyPlaylist]'s rewrite of media playlists first. */
+    private class LowLatencyPlaylists : HlsPlaylistParserFactory {
+        private val inner = DefaultHlsPlaylistParserFactory()
+
+        override fun createPlaylistParser(): ParsingLoadable.Parser<HlsPlaylist> = rewriting(inner.createPlaylistParser())
+
+        override fun createPlaylistParser(
+            multivariantPlaylist: HlsMultivariantPlaylist,
+            previousMediaPlaylist: HlsMediaPlaylist?,
+        ): ParsingLoadable.Parser<HlsPlaylist> = rewriting(inner.createPlaylistParser(multivariantPlaylist, previousMediaPlaylist))
+
+        private fun rewriting(parser: ParsingLoadable.Parser<HlsPlaylist>) = ParsingLoadable.Parser<HlsPlaylist> { uri, input ->
+            val text = input.readBytes().decodeToString()
+            parser.parse(uri, lowLatencyPlaylist(text).encodeToByteArray().inputStream())
+        }
+    }
 
     fun release(context: Context) {
         val current = active ?: return

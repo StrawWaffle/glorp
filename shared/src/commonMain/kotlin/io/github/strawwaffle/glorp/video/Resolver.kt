@@ -195,7 +195,8 @@ class Resolver(private val client: HttpClient, private val youtube: YouTubePlugi
         val query = listOf(
             "sig" to token.signature, "token" to token.value, "allow_source" to "true", "allow_audio_only" to "true",
             "playlist_include_framerate" to "true", "player" to "twitchweb", "p" to Random.nextInt(0, 9_999_999).toString(),
-        ).joinToString("&") { (k, v) -> "$k=${v.encodeURLParameter()}" }
+            // Live: ask for the segments still being made (#EXT-X-TWITCH-PREFETCH), as Twitch's low-latency player does.
+        ).let { if (vod) it else it + ("fast_bread" to "true") }.joinToString("&") { (k, v) -> "$k=${v.encodeURLParameter()}" }
         val url = if (vod) "https://usher.ttvnw.net/vod/${id.encodeURLPathPart()}.m3u8?$query"
         else "https://usher.ttvnw.net/api/channel/hls/${id.lowercase().encodeURLPathPart()}.m3u8?$query"
         // Usher answers 404 for a channel that isn't live. Asking it costs one
