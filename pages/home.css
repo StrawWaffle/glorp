@@ -1,0 +1,101 @@
+/* The homepage, on top of signin/style.css's colours, fonts and panels. */
+
+main.wide { max-width: 980px; }
+
+.intro {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  margin: 8px 0 32px;
+}
+
+.intro .mascot { width: 160px; height: auto; flex: none; }
+.intro h1 { font-size: 64px; margin: 0 0 6px; color: var(--primary); }
+.lede { font-size: 19px; margin: 0 0 18px; }
+.intro .quiet { margin: 14px 0 0; }
+
+.actions .button {
+  display: inline-flex;
+  align-items: center;
+  font: 800 16px/1.2 "Nunito", ui-rounded, system-ui, sans-serif;
+  color: var(--text);
+  text-decoration: none;
+  background: var(--button);
+  border: 2px solid var(--panel-border);
+  border-radius: 9999px;
+  padding: 11px 20px;
+  box-shadow: 0 4px 0 var(--button-shadow);
+  transition: translate 80ms ease, box-shadow 80ms ease;
+}
+
+.actions .button:active { translate: 0 3px; box-shadow: 0 1px 0 var(--button-shadow); }
+
+.actions .button.primary {
+  color: var(--primary-text);
+  background: var(--primary);
+  border-color: var(--primary-shadow);
+  box-shadow: 0 4px 0 var(--primary-shadow);
+}
+
+.actions .button.primary:active { box-shadow: 0 1px 0 var(--primary-shadow); }
+
+/* Screenshots side by side, scrolling sideways on a phone. */
+.shots {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(200px, 1fr);
+  gap: 16px;
+  overflow-x: auto;
+  padding: 4px 4px 18px;
+  margin: 0 0 24px;
+  scroll-snap-type: x mandatory;
+}
+
+.shots figure { margin: 0; scroll-snap-align: start; }
+
+.shots img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 2px solid var(--panel-border);
+  border-radius: 18px;
+  box-shadow: 0 5px 0 var(--panel-shadow);
+}
+
+.shots figcaption {
+  font: 700 20px/1.2 "Gaegu", "Nunito", cursive;
+  text-align: center;
+  margin-top: 10px;
+}
+
+ul.checks { list-style: none; padding: 0; margin: 10px 0 0; }
+
+ul.checks li {
+  position: relative;
+  padding-left: 28px;
+  margin: 0 0 10px;
+}
+
+ul.checks li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0.5em;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 2px 0 var(--primary-shadow);
+}
+
+@media (max-width: 640px) {
+  .intro { flex-direction: column; text-align: center; gap: 12px; }
+  .intro .mascot { width: 120px; }
+  .intro h1 { font-size: 52px; }
+  .actions { justify-content: center; }
+  .shots { grid-auto-columns: 70%; }
+}
+
+@media (prefers-color-scheme: light) {
+  .intro h1 { color: var(--primary-shadow); }
+}

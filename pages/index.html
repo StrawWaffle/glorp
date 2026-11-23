@@ -4,21 +4,101 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'none'">
-<title>Glorp</title>
+<title>Glorp: destiny.gg chat and bigscreen for Android</title>
+<meta name="description" content="An unofficial destiny.gg app for Android: the site's chat, bigscreen's streams in a native player, and a few things of its own.">
 <link rel="icon" href="glorp.png">
 <link rel="stylesheet" href="signin/style.css">
+<link rel="stylesheet" href="home.css">
 </head>
 <body>
-<main>
-  <header>
-    <img src="glorp.png" alt="Glorp, a green furry alien with antennae">
-    <h1>Glorp</h1>
+<main class="wide">
+  <header class="intro">
+    <img src="glorp.png" alt="Glorp, a green furry alien with antennae" class="mascot">
+    <div>
+      <h1>Glorp</h1>
+      <p class="lede">destiny.gg chat and bigscreen on your Android phone: everything the site's chat does, streams in a proper video player, and a few things of its own.</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/StrawWaffle/glorp/releases/latest">Download for Android</a>
+        <a class="button" href="https://github.com/StrawWaffle/glorp">Code on GitHub</a>
+      </div>
+      <p class="quiet">Free, Android 8 or newer. An unofficial community app, not made by or affiliated with destiny.gg or Destiny.</p>
+    </div>
   </header>
-  <section class="panel">
-    <p>An unofficial destiny.gg app for Android: chat, bigscreen and the community's tools.</p>
-    <p><a href="https://github.com/StrawWaffle/glorp">The app and its code on GitHub</a></p>
-    <p><a href="signin/">Sign in to the app from a computer</a></p>
+
+  <section class="shots" aria-label="Screenshots">
+    <figure><img src="img/chat.webp" alt="Chat with emotes, a subscription, a donation and a combo" loading="lazy"><figcaption>Chat as the site draws it</figcaption></figure>
+    <figure><img src="img/stream.webp" alt="A video playing above chat" loading="lazy"><figcaption>Streams in a native player</figcaption></figure>
+    <figure><img src="img/link-card.webp" alt="A YouTube link's preview card" loading="lazy"><figcaption>Link previews</figcaption></figure>
+    <figure><img src="img/aerith-light.webp" alt="Chat in the light Aerith theme" loading="lazy"><figcaption>Themes</figcaption></figure>
+    <figure><img src="img/emote-card.webp" alt="An emote's card with Add to message" loading="lazy"><figcaption>Emote cards</figcaption></figure>
+    <figure><img src="img/settings.webp" alt="Settings in categories" loading="lazy"><figcaption>Settings</figcaption></figure>
   </section>
+
+  <section class="panel">
+    <h2>Everything chat does on the site</h2>
+    <p>Glorp follows the site's own chat code, so chat looks and works the way it does on destiny.gg.</p>
+    <ul class="checks">
+      <li>Emotes, animated, with combos and the effects emotes have next to each other; flairs and name colours, Tier 5's moving rainbow included</li>
+      <li>Mentions, highlight words, tags with notes, the ignore list, timestamps in your own format</li>
+      <li>Whispers, with your conversations and their history</li>
+      <li>Polls you can vote in, the pinned message, spotlighted messages</li>
+      <li>Subscriptions, gifted subs, donations, deaths, posts from X and the Vestaboard, as chat shows them</li>
+      <li>Muted and banned users' messages censored, NSFW and NSFL hiding, mod notices</li>
+      <li>The site's commands, <code>/stalk</code>, <code>/mentions</code> and <code>/tag</code> included, with suggestions as you type</li>
+      <li>Link previews and emote cards, favourite emotes, and the eye button's same-stream dimming</li>
+      <li>Your chat settings follow your destiny.gg account, and the site sees what you're watching</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>Better on a phone</h2>
+    <ul class="checks">
+      <li><b>A real video player</b> for Kick, Twitch, YouTube and AngelThump: a quality menu, picture in picture, sound with the screen off, and a few seconds from live, close to the site</li>
+      <li><b>Notifications</b> when Destiny goes live, when you're mentioned, and for whispers, without keeping chat open</li>
+      <li><b>Warnings before you send</b> a message that would hit a nuke, mutelinks or a banned phrase</li>
+      <li><b>The community's tools built in</b>: chat log search (rustlesearch.dev), the poll archive and movie nights</li>
+      <li><b>Titles for YouTube and Rumble links</b> in chat, instead of bare addresses</li>
+      <li><b>Easy on battery and memory</b>: chat only connects while the app is on screen, and only what you see is drawn</li>
+      <li><b>Updates itself</b> from its releases, and a <b>Report a problem</b> button that writes the report for you</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>Glorp's own</h2>
+    <ul class="checks">
+      <li><b>Themes</b>: Glorp's own, and Aerith's light and dark themes for the site</li>
+      <li><b>Name icons</b>: an emoji before someone's name, a private tag only you see</li>
+      <li><b>Chat from other streams</b>: dim it like the site's eye button, or hide it altogether</li>
+      <li><b>Text size and font</b>: your phone's font or the site's</li>
+      <li><b>Your latest mention stays in view</b> until you've read it, and <b>your own alert words</b> warn you before sending</li>
+      <li><b>Destiny's stream on the platform you like</b> when he's live on several</li>
+      <li><b>Test versions</b> to try what's next, as <i>Glorp Probe</i></li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>Install</h2>
+    <ol class="steps">
+      <li><p>Download the APK from the <a href="https://github.com/StrawWaffle/glorp/releases/latest">latest release</a> on your phone and open it. Android asks once to let your browser install apps.</p></li>
+      <li><p>Or add <code>https://github.com/StrawWaffle/glorp</code> to <a href="https://obtainium.imranr.dev/">Obtainium</a>.</p></li>
+      <li><p>Glorp checks for new versions itself and offers them at the top of its menu.</p></li>
+    </ol>
+  </section>
+
+  <section class="panel">
+    <h2>Signing in</h2>
+    <p>destiny.gg's login page can't run inside an app (Twitch, Kick and Google block it), so Glorp signs in two ways:</p>
+    <ul class="checks">
+      <li><b><a href="signin/">From a computer</a></b>, for everything: copy two values from your browser into Glorp's sign-in page and scan the code it shows. Nothing is sent anywhere.</li>
+      <li><b>A login key</b> from your account's developer page, for chat and whispers.</li>
+    </ul>
+    <p class="quiet">Logins stay on your phone, encrypted.</p>
+  </section>
+
+  <footer>
+    Glorp is free for non-commercial use. YouTube plays through FUTO's Grayjay plugin. Community screens use rustlesearch.dev, and mitchdev.net and dinkdonk.mov (both by Mitch); the warnings use vyneer.me's lists. Thanks to all of them.
+    <br>Set in Nunito and Gaegu, under the SIL Open Font License.
+  </footer>
 </main>
 </body>
 </html>
