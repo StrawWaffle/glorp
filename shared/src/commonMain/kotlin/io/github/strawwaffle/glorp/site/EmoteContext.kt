@@ -38,6 +38,7 @@ internal class EmoteContext private constructor(
             // Longhands a neighbour rule changes timing with (`.emote.SOY + .emote.Clap`).
             "animation-duration", "animation-delay", "animation-iteration-count", "animation-direction",
             "translate", "rotate", "scale",
+            "margin", "margin-left", "margin-right", "margin-inline", "vertical-align",
         )
 
         fun parse(css: String): EmoteContext {

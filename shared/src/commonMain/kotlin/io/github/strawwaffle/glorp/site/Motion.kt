@@ -25,6 +25,9 @@ data class Pose(
     val ox: Float = Float.NaN,
     val oy: Float = Float.NaN,
     val clip: List<Float>? = null,
+    /** How much wider than its own box it's drawn, and how far its margin moves it, in px (PepoPunch's punch). */
+    val dw: Float = 0f,
+    val dml: Float = 0f,
 ) {
     companion object {
         val Rest = Pose()
@@ -44,6 +47,9 @@ data class KeyFrame(
     val origin: Pair<Float, Float>? = null,
     /** `clip-path: polygon()` as x, y fractions of the emote's box. */
     val clip: List<Float>? = null,
+    /** `width` and `margin-left` in px as written; in an emote's [Motion], the change from its own. */
+    val width: Float? = null,
+    val marginLeft: Float? = null,
 )
 
 /** A timing function, as CSS has them. */
@@ -143,6 +149,8 @@ data class Motion(
         interpolate(p, { it.origin }, restOrigin) { a, b, f -> lerp(a.first, b.first, f) to lerp(a.second, b.second, f) }
             ?.let { pose = pose.copy(ox = it.first, oy = it.second) }
         if (frames.any { it.clip != null }) pose = pose.copy(clip = clipAt(p))
+        interpolate(p, { it.width }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dw = it) }
+        interpolate(p, { it.marginLeft }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dml = it) }
         return pose
     }
 
@@ -210,14 +218,17 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
             val background = decls["background-position"]?.let(::readBackgroundPosition)
             val origin = decls["transform-origin"]
             val clip = decls["clip-path"]?.let(::readPolygon)
-            if (transform == null && opacity == null && filter == null && background == null && origin == null && clip == null) continue
+            fun px(name: String) = decls[name]?.trim()?.let { if (it == "0") 0f else it.takeIf { v -> v.endsWith("px") }?.removeSuffix("px")?.toFloatOrNull() }
+            val width = px("width")
+            val marginLeft = px("margin-left")
+            if (transform == null && opacity == null && filter == null && background == null && origin == null && clip == null && width == null && marginLeft == null) continue
             for (at in s.groupValues[1].split(',')) {
                 val offset = when (val word = at.trim().lowercase()) {
                     "from" -> 0f
                     "to" -> 1f
                     else -> word.removeSuffix("%").toFloatOrNull()?.div(100f)
                 } ?: continue
-                frames += KeyFrame(offset, transform, opacity, filter, background, origin, clip = clip)
+                frames += KeyFrame(offset, transform, opacity, filter, background, origin, clip = clip, width = width, marginLeft = marginLeft)
             }
         }
         if (frames.isNotEmpty()) out[match.groupValues[1]] = frames.sortedBy { it.at }

@@ -58,6 +58,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import kotlin.time.Clock
 
 /**
@@ -87,7 +88,8 @@ internal sealed interface InlineItem {
     val heightDp: Int
 
     class EmoteItem(val emote: Emote, val sentAt: Long) : InlineItem {
-        override val widthDp get() = emote.width
+        // Its margins take room or, negative, give it back to the neighbours.
+        override val widthDp get() = (emote.width + emote.marginLeft + emote.marginRight).roundToInt().coerceAtLeast(0)
         override val heightDp get() = emote.height
     }
 
@@ -171,10 +173,12 @@ internal expect fun playingPainter(image: coil3.Image, context: PlatformContext)
  * on the baseline) and hangs down a quarter of its height from the baseline,
  * reaching up over the line above.
  */
-internal fun DrawScope.emoteRect(emote: Emote, placeholder: androidx.compose.ui.geometry.Rect): androidx.compose.ui.geometry.Rect {
+internal fun Density.emoteRect(emote: Emote, placeholder: androidx.compose.ui.geometry.Rect): androidx.compose.ui.geometry.Rect {
     val h = emote.height.dp.toPx()
-    val bottom = placeholder.bottom + h / 4
-    return androidx.compose.ui.geometry.Rect(placeholder.left, bottom - h, placeholder.left + emote.width.dp.toPx(), bottom)
+    // `vertical-align: -5px` lowers it that much more.
+    val bottom = placeholder.bottom + h / 4 - emote.verticalAlign.dp.toPx()
+    val left = placeholder.left + emote.marginLeft.dp.toPx()
+    return androidx.compose.ui.geometry.Rect(left, bottom - h, left + emote.width.dp.toPx(), bottom)
 }
 
 /** Time far past any finite animation: everything shows how it rests. */
@@ -319,9 +323,7 @@ private class LayoutHolder {
         layout.placeholderRects.forEachIndexed { i, rect ->
             val item = prepared.items.getOrNull(i)
             if (rect != null && item is InlineItem.EmoteItem) {
-                val h = with(density) { item.emote.height.dp.toPx() }
-                val drawn = androidx.compose.ui.geometry.Rect(rect.left, rect.bottom + h / 4 - h, rect.right, rect.bottom + h / 4)
-                if (drawn.contains(at)) return LineTap.EmoteTap(item.emote.prefix)
+                if (density.emoteRect(item.emote, rect).contains(at)) return LineTap.EmoteTap(item.emote.prefix)
             }
         }
         // Then the text under the finger, if the finger is on a line's text.
@@ -357,7 +359,6 @@ private fun DrawScope.drawRainbow(outline: Pair<Path, androidx.compose.ui.geomet
 private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top: Float, heightPx: Float, elapsedMs: Long, still: Boolean) {
     val sprite = emote.sprite
     val scale = heightPx / emote.height
-    val w = emote.width * scale
     val h = heightPx
     val at = if (still) 0L else elapsedMs
     val moving = emote.motions.isNotEmpty() || emote.rest != Pose.Rest
@@ -366,20 +367,22 @@ private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top
         still -> emote.rest
         else -> emote.motions.fold(emote.rest) { p, m -> m.apply(at, p) }
     }
+    // Keyframes may widen the box it's drawn in (PepoPunch's punch).
+    val w = (emote.width + pose.dw) * scale
     val frame = when {
         sprite == null -> 0
-        at < sprite.totalMs -> ((at % sprite.durationMs) * sprite.frames / sprite.durationMs).toInt()
-        sprite.holdLast -> minOf(sprite.frames, sprite.sheetWidth / emote.width - 1)
+        sprite.frameAt(at) != null -> sprite.frameAt(at)!!
+        sprite.holdLast && at >= sprite.totalMs -> minOf(sprite.frames, sprite.sheetWidth / emote.width - 1)
         else -> 0
     }
-    val playing = sprite != null && at < sprite.totalMs
+    val playing = sprite?.frameAt(at) != null
     val base = if (playing) sprite?.startX ?: emote.offsetX else emote.offsetX
-    val offset = (base + frame * emote.width) * scale
+    val offset = (base + frame * (sprite?.stepX ?: emote.width)) * scale
     val stages = pose.filter.colorStages()
     val filter = stages.firstOrNull()?.let { ColorFilter.colorMatrix(ColorMatrix(it)) }
     // A keyframe's own pivot (BLADE stabs from its corner) over the emote's.
     val pivot = Offset((if (pose.ox.isNaN()) emote.originX else pose.ox) * w, (if (pose.oy.isNaN()) emote.originY else pose.oy) * h)
-    val dx = left + pose.tx.dp.toPx()
+    val dx = left + pose.tx.dp.toPx() + pose.dml * scale
     val dy = top + pose.ty.dp.toPx()
     withTransform({
         translate(dx, dy)

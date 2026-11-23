@@ -40,6 +40,11 @@ data class Emote(
     val originY: Float = 0.5f,
     /** Its still `transform` (a mirrored emote facing its neighbour), under any movement. */
     val rest: Pose = Pose.Rest,
+    /** `margin-left` and `margin-right` in px: negative ones let neighbours overlap (RapThis, TRIAD). */
+    val marginLeft: Float = 0f,
+    val marginRight: Float = 0f,
+    /** `vertical-align` in px: negative lowers it (BUTTSTINY's -5px). */
+    val verticalAlign: Float = 0f,
 ) {
     /** Whether the picture is drawn whole, scaled to the emote's size, and still. */
     val isWholePicture: Boolean get() = sprite == null && motions.isEmpty() && rest == Pose.Rest && offsetX == 0 && sheetWidth == width && sheetHeight == height
@@ -61,8 +66,20 @@ data class Sprite(
     val holdLast: Boolean,
     /** Where the strip starts while it plays, in px from the picture's left; null for where it rests. */
     val startX: Int? = null,
+    /** `animation-delay`; a negative one starts partway through (TRIAD, POPPERS). */
+    val delayMs: Long = 0,
+    /** How far each step moves the strip, in px, where it isn't the emote's width (PepoPunch's 56 in a 47 px box). */
+    val stepX: Int? = null,
 ) {
-    val totalMs: Long get() = if (iterations == Int.MAX_VALUE) Long.MAX_VALUE else durationMs * iterations
+    /** When it stops, from when the message was sent. */
+    val totalMs: Long get() = if (iterations == Int.MAX_VALUE) Long.MAX_VALUE else delayMs + durationMs * iterations
+
+    /** The frame showing [at] ms after the message was sent; null while it isn't playing (before its delay, or done). */
+    fun frameAt(at: Long): Int? {
+        val t = at - delayMs
+        if (t < 0 || at >= totalMs) return null
+        return ((t % durationMs) * frames / durationMs).toInt()
+    }
 }
 
 /** What the site says about an emote beyond its picture: who made it, and who may use it. */
@@ -250,7 +267,7 @@ private fun build(
     width *= shrink; height *= shrink; sheetWidth *= shrink; sheetHeight *= shrink; offset *= shrink
     val animation = decls.value("animation")?.let { listOf(it) }
     var sprite = animation?.let { spriteOf(it, sheetWidth.toInt(), width.toInt(), keyframes) { token -> decls.resolvePx(token) } }
-        ?.let { sp -> sp.copy(startX = sp.startX?.let { (it * shrink).toInt() }) }
+        ?.let { sp -> sp.copy(startX = sp.startX?.let { (it * shrink).toInt() }, stepX = sp.stepX?.let { (it * shrink).toInt() }?.takeIf { it != width.toInt() }) }
     var motions = animation?.let { motionsOf(topLevelParts(it.last()), moving) }.orEmpty()
     // Longhands after the shorthand change every animation in it (`.emote.SOY + .emote.Clap`).
     decls.value("animation-duration")?.let(::cssMillis)?.takeIf { it > 0 }?.let { ms ->
@@ -269,14 +286,17 @@ private fun build(
     // Its still `filter`: a tint for a flair, a glow.
     decls.value("filter")?.let(::readFilter)?.takeIf { !it.isNone }?.let { rest = rest.copy(filter = it) }
     decls.value("scale")?.let { readTransform("scale(${it.trim().replace(Regex("""\s+"""), ",")})") }?.let { rest = rest.copy(sx = rest.sx * it.sx, sy = rest.sy * it.sy) }
+    val (marginLeft, marginRight) = decls.margins()
+    val verticalAlign = decls.px("vertical-align")?.toFloat() ?: 0f
     return Emote(
         prefix, url, width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1), minimumSubTier, sprite,
         sheetWidth = sheetWidth.toInt().coerceAtLeast(1), sheetHeight = sheetHeight.toInt().coerceAtLeast(1), offsetX = offset.toInt(),
         // A motion whose keyframes this can't read moves nothing; kept, an endless
         // one would redraw the emote every frame for nothing (EatFresh's x5 combo).
-        motions = motions.map { m -> m.slidingFrom(offset, shrink).withOrigins(width / shrink, height / shrink, originX to originY) }
-            .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.filter != null || it.background != null || it.origin != null || it.clip != null } },
+        motions = motions.map { m -> m.slidingFrom(offset, shrink).withOrigins(width / shrink, height / shrink, originX to originY).withBox(width / shrink, marginLeft.toDouble(), shrink) }
+            .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.filter != null || it.background != null || it.origin != null || it.clip != null || it.width != null || it.marginLeft != null } },
         originX = originX, originY = originY, rest = rest,
+        marginLeft = marginLeft, marginRight = marginRight, verticalAlign = verticalAlign,
     )
 }
 
@@ -294,6 +314,36 @@ private fun Motion.slidingFrom(offset: Double, shrink: Double): Motion {
         val background = if (easing is Easing.Steps) null else ((x * shrink + offset).toFloat() to (y * shrink).toFloat())
         f.copy(background = background)
     })
+}
+
+/**
+ * This motion's `width` and `margin-left` keyframes as changes from the
+ * emote's own ([width], [marginLeft] px), shrunk with it: drawn only, as the
+ * line's layout stays put (PepoPunch widens by as much as its margin takes back).
+ */
+private fun Motion.withBox(width: Double, marginLeft: Double, shrink: Double): Motion {
+    if (frames.none { it.width != null || it.marginLeft != null }) return this
+    return copy(frames = frames.map { f ->
+        f.copy(width = f.width?.let { ((it - width) * shrink).toFloat() }, marginLeft = f.marginLeft?.let { ((it - marginLeft) * shrink).toFloat() })
+    })
+}
+
+/** `margin-left` and `margin-right` in px, from the longhands or `margin` / `margin-inline`. */
+private fun Decls.margins(): Pair<Float, Float> {
+    fun len(v: String?) = v?.trim()?.let { if (it == "0") 0.0 else pxRegex.find(it)?.groupValues?.get(1)?.toDouble() }
+    var left = 0.0
+    var right = 0.0
+    value("margin")?.trim()?.split(Regex("""\s+"""))?.let { p ->
+        when (p.size) {
+            1, 2 -> { left = len(p.getOrNull(1) ?: p[0]) ?: 0.0; right = left }
+            3 -> { left = len(p[1]) ?: 0.0; right = left }
+            4 -> { right = len(p[1]) ?: 0.0; left = len(p[3]) ?: 0.0 }
+        }
+    }
+    value("margin-inline")?.trim()?.split(Regex("""\s+"""))?.let { p -> left = len(p[0]) ?: left; right = len(p.getOrNull(1) ?: p[0]) ?: right }
+    len(value("margin-left"))?.let { left = it }
+    len(value("margin-right"))?.let { right = it }
+    return left.toFloat() to right.toFloat()
 }
 
 /** This motion's `transform-origin` keyframes as fractions of the emote's size ([width] by [height] CSS px). */
@@ -419,7 +469,7 @@ private fun topLevelParts(value: String): List<String> {
     return parts
 }
 
-private val timeRegex = Regex("""(\d*\.?\d+)(ms|s)\b""")
+private val timeRegex = Regex("""(-?\d*\.?\d+)(ms|s)\b""")
 
 /**
  * Reads an `animation` shorthand that steps a background through a strip, such
@@ -440,8 +490,8 @@ private fun spriteOf(
         if (strip.positions.none { resolve(it) != null }) continue
         val startX = strip.start?.let(resolve)?.let { kotlin.math.abs(it).toInt() }
         if (frameWidth <= 0 || sheetWidth <= frameWidth || steps <= 0) continue
-        val time = timeRegex.find(part) ?: continue
-        val durationMs = time.groupValues[1].toDouble().let { if (time.groupValues[2] == "s") it * 1000 else it }.toLong()
+        val times = timeRegex.findAll(part).map { t -> t.groupValues[1].toDouble().let { if (t.groupValues[2] == "s") it * 1000 else it }.toLong() }.toList()
+        val durationMs = times.firstOrNull() ?: continue
         // What's left once the name, times and steps are taken out is the
         // iteration count and the fill mode.
         val rest = part.replace(Regex("""calc\(.*\)"""), " ").replace(timeRegex, " ")
@@ -450,7 +500,11 @@ private fun spriteOf(
             "infinite" in rest -> Int.MAX_VALUE
             else -> Regex("""(?:^|\s)(\d+)(?:\s|$)""").find(rest)?.groupValues?.get(1)?.toInt() ?: 1
         }
-        return Sprite(sheetWidth, steps, durationMs.coerceAtLeast(1), iterations, "forwards" in rest || "both" in rest, startX)
+        // Each step moves the strip by its whole travel over the steps.
+        val from = strip.start?.let(resolve) ?: 0.0
+        val to = strip.positions.lastOrNull()?.let(resolve)
+        val stepX = to?.let { kotlin.math.abs(it - from) / steps }?.takeIf { it > 0 }?.let { kotlin.math.round(it).toInt() }
+        return Sprite(sheetWidth, steps, durationMs.coerceAtLeast(1), iterations, "forwards" in rest || "both" in rest, startX, times.getOrElse(1) { 0L }, stepX)
     }
     return null
 }

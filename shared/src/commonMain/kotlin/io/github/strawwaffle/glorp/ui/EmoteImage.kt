@@ -109,8 +109,8 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
         val at = if (still) 0L else elapsed.longValue
         val frame = when {
             sprite == null -> 0
-            at < sprite.totalMs -> ((at % sprite.durationMs) * sprite.frames / sprite.durationMs).toInt()
-            sprite.holdLast -> minOf(sprite.frames, sprite.sheetWidth / emote.width - 1)
+            sprite.frameAt(at) != null -> sprite.frameAt(at)!!
+            sprite.holdLast && at >= sprite.totalMs -> minOf(sprite.frames, sprite.sheetWidth / emote.width - 1)
             else -> 0
         }
         val now = if (moving) pose(emote, at) else Pose.Rest
@@ -118,9 +118,9 @@ private fun SheetImage(emote: Emote, sentAt: Long, modifier: Modifier) {
         val scale = size.height / emote.height
         // While the strip plays, its keyframes place it (from their start);
         // at rest, the emote's own background-position does.
-        val playing = sprite != null && at < sprite.totalMs
+        val playing = sprite?.frameAt(at) != null
         val base = if (playing) sprite?.startX ?: emote.offsetX else emote.offsetX
-        val offset = (base + frame * emote.width) * scale
+        val offset = (base + frame * (sprite?.stepX ?: emote.width)) * scale
         clipRect {
             // A picture slid inside its box (GIGACHAD arriving) as well.
             translate(left = -offset + now.bx * scale, top = now.by * scale) {
