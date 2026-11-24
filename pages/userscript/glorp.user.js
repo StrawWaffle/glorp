@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Glorp
 // @namespace    https://strawwaffle.github.io/glorp/
-// @version      2.3
+// @version      2.4
 // @description  Glorp's own chat features in destiny.gg's chat on a computer: themes, name icons, hiding other streams' chat, sticky mentions, settings synced with the Glorp app, and signing Glorp in without the developer tools.
 // @match        https://www.destiny.gg/*
 // @match        https://www.omniliberal.dev/*
@@ -11,6 +11,7 @@
 // @grant        GM.setValue
 // @grant        GM.xmlHttpRequest
 // @grant        GM_registerMenuCommand
+// @grant        GM_addValueChangeListener
 // @connect      netlify.app
 // @connect      strawwaffle.github.io
 // @connect      polecat.me
@@ -149,11 +150,11 @@
   // of colours for each role; every rule using one gets the theme's colour instead.
   var THEMES = {
     // Glorp's own, from its homepage: near-black green and lime, or pale green.
-    Glorp: { bg: "#0a0f08", surface: "#131b10", raised: "#1b2716", action: "#b7fa44", text: "#eef6e4", dim: "#9eb38c", green: "#8bd450", mention: "#1f2b0f", tagged: "#1b2716", faint: "#5d7249", mentionBar: "#b7fa44" },
-    GlorpLight: { light: true, bg: "#fbfef5", surface: "#eef6e2", raised: "#d3e5bb", action: "#3f7d12", text: "#1c2a12", dim: "#5d7249", green: "#4e8f1a", mention: "#eaf7d0", tagged: "#eef6e2", faint: "#9eb38c", mentionBar: "#78b52a" },
+    Glorp: { bg: "#0a0f08", surface: "#131b10", raised: "#1b2716", action: "#b7fa44", text: "#eef6e4", dim: "#9eb38c", green: "#8bd450", mention: "#1f2b0f", tagged: "#1b2716", faint: "#5d7249", mentionBar: "#b7fa44", page: "#0a0f08", card: "#131b10", bar: "#131b10", onBar: "#eef6e4", actionBg: "#263a10" },
+    GlorpLight: { light: true, bg: "#fbfef5", surface: "#eef6e2", raised: "#d3e5bb", action: "#3f7d12", text: "#1c2a12", dim: "#5d7249", green: "#4e8f1a", mention: "#eaf7d0", tagged: "#eef6e2", faint: "#9eb38c", mentionBar: "#78b52a", page: "#eef6e2", card: "#fbfef5", bar: "#b7fa44", onBar: "#13240a", actionBg: "#e3f5c4" },
     // Aerith's: cream and brown or slate, a sky-blue bar, teal for mentions, buttons on round tiles.
-    AerithLight: { light: true, bg: "#faf8e8", surface: "#efecd8", raised: "#dcd6b8", action: "#308fd6", text: "#5a4a38", dim: "#918168", green: "#55a637", mention: "#e4f6f0", tagged: "#efe9d2", faint: "#b3a68a", mentionBar: "#6de1c1", tile: "#efecd8", field: "#ffffff", fieldBorder: "#b3a68a", dash: "#dcd6b8" },
-    AerithDark: { bg: "#2b3444", surface: "#1f2a3c", raised: "#3b444e", action: "#7bc3e9", text: "#f1ecda", dim: "#b6ae98", green: "#85d28b", mention: "#27463f", tagged: "#243040", faint: "#717888", mentionBar: "#6de1c1", tile: "#243040", field: "#1a2332", fieldBorder: "#6fb4ec", dash: "#3b4658" },
+    AerithLight: { light: true, bg: "#faf8e8", surface: "#efecd8", raised: "#dcd6b8", action: "#308fd6", text: "#5a4a38", dim: "#918168", green: "#55a637", mention: "#e4f6f0", tagged: "#efe9d2", faint: "#b3a68a", mentionBar: "#6de1c1", tile: "#efecd8", field: "#ffffff", fieldBorder: "#b3a68a", dash: "#dcd6b8", page: "#efe9d2", card: "#faf8e8", bar: "#6fb4ec", onBar: "#ffffff", actionBg: "#e2f0fb" },
+    AerithDark: { bg: "#2b3444", surface: "#1f2a3c", raised: "#3b444e", action: "#7bc3e9", text: "#f1ecda", dim: "#b6ae98", green: "#85d28b", mention: "#27463f", tagged: "#243040", faint: "#717888", mentionBar: "#6de1c1", tile: "#243040", field: "#1a2332", fieldBorder: "#6fb4ec", dash: "#3b4658", page: "#1f2a3c", card: "#2b3444", bar: "#3f6f9e", onBar: "#f3eedc", actionBg: "#2c4a66" },
   };
   // "Destiny" (destiny.gg) is the site as it is: picking it here syncs it to the app.
   var THEME_LABELS = [["", "The site's own (this browser only)"], ["Glorp", "Glorp dark"], ["GlorpLight", "Glorp light"], ["Destiny", "destiny.gg"], ["AerithLight", "Aerith light"], ["AerithDark", "Aerith dark"]];
@@ -164,7 +165,13 @@
     "rgb(222, 222, 222)": "text", "rgb(185, 185, 185)": "text", "rgb(255, 247, 249)": "text", "rgb(220, 220, 220)": "text",
     "rgb(153, 153, 153)": "dim", "rgb(131, 131, 131)": "dim", "rgb(102, 102, 102)": "dim",
     "rgb(6, 38, 62)": "mention", "rgb(2, 194, 255)": "action", "rgb(74, 142, 204)": "action", "rgb(79, 177, 244)": "action",
-    "rgb(108, 165, 40)": "green", "rgb(64, 64, 64)": "faint", "rgb(65, 65, 65)": "faint",
+    "rgb(108, 165, 40)": "green",
+    // The rest of the site (web.css): Radix's grey and blue scales.
+    "rgb(17, 17, 19)": "page", "rgb(24, 25, 27)": "card", "rgb(33, 34, 37)": "hover",
+    "rgb(39, 42, 45)": "raised", "rgb(46, 49, 53)": "raised", "rgb(54, 58, 63)": "raised", "rgb(67, 72, 78)": "faint",
+    "rgb(90, 97, 105)": "dim", "rgb(105, 110, 119)": "dim", "rgb(119, 123, 132)": "dim", "rgb(175, 179, 186)": "dim",
+    "rgb(237, 238, 240)": "text", "rgb(0, 144, 255)": "action", "rgb(112, 184, 255)": "action", "rgb(59, 158, 255)": "action",
+    "rgb(13, 40, 71)": "actionBg", "rgb(0, 51, 98)": "actionBg", "rgb(17, 25, 39)": "actionBg", "rgb(64, 64, 64)": "faint", "rgb(65, 65, 65)": "faint",
   };
   var COLOUR_PROPS = ["color", "background-color", "border-color", "border-top-color", "border-bottom-color", "border-left-color", "border-right-color", "outline-color", "fill"];
   var themeRules = null; // [selector, prop, role][], read once from the site's stylesheets
@@ -203,8 +210,11 @@
     var t = THEMES[name];
     if (!t) { themeStyle.textContent = ""; return; }
     readThemeRules().then(function (rules) {
-      var css = rules.map(function (r) { return r[0] + "{" + r[1] + ":" + t[r[2]] + " !important}"; }).join("\n");
-      css += "\nbody,#chat,.chat-lines{background-color:" + t.bg + " !important}" +
+      var css = rules.map(function (r) { return r[0] + "{" + r[1] + ":" + colour(t, r[2]) + " !important}"; }).join("\n");
+      // Bigscreen's page around chat: its header on the theme's bar, chat's own top bar on chat's colour.
+      css += "\nheader.header,.navbar{background-color:" + colour(t, "bar") + " !important;color:" + colour(t, "onBar") + " !important;border-radius:0 0 12px 12px}" +
+        "\n#chat-controls,#chat-panel-embeds{background-color:" + t.bg + " !important}";
+      css += "\n" + (/^\/embed\/chat/.test(location.pathname) ? "body," : "") + "#chat,.chat-lines{background-color:" + t.bg + " !important}" +
         "\n.msg-chat a.externallink{color:" + t.action + " !important}";
       // The site's icons are light shapes for a dark page: on a light theme, darkened.
       if (t.light) css += "\n.btn-icon,.chat-menu-close{filter:invert(1) brightness(.45)}";
@@ -213,6 +223,12 @@
       if (t.tile) css += aerithShapes(t);
       themeStyle.textContent = css;
     });
+  }
+
+  /** A role's colour in theme [t], with the site-only roles falling back on the chat's. */
+  function colour(t, role) {
+    if (t[role]) return t[role];
+    return { page: t.surface, card: t.bg, hover: t.tile || t.surface, actionBg: t.mention, bar: t.surface, onBar: t.text }[role] || t.text;
   }
 
   /** Aerith's shapes: buttons on round tiles, a round glowing input, rounded rows and menus, dashed lines. */
@@ -682,7 +698,6 @@
   function mountChat() {
     var groups = document.querySelectorAll("#chat-tools-wrap .chat-tools-group");
     if (groups.length < 2 || document.getElementById("chat-glorp-btn")) return false;
-    document.head.appendChild(themeStyle);
     document.head.appendChild(extraStyle);
     var style = document.createElement("style");
     style.textContent =
@@ -773,6 +788,17 @@
   }
 
   load().then(function () {
+    // The theme on every page of the site (bigscreen's header and chat column too), not only in chat.
+    (document.head || document.documentElement).appendChild(themeStyle);
+    applyTheme();
+    // A change made in chat's Glorp panel (another frame) or another tab shows here at once.
+    if (typeof GM_addValueChangeListener !== "undefined") {
+      GM_addValueChangeListener("glorp", function (name, before, after, remote) {
+        if (!remote || !after || typeof after !== "object") return;
+        state = { settings: after.settings || {}, local: after.local || {} };
+        apply();
+      });
+    }
     if (typeof GM_registerMenuCommand !== "undefined") {
       GM_registerMenuCommand("Sign in to Glorp", openSignIn);
       GM_registerMenuCommand("Check for updates", function () {
