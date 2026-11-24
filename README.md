@@ -28,9 +28,12 @@ affiliated with it.
 Glorp follows chat-gui, destiny.gg's own chat code, so chat looks and behaves
 the way it does in a browser.
 
-- Emotes animate, combos count up, and emotes change next to each other as
-  they do on the site. Flairs colour names, and Tier 5 names get the moving
-  rainbow.
+- Emotes move the way they do on the site, with their colour changes, glows
+  and the extras drawn over them, like BibleThump's tears and GSN's dolphins.
+  Glorp reads the site's own emote stylesheet, and a test compares its frames
+  with the site's in a browser. Combos count up and end with C-C-C-COMBO,
+  over the splat from 10 hits. Flairs colour names, and Tier 5 names get the
+  moving rainbow.
 - Mentions, highlight words, tags with notes, the ignore list and timestamps
   all work.
 - Whispers have their own conversations, with history.
@@ -41,8 +44,12 @@ the way it does in a browser.
   can be hidden, and mod notices show.
 - The site's commands work, `/stalk`, `/mentions`, `/tag` and `/maxlines`
   included. The input suggests emotes, names and commands as you type.
+- Tapping a name, the sender's or one in a message, opens that person's
+  membership card from their profile page: photo, team, tier, standing and
+  biography, and on the back their signature.
 - Tapping a link shows its preview. Tapping an emote shows who made it and
-  lets you favourite it. The eye button's same-stream dimming is there too.
+  lets you favourite it. Hold the emote there to see what it does when
+  pointed at on the site. The eye button's same-stream dimming is there too.
 - Signed in with cookies, your chat settings follow your account and the site
   sees what you're watching.
 
@@ -59,6 +66,8 @@ the way it does in a browser.
   utilities userscript.
 - Chat log search from rustlesearch.dev, the poll archive and movie nights
   are built in. YouTube and Rumble links show their titles.
+- Busy chat stays smooth. Glorp prepares new messages away from the screen's
+  own work and lets a flood in a few rows at a time.
 - Glorp updates itself from its releases. Menu → Report a problem opens a
   GitHub issue with the version, phone and log already filled in.
 
