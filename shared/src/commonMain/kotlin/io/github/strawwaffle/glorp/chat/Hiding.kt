@@ -45,6 +45,18 @@ class LocalOptions(private val prefs: ChatPrefs) {
         prefs.putList(NAME_ICONS, nameIcons.map { (n, i) -> "$n $i" }.sorted())
     }
 
+    /** Takes all of [icons] at once (from sync). */
+    fun replaceIcons(icons: Map<String, String>) {
+        nameIcons = icons.mapKeys { it.key.lowercase() }.mapValues { cutIcon(it.value) }.filterValues { it.isNotBlank() }
+        prefs.putList(NAME_ICONS, nameIcons.map { (n, i) -> "$n $i" }.sorted())
+    }
+
+    /** Takes all hidden flairs at once (from sync). */
+    fun replaceHiddenFlairs(names: Set<String>) {
+        hiddenFlairs = names
+        prefs.putList(HIDDEN_FLAIRS, names.sorted())
+    }
+
     /** Titles and channels for YouTube and Rumble links (on unless turned off). */
     var linkTitles by mutableStateOf(prefs.get(LINK_TITLES) != "false")
         private set

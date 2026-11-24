@@ -1,0 +1,7 @@
+# Glorp's settings sync, as a Netlify site: one function and Netlify Blobs.
+# Deploy with this folder as the site's base directory (see README.md).
+[build]
+  publish = "public"
+
+[functions]
+  node_bundler = "esbuild"

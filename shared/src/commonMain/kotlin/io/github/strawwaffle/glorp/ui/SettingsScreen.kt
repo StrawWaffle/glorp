@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.ui
 
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
@@ -97,6 +98,9 @@ fun SettingsScreen(
     onTextScale: (Float) -> Unit = {},
     testVersions: Boolean? = null,
     onTestVersions: (Boolean) -> Unit = {},
+    /** Settings sync with other Glorps and the userscript; null where it isn't available. */
+    sync: io.github.strawwaffle.glorp.chat.GlorpSync? = null,
+    scanCode: (((String?) -> Unit) -> Unit)? = null,
 ) {
     var choosingFlairs by remember { mutableStateOf(false) }
     // A list of categories, each its own page, as Android's settings are.
@@ -106,6 +110,7 @@ fun SettingsScreen(
         when (it) {
             SettingsSection.Notifications -> notify != null && notifyOptions != null
             SettingsSection.Updates -> testVersions != null
+            SettingsSection.Sync -> sync != null
             else -> true
         }
     }
@@ -135,6 +140,9 @@ fun SettingsScreen(
                     Text("›", color = Palette.TextDim, fontSize = 22.sp)
                 }
             }
+        }
+        if (section == SettingsSection.Sync && sync != null) {
+            item { SyncSettings(sync, scanCode) }
         }
         if (section == SettingsSection.Look) {
         item {
@@ -389,6 +397,7 @@ private enum class SettingsSection(val title: String, val summary: String) {
     Notifications("Notifications", "Destiny going live, mentions and whispers"),
     Player("Player", "Destiny's platform, sound with the screen off, catching up"),
     Updates("Updates", "Test versions"),
+    Sync("Sync", "The same Glorp settings on your computer and other phones"),
 }
 
 @Composable
@@ -570,6 +579,61 @@ private fun NotificationSettings(
                 fontSize = 13.sp,
                 modifier = Modifier.fillMaxWidth().clickable { notify.ask { permitted = it; onChanged() } }.padding(horizontal = 16.dp, vertical = 10.dp),
             )
+        }
+    }
+}
+
+/**
+ * Sync: start with a new code, or join one from the userscript (scanning the
+ * code it shows) or another phone (pasting it). Once on, what's synced and
+ * the code to give the next device.
+ */
+@Composable
+private fun SyncSettings(sync: io.github.strawwaffle.glorp.chat.GlorpSync, scanCode: (((String?) -> Unit) -> Unit)?) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    var typed by remember { mutableStateOf("") }
+    var problem by remember { mutableStateOf<String?>(null) }
+    fun join(text: String?) {
+        if (text == null) return
+        if (sync.join(text)) { problem = null; scope.launch { sync.sync() } }
+        else problem = "That isn't a Glorp sync code."
+    }
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+        Text(
+            "Keeps your theme, name icons, hidden phrases and flairs, alert words, sticky mentions and other-stream setting the same " +
+                "in Glorp on other phones and in the Glorp userscript on a computer. The sync service only ever sees them encrypted, " +
+                "and anyone with your sync code can read and change them.",
+            color = Palette.TextDim, fontSize = 14.sp,
+        )
+        val code = sync.codeText
+        if (code == null) {
+            androidx.compose.material3.Button(
+                onClick = { sync.start(); scope.launch { sync.sync() } },
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Palette.Blue, contentColor = Palette.OnAction),
+            ) { Text("Start syncing") }
+            SettingsHeading("Or join a sync you've started")
+            if (scanCode != null) {
+                androidx.compose.material3.OutlinedButton(onClick = { scanCode(::join) }) { Text("Scan the userscript's code", color = Palette.White) }
+            }
+            androidx.compose.material3.OutlinedTextField(
+                typed, { typed = it.trim() }, label = { Text("Sync code") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+            )
+            androidx.compose.material3.OutlinedButton(onClick = { join(typed) }, enabled = typed.isNotEmpty()) { Text("Join", color = Palette.White) }
+            problem?.let { Text(it, color = Palette.Orange, fontSize = 14.sp) }
+        } else {
+            Text(sync.status ?: "Syncing…", color = Palette.White, fontSize = 15.sp)
+            androidx.compose.material3.OutlinedButton(onClick = { scope.launch { sync.sync() } }) { Text("Sync now", color = Palette.White) }
+            SettingsHeading("Add a computer or another phone")
+            Text(
+                "In the Glorp userscript's panel on destiny.gg, paste this under Sync with Glorp. On another phone, paste it in Settings → Sync.",
+                color = Palette.TextDim, fontSize = 14.sp,
+            )
+            androidx.compose.material3.OutlinedButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(code)) }) {
+                Text("Copy the sync code", color = Palette.White)
+            }
+            SettingsHeading("Stop")
+            androidx.compose.material3.OutlinedButton(onClick = { sync.stop() }) { Text("Stop syncing on this phone", color = Palette.Orange) }
         }
     }
 }

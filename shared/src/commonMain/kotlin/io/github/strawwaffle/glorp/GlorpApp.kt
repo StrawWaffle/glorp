@@ -137,6 +137,28 @@ fun GlorpApp(
             // so whispers and mentions still notify at once.
             onStopOrDispose { chat.stopWhenIdle { chat.canNotifyLive() && nativePlaybackPlaying() } }
         }
+        // Glorp's own settings kept the same in every Glorp and the userscript (see GlorpSync):
+        // on opening, and while open whenever something changed or a few minutes have passed.
+        val sync = remember(chat) {
+            io.github.strawwaffle.glorp.chat.GlorpSync(
+                prefs, chat.input.options,
+                theme = { prefs.get(COLOR_THEME) ?: ColorTheme.Glorp.name },
+                setTheme = { name ->
+                    ColorTheme.entries.firstOrNull { it.name == name }?.let { colorTheme = it; Palette.theme = it; prefs.put(COLOR_THEME, it.name) }
+                },
+                client = io.github.strawwaffle.glorp.net.createHttpClient(),
+            )
+        }
+        val syncScope = androidx.compose.runtime.rememberCoroutineScope()
+        LifecycleStartEffect(sync) {
+            val job = syncScope.launch {
+                while (true) {
+                    if (sync.due()) sync.sync()
+                    kotlinx.coroutines.delay(20_000)
+                }
+            }
+            onStopOrDispose { job.cancel() }
+        }
         // Not read here: only chat redraws when a message comes (see ChatScreen).
         val lines = chat.lines.collectAsStateWithLifecycle()
         val flairs by chat.flairs.collectAsStateWithLifecycle()
@@ -393,6 +415,8 @@ fun GlorpApp(
                             onTextScale = { textScale = it; prefs.put(TEXT_SCALE, it.toString()) },
                             testVersions = testVersions,
                             onTestVersions = { on -> testVersions = on; updates?.testVersions = on },
+                            sync = sync.takeIf { it.available },
+                            scanCode = scanCode,
                         )
                     }
                 }

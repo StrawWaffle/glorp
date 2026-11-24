@@ -80,6 +80,20 @@ your own alert words warn you before sending. You pick which platform plays
 Destiny when he's live on several. Test versions, which install as
 *Glorp Probe*, are there for anyone who wants to try what's next.
 
+### On a computer
+
+The [Glorp userscript](https://strawwaffle.github.io/glorp/userscript/glorp.user.js)
+adds a Glorp button to destiny.gg's chat, next to the eye. It brings the
+themes, name icons, hiding other streams' chat and sticky mentions to the
+site, and signs Glorp in on your phone from there. Hidden phrases, hidden
+flairs and alert words came to Glorp from the d.gg utilities userscript, so
+on a computer that script does them.
+
+Settings → Sync keeps Glorp's own settings the same in the app, on other
+phones and in the userscript. The sync service only stores them encrypted
+with a key made from your sync code, which never leaves your devices. Its
+code is in [`sync`](sync).
+
 What's still to come is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Install
@@ -102,7 +116,7 @@ Google block sign-in there. Glorp signs in two other ways.
   from the browser, and scan the code it shows with Glorp. The page sends
   nothing anywhere. Its code is in [`pages/signin`](pages/signin). With
   Violentmonkey, or Tampermonkey's beta, the
-  [sign-in userscript](https://strawwaffle.github.io/glorp/userscript/glorp.user.js)
+  [Glorp userscript](https://strawwaffle.github.io/glorp/userscript/glorp.user.js)
   reads the two values for you and shows the code on destiny.gg itself.
 - **A login key.** This covers chat and whispers. Create one on your
   account's developer page and paste it into Glorp.
