@@ -1043,10 +1043,8 @@ private fun prepare(
             append(' ')
         }
         when (line.kind) {
-            ChatLine.Kind.Broadcast -> {
-                withStyle(SpanStyle(color = Palette.Orange, fontWeight = FontWeight.Bold)) { append(line.text) }
-                return@buildAnnotatedString
-            }
+            // Formatted as a message is (links, embeds, emotes), as chat-gui does, in the announcement's colour.
+            ChatLine.Kind.Broadcast -> Unit
             ChatLine.Kind.Info -> {
                 withStyle(SpanStyle(color = Palette.TextDim, fontStyle = FontStyle.Italic)) { append(line.text) }
                 return@buildAnnotatedString
@@ -1095,8 +1093,8 @@ private fun prepare(
         }
         mentionsMe = mention != null && !line.nick.equals(me, ignoreCase = true) && mention.containsMatchIn(line.text)
         val nameColor = flairs.nameColor(line.features)?.let { Color(it) } ?: Palette.White
-        if (line.kind == ChatLine.Kind.Event) {
-            // The name is in the event's header.
+        if (line.kind == ChatLine.Kind.Event || line.kind == ChatLine.Kind.Broadcast) {
+            // The name is in the event's header; an announcement has none.
         } else if (continued) {
             withStyle(SpanStyle(color = Palette.TextDim)) { append("> ") }
         } else {
@@ -1117,6 +1115,7 @@ private fun prepare(
             return@buildAnnotatedString
         }
         val style = when {
+            line.kind == ChatLine.Kind.Broadcast -> SpanStyle(color = Palette.Orange, fontWeight = FontWeight.Bold)
             line.action -> SpanStyle(fontStyle = FontStyle.Italic)
             line.green -> SpanStyle(color = Palette.Greentext)
             else -> SpanStyle()

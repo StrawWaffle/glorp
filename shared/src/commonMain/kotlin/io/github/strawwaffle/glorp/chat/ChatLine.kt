@@ -99,6 +99,8 @@ data class ChatLine(
             at = at,
             action = false,
             green = false,
+            // Any emote: chat-gui formats announcements with every emote.
+            subTier = Int.MAX_VALUE,
         )
 
         fun whisper(nick: String, text: String, at: Long, messageId: String?) = ChatLine(
