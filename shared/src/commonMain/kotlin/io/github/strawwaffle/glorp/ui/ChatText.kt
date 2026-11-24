@@ -144,7 +144,10 @@ internal sealed interface InlineItem {
         }
         /** The count's size, as a multiple of chat's text. */
         val countScale get() = when (group) { 50 -> 5f; 30 -> 4f; 20 -> 3f; 10 -> 2f; 5 -> 1.5f; else -> 1.15f }
-        fun moves(now: Long) = now - lastHitAt in 0 until HIT_MS || (endedAt > 0 && now - endedAt in 0 until GREYOUT_MS)
+        // HITS flashing, C-C-C-COMBO sliding in, and from 10 hits the splat greying out.
+        // Not while chat runs busy (see ChatRendering.busy): there a combo shows how each flash and slide ends.
+        fun moves(now: Long) = !ChatRendering.busy && ((endedAt == 0L && now - lastHitAt in 0 until HIT_MS) ||
+            (endedAt > 0 && now - endedAt in 0 until (if (group >= 10) GREYOUT_MS else COMPLETE_MS)))
 
         companion object {
             const val HIT_MS = 600L
@@ -735,8 +738,17 @@ private fun DrawScope.outlined(layout: androidx.compose.ui.text.TextLayoutResult
     else drawText(layout, topLeft = Offset(x, y), alpha = alpha)
 }
 
+/** Combo tail widths by count, state and density: a busy combo is laid out again on every hit. */
+private val comboWidths = HashMap<String, Int>()
+
 /** How wide a combo's tail is at rest, in dp, for its placeholder. */
-internal fun comboWidthDp(measurer: TextMeasurer, density: Density, count: Int, ended: Boolean): Int {
+internal fun comboWidthDp(measurer: TextMeasurer, density: Density, count: Int, ended: Boolean): Int =
+    comboWidths.getOrPut("$count|$ended|${density.density}|${density.fontScale}") {
+        if (comboWidths.size > 500) comboWidths.clear()
+        measureComboWidth(measurer, density, count, ended)
+    }
+
+private fun measureComboWidth(measurer: TextMeasurer, density: Density, count: Int, ended: Boolean): Int {
     val base = 14f
     val group = when { count >= 50 -> 5f; count >= 30 -> 4f; count >= 20 -> 3f; count >= 10 -> 2f; count >= 5 -> 1.5f; else -> 1.15f }
     fun w(text: String, size: Float, bold: Boolean = false, italic: Boolean = false, letters: Float = 0f) = measurer.measure(
@@ -756,7 +768,7 @@ internal fun comboWidthDp(measurer: TextMeasurer, density: Density, count: Int, 
 /** A combo's tail at [now]: see [InlineItem.ComboItem]. */
 private fun DrawScope.drawCombo(item: InlineItem.ComboItem, rect: androidx.compose.ui.geometry.Rect, now: Long, measurer: TextMeasurer, pictures: (String) -> Painter?) {
     val px = 14.dp.toPx()
-    val settled = now == SETTLED_MS
+    val settled = now == SETTLED_MS || ChatRendering.busy
     val ended = item.endedAt > 0
     val big = item.group >= 10
     // From 10 hits, a finished combo: the splat behind it, the whole tail greying out over 3.5 s (from 75% of it).
@@ -797,7 +809,9 @@ private fun DrawScope.drawCombo(item: InlineItem.ComboItem, rect: androidx.compo
                     (2f + (1.2f - 2f) * f) to androidx.compose.ui.graphics.lerp(comboRed, comboLight, f)
                 }
             }
-            outlined(comboPiece(measurer, "HITS", px * size, comboLight, italic = true, letters = 0.05f), x, cy, color = color)
+            // Laid out once at chat's size and scaled while drawing: re-measuring every frame of a busy combo costs too much.
+            val hits = comboPiece(measurer, "HITS", px, comboLight, italic = true, letters = 0.05f)
+            withTransform({ scale(size, size, Offset(x, cy)) }) { outlined(hits, x, cy, color = color) }
         } else {
             outlined(comboPiece(measurer, "HITS", px, comboLight, italic = true, letters = 0.05f), x, cy)
         }
