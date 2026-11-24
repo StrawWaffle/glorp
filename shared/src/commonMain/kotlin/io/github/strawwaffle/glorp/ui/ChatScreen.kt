@@ -266,7 +266,7 @@ private fun ChatBody(
             UserSheet(nick, input.tappedLine, flairs, account, input, userActions, onDismiss = input::closeUser)
         }
         input.tappedEmote?.let { prefix ->
-            emotes[prefix]?.let { EmoteSheet(it, emotes.info(prefix), account, input, onDismiss = input::closeEmote) }
+            emotes[prefix]?.let { EmoteSheet(it, emotes.info(prefix), account, input, onDismiss = input::closeEmote, hover = emotes.hover(prefix)) }
                 ?: LaunchedEffect(prefix) { input.closeEmote() }
         }
         if (pinned != null && !pinned.dismissed) PinnedBar(pinned, flairs, emotes, me, openEmbed, tapNick, onShowPin)

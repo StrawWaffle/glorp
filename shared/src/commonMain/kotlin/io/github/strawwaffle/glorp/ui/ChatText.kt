@@ -859,3 +859,34 @@ private fun DrawScope.drawBoxShadows(shadows: List<io.github.strawwaffle.glorp.s
         }
     }
 }
+
+/**
+ * One emote on its own, drawn as chat draws it ([drawEmote]: strips,
+ * movements, filters, overlays), playing from [startedAt]. For the emote card.
+ */
+@Composable
+internal fun EmotePreview(emote: Emote, startedAt: Long, modifier: Modifier) {
+    val context = LocalPlatformContext.current
+    val measurer = rememberTextMeasurer()
+    val clock = remember(emote, startedAt) { mutableLongStateOf(startedAt) }
+    LaunchedEffect(emote, startedAt) {
+        while (true) {
+            withFrameMillis { }
+            val now = Clock.System.now().toEpochMilliseconds()
+            clock.longValue = now
+            if (now - startedAt >= emote.settlesAfterMs) break
+            delay(16)
+        }
+    }
+    androidx.compose.foundation.Canvas(modifier) {
+        val now = clock.longValue
+        val painter = ChatImages.get(emote.url, context) ?: return@Canvas
+        // The emote's box, scaled to fit; its overlays may reach outside it.
+        val scale = minOf(size.width / emote.width.dp.toPx(), size.height / emote.height.dp.toPx())
+        val h = emote.height.dp.toPx() * scale
+        val w = emote.width.dp.toPx() * scale
+        drawEmote(emote, painter, (size.width - w) / 2, (size.height - h) / 2, h, (now - startedAt).coerceAtLeast(0), still = false, measurer) { url ->
+            ChatImages.get(url, context)
+        }
+    }
+}

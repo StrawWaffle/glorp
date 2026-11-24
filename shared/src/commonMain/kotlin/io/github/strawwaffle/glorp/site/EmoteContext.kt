@@ -109,24 +109,27 @@ internal class LineModel(val root: El, val emotes: List<El>) {
             features: List<String>, nameFlair: String?, continued: Boolean, green: Boolean, parts: List<String?>,
             /** The sender, as chat-gui's `data-username`: lower case. Some emotes look different for one person. */
             nick: String? = null,
+            /** As if the pointer were on the emotes (and so on the line): `:hover` rules apply. */
+            hovered: Boolean = false,
         ): LineModel {
+            val hover = if (hovered) mapOf("hover" to "1") else emptyMap()
             val classes = buildSet {
                 add("msg-chat"); add("msg-user"); addAll(features)
                 if (continued) add("msg-continue")
             }
-            val root = El("div", classes, nick?.let { mapOf("data-username" to it.lowercase()) }.orEmpty())
+            val root = El("div", classes, nick?.let { mapOf("data-username" to it.lowercase()) }.orEmpty() + hover)
             if (features.isNotEmpty()) {
                 val badges = root.add(El("span", setOf("features")))
                 for (f in features) badges.add(El("i", setOf("flair", f)))
             }
             root.add(El("a", setOfNotNull("user", nameFlair)))
             root.add(El("span", setOf("ctrl")))
-            var text = root.add(El("span", setOf("text")))
+            var text = root.add(El("span", setOf("text"), hover))
             if (green) text = text.add(El("span", setOf("greentext")))
             val emotes = ArrayList<El>()
             for (part in parts) {
                 if (part == null) text.add(El("a", setOf("externallink")))
-                else emotes += text.add(El("div", setOf("emote", part)))
+                else emotes += text.add(El("div", setOf("emote", part), hover))
             }
             return LineModel(root, emotes)
         }
@@ -215,7 +218,13 @@ private class Only(val ofType: Boolean) : Simple {
     override val specificity get() = spec(0, 1, 0)
 }
 
-/** Hover, pseudo-elements and anything not modelled: never matches. */
+/** `:hover`: an element of a line built as pointed at. */
+private object Hover : Simple {
+    override fun matches(el: El) = el.attrs["hover"] == "1"
+    override val specificity get() = spec(0, 1, 0)
+}
+
+/** Pseudo-elements and anything not modelled: never matches. */
 private object Never : Simple {
     override fun matches(el: El) = false
     override val specificity get() = 0
@@ -386,6 +395,8 @@ private class SelectorParser(private val s: String) {
             "last-of-type" -> Nth(0, 1, ofType = true, fromEnd = true)
             "only-child" -> Only(ofType = false)
             "only-of-type" -> Only(ofType = true)
+            // Pointed at: only in a line built for the emote card's held emote (see LineModel.message's `hovered`).
+            "hover" -> Hover
             "nth-child", "nth-of-type", "nth-last-child", "nth-last-of-type" -> {
                 expect('(')
                 val arg = s.substring(i, s.indexOf(')', i)).trim().lowercase()

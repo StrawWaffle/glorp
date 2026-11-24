@@ -1,5 +1,9 @@
 package io.github.strawwaffle.glorp.ui
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,9 +43,10 @@ import kotlin.time.Clock
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun EmoteSheet(emote: Emote, info: EmoteInfo?, account: Account?, input: ChatInputState, onDismiss: () -> Unit) {
-    // Played from the start while the card is open.
+fun EmoteSheet(emote: Emote, info: EmoteInfo?, account: Account?, input: ChatInputState, onDismiss: () -> Unit, hover: Emote? = null) {
+    // Played from the start while the card is open; held, the way the site plays it when pointed at.
     val openedAt = remember(emote.prefix) { Clock.System.now().toEpochMilliseconds() }
+    var heldAt by remember(emote.prefix) { androidx.compose.runtime.mutableLongStateOf(0L) }
     val favorite = emote.prefix in input.favoriteEmotes
     val usable = account != null && mayUse(emote, account.features, account.subTier, account.roles)
     ModalBottomSheet(
@@ -55,10 +60,28 @@ fun EmoteSheet(emote: Emote, info: EmoteInfo?, account: Account?, input: ChatInp
         ) {
             // Big enough to see: small emotes up to twice their size, big ones fitted.
             val scale = minOf(2f, 240f / emote.width, 140f / emote.height)
-            Box(Modifier.fillMaxWidth().heightIn(min = 72.dp), contentAlignment = Alignment.Center) {
-                EmoteImage(emote, sentAt = openedAt, modifier = Modifier.size((emote.width * scale).dp, (emote.height * scale).dp))
+            val shown = if (heldAt > 0 && hover != null) hover else emote
+            Box(
+                Modifier.fillMaxWidth().heightIn(min = 72.dp).then(
+                    if (hover == null) Modifier
+                    else Modifier.pointerInput(hover) {
+                        detectTapGestures(onPress = {
+                            heldAt = Clock.System.now().toEpochMilliseconds()
+                            tryAwaitRelease()
+                            heldAt = 0L
+                        })
+                    },
+                ),
+                contentAlignment = Alignment.Center,
+            ) {
+                EmotePreview(
+                    shown,
+                    startedAt = if (heldAt > 0 && hover != null) heldAt else openedAt,
+                    modifier = Modifier.size((emote.width * scale).dp, (emote.height * scale).dp),
+                )
             }
             Text(emote.prefix, color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            if (hover != null) Text("Hold it to see what it does when pointed at on the site", color = Palette.TextDim, fontSize = 13.sp)
             info?.creator?.let { Text("By $it", color = Palette.TextDim, fontSize = 14.sp) }
             Text(
                 when {

@@ -183,6 +183,18 @@ class Emotes private constructor(
     fun info(word: String): EmoteInfo? = infos[word]
 
     /**
+     * The emote as the site shows it while pointed at (its `:hover` rules, and
+     * those of its ::before and ::after), or null if it has none: the emote
+     * card plays it while the emote is held.
+     */
+    fun hover(word: String): Emote? {
+        if (builder == null) return null
+        val base = byPrefix[word] ?: return null
+        val held = inLine(LineModel.message(emptyList(), null, continued = false, green = false, parts = listOf(word), hovered = true)).firstOrNull()
+        return held?.takeIf { it !== base && it != inLine(LineModel.message(emptyList(), null, continued = false, green = false, parts = listOf(word))).firstOrNull() }
+    }
+
+    /**
      * The emotes of one line as they look there: the stylesheet changes some
      * by what's next to them, what else the line holds, or a combo's size.
      * [parts] are the line's emotes and links in order (null for a link);
@@ -548,11 +560,11 @@ private fun baseRules(css: String): Map<String, Decls> {
     val out = HashMap<String, HashMap<String, MutableList<String>>>()
     // The `}` before a rule is looked at, not taken, or a rule straight after
     // another would be missed.
-    for (match in Regex("""(?:^|(?<=\}))\s*(?:\.text\s*>\s*)?\.emote\.([A-Za-z0-9_-]+)(::?(?:before|after))?\s*\{([^{}]*)\}""").findAll(clean)) {
-        // `.emote.GSN:before` and `::before` alike, kept as `GSN::before`.
-        val pseudo = match.groupValues[2].trimStart(':').takeIf { it.isNotEmpty() }?.let { "::$it" }.orEmpty()
-        val decls = out.getOrPut(match.groupValues[1] + pseudo) { HashMap() }
-        for (decl in match.groupValues[3].split(';')) {
+    for (match in Regex("""(?:^|(?<=\}))\s*(?:\.text\s*>\s*)?\.emote\.([A-Za-z0-9_-]+)(:hover)?(::?(?:before|after))?\s*\{([^{}]*)\}""").findAll(clean)) {
+        // `.emote.GSN:before` and `::before` alike, kept as `GSN::before`; `:hover` ones as `GSN:hover`, `GSN:hover::before`.
+        val pseudo = match.groupValues[3].trimStart(':').takeIf { it.isNotEmpty() }?.let { "::$it" }.orEmpty()
+        val decls = out.getOrPut(match.groupValues[1] + match.groupValues[2] + pseudo) { HashMap() }
+        for (decl in match.groupValues[4].split(';')) {
             val colon = decl.indexOf(':')
             if (colon <= 0) continue
             // Custom properties keep their case: `var(--t-NoTears)` names `--t-NoTears`.
