@@ -55,7 +55,7 @@ the way it does in a browser.
 
 ### Better on a phone
 
-- Kick, Twitch, YouTube and AngelThump play in Android's own player, live and
+- Kick, Twitch, YouTube, Rumble and AngelThump play in Android's own player, live and
   recorded. It has a quality menu, picture in picture and sound with the
   screen off. On Kick it sits about 4 seconds behind live. Other platforms use
   their web player.

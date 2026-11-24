@@ -136,11 +136,22 @@ with memory and battery throughout.
    live and VODs are done (a playback token from Twitch's web GraphQL API,
    then usher's playlist, as twitch.tv's player does); recordings and
    rewindable live streams get a timeline. Next: Grayjay's plugin engine for
-   YouTube, Rumble and the rest; Twitch clips; background audio with the
+   YouTube and the rest; Twitch clips; background audio with the
    screen off.
-   **Rumble** stays on its web player: rumble.com answers anything that
-   isn't a browser with Cloudflare's "Just a moment" check, so a native
-   lookup would break; the embed works in the web view. Twitch clips (MP4)
+   **Rumble (done)** is native too, from the lookup its own embed player
+   makes (`embedJS/u3/?request=video&ver=2&v=<id>`, `video/Rumble.kt`).
+   Cloudflare in front of rumble.com challenges ("Just a moment") requests
+   that claim to be a browser; the app's own User-Agent gets the JSON
+   (checked 2026-11-24). Its `ua.hls.auto` is an HLS playlist with every
+   quality, for live streams and recent recordings alike; the playlists and
+   segments come from Rumble's CDN without cookies. Older uploads have only
+   MP4 files, and play the best up to 1080p. Live streams are offered with
+   their whole past (`live-hls-dvr`), whose playlists list every segment
+   since the start (hundreds of kilobytes, fetched every two seconds), so
+   live plays the same stream from `live-hls`, a couple of kilobytes, about
+   ten seconds behind live. Grayjay's Rumble plugin wasn't needed: it reads
+   the same lookup, but through a browser-impersonating HTTP client the
+   engine here doesn't have. Twitch clips (MP4)
    and Kick VODs (HLS from kick.com's video lookup) are native.
 
    **YouTube recordings (done, 0.1.8).** The plugin gives each quality and
