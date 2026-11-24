@@ -19,7 +19,8 @@ const json = (status, body) =>
 export default async (req, context) => {
   const id = context.params.id;
   if (!ID.test(id || "")) return json(400, { error: "bad id" });
-  const store = getStore("glorp-sync");
+  // Strong reads: a device reading right after another wrote gets what it wrote.
+  const store = getStore({ name: "glorp-sync", consistency: "strong" });
 
   if (req.method === "GET") {
     const found = await store.get(id, { type: "json" });

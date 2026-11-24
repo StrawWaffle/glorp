@@ -8,3 +8,7 @@ local.properties
 captures/
 *.jks
 *.keystore
+
+# The sync service's packages and Netlify's local state.
+sync/node_modules/
+sync/.netlify/
