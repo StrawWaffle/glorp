@@ -171,9 +171,14 @@ private fun mixColor(a: Long, b: Long, f: Float): Long {
     return m(24) or m(16) or m(8) or m(0)
 }
 
+/**
+ * Whether a function pushes colours far enough past 0..1 that the next one
+ * must see them clamped first. Mild ones (a 1.25 saturate, a hue turn) fold
+ * into one matrix with what follows, which looks the same and saves a layer
+ * a frame; COOMER's `saturate(60)` gets a stage of its own.
+ */
 private fun canOverflow(fn: Filter.Fn): Boolean = when (fn.name) {
-    "brightness", "contrast", "saturate" -> fn.amount > 1f
-    "hue-rotate", "sepia" -> true
+    "brightness", "contrast", "saturate" -> fn.amount > 2f
     else -> false
 }
 

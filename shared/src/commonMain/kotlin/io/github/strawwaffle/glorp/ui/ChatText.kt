@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
@@ -73,6 +74,28 @@ import kotlin.time.Clock
 object ChatRendering {
     var singleNode = true
 
+    /**
+     * When chat last ran busy (over [BUSY_PER_SECOND] new lines a second):
+     * until a little after, moving emotes draw at 30 frames a second instead
+     * of every frame. Measured replaying a real 40-a-second evening full of
+     * shaking emotes, every-frame animation took about 40% more CPU.
+     */
+    var busyUntil = 0L
+        private set
+    private val arrivals = ArrayDeque<Pair<Long, Int>>()
+
+    /** [count] new lines just came in. */
+    fun arrived(count: Int) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        arrivals.addLast(now to count)
+        while (arrivals.isNotEmpty() && arrivals.first().first < now - 2_000) arrivals.removeFirst()
+        if (arrivals.sumOf { it.second } > BUSY_PER_SECOND * 2) busyUntil = now + 3_000
+    }
+
+    val busy: Boolean get() = Clock.System.now().toEpochMilliseconds() < busyUntil
+
+    private const val BUSY_PER_SECOND = 15
+
     /** Dev builds (`--es emote-cdn https://r2cdn.destiny.gg`): emotes from another copy of the site than chat's, to compare them. */
     var emoteCdn: String? = null
 
@@ -117,6 +140,16 @@ internal class PreparedLine(
     /** Embeds by key, for a tap on an `embed` annotation. */
     val embeds: Map<String, io.github.strawwaffle.glorp.site.Embed>,
 ) {
+    /** Whether something is moving that needs every frame: a strip stepping, an emote shaking, turning or sliding. */
+    fun movesFast(now: Long): Boolean = items.any { item ->
+        if (item !is InlineItem.EmoteItem || item.sentAt <= 0) return@any false
+        val t = now - item.sentAt
+        val e = item.emote
+        e.sprite?.frameAt(t) != null || e.motions.any { m ->
+            t >= m.delayMs && t < m.endMs && m.frames.any { it.transform != null || it.background != null || it.clip != null || it.width != null || it.left != null }
+        }
+    }
+
     /** An emote still moving, or a name in the moving rainbow: the row needs a clock. */
     fun moves(now: Long): Boolean = rainbowName != null || items.any {
         it is InlineItem.EmoteItem && it.sentAt > 0 &&
@@ -219,14 +252,16 @@ internal fun ChatText(
     val clock = remember(prepared) { mutableLongStateOf(fixed ?: SETTLED_MS) }
     if (fixed == null && animate && prepared.moves(Clock.System.now().toEpochMilliseconds())) {
         LaunchedEffect(prepared) {
-            val rainbowOnly = prepared.items.none { it is InlineItem.EmoteItem && it.sentAt > 0 }
             while (true) {
                 val now = Clock.System.now().toEpochMilliseconds()
                 withFrameMillis { }
                 clock.longValue = now
                 if (!prepared.moves(now)) break
-                // A rainbow sweeps slowly: 30 frames a second looks the same.
-                delay(if (rainbowOnly) 33 else 8)
+                // A rainbow sweeping, a tint changing, tears falling over an
+                // emote: 30 frames a second looks the same and halves the
+                // drawing in a busy chat. Shakes, spins and strips get every frame.
+                // So does everything while chat runs busy (see ChatRendering.busy).
+                delay(if (prepared.movesFast(now) && !ChatRendering.busy) 8 else 33)
             }
             clock.longValue = SETTLED_MS
         }
@@ -253,12 +288,12 @@ internal fun ChatText(
             onTap = { at -> holder.hit(prepared, at, this)?.let(onTap) },
         )
     }
-    val draw = Modifier.drawBehind {
+    val drawText = Modifier.drawBehind {
         val layout = holder.layout ?: return@drawBehind
-        val now = clock.longValue
         val rainbow = prepared.rainbowName?.let { holder.rainbow(layout, it) }
         if (rainbow == null) drawText(layout)
         else {
+            val now = clock.longValue
             // The rainbow is laid over the name's letters only (SrcAtop), in a
             // layer just the size of the name, so the emotes drawn after can
             // still reach outside the row.
@@ -270,6 +305,10 @@ internal fun ChatText(
             drawText(layout)
             drawIntoCanvas { it.restore() }
         }
+    }
+    val drawPictures = Modifier.drawBehind {
+        val layout = holder.layout ?: return@drawBehind
+        val now = clock.longValue
         val rects = layout.placeholderRects
         prepared.items.forEachIndexed { i, item ->
             val rect = rects.getOrNull(i) ?: return@forEachIndexed
@@ -292,7 +331,10 @@ internal fun ChatText(
             }
         }
     }
-    Layout(modifier.then(semantics).then(taps).then(draw)) { _, constraints ->
+    // A line whose pictures move draws them in a layer of their own, so each
+    // new frame of an emote re-records only the pictures, not the line's text.
+    val layer = remember(prepared) { animate && prepared.moves(Clock.System.now().toEpochMilliseconds()) }
+    Layout(modifier.then(semantics).then(taps).then(drawText).then(if (layer) Modifier.graphicsLayer() else Modifier).then(drawPictures)) { _, constraints ->
         val layout = measurer.measure(
             prepared.text,
             style,
@@ -446,9 +488,11 @@ private fun DrawScope.drawSheet(emote: Emote, painter: Painter, w: Float, h: Flo
     for (glow in pose.filter.glows) {
         val color = androidx.compose.ui.graphics.Color(glow.argb.toInt())
         if (color.alpha == 0f) continue
+        // Eight copies round one ring (four for a thin outline): a glow that
+        // pulses forever (a user's YEE) is drawn every frame, so few copies.
         val r = glow.blur * scale
-        val rings = if (r < 1.5f) listOf(r / 2) else listOf(r / 3, r * 2 / 3)
-        val points = rings.flatMap { ring -> (0 until 8).map { k -> ring to k * kotlin.math.PI.toFloat() / 4 } }
+        val count = if (r < 1.5f) 4 else 8
+        val points = (0 until count).map { k -> r / 2 to k * 2 * kotlin.math.PI.toFloat() / count }
         val tint = ColorFilter.tint(color.copy(alpha = 1f), BlendMode.SrcIn)
         val each = (color.alpha * 2f / points.size).coerceAtMost(1f) * pose.opacity.coerceIn(0f, 1f)
         for ((ring, angle) in points) {

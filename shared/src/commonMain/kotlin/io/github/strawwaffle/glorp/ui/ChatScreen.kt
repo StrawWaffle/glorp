@@ -1177,8 +1177,9 @@ private class RowPacer {
      */
     fun fresh(target: List<Shown>, following: Boolean): Int {
         val shown = newestShown ?: return 0
-        if (!following) return 0
         val i = target.indexOfFirst { it.line.id == shown }
+        if (i > 0) ChatRendering.arrived(i)
+        if (!following) return 0
         return when {
             // Up to half a screen comes at once, as before: pacing that would
             // only move chat more often, which costs more than it saves.
