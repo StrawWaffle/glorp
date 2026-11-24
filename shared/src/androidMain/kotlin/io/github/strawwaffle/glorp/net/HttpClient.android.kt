@@ -17,6 +17,20 @@ actual fun createHttpClient(): HttpClient = HttpClient(OkHttp) {
     install(WebSockets)
 }
 
+private val cachingClient by lazy {
+    HttpClient(OkHttp) {
+        engine {
+            config {
+                connectTimeout(10, TimeUnit.SECONDS)
+                // The app's own cache folder (java.io.tmpdir on Android).
+                cache(okhttp3.Cache(java.io.File(System.getProperty("java.io.tmpdir") ?: "/tmp", "glorp-http"), 8L * 1024 * 1024))
+            }
+        }
+    }
+}
+
+actual fun createCachingHttpClient(): HttpClient = cachingClient
+
 actual fun createPluginHttpClient(): HttpClient = HttpClient(OkHttp) {
     install(io.ktor.client.plugins.cookies.HttpCookies)
     install(io.ktor.client.plugins.HttpTimeout) { requestTimeoutMillis = 30_000 }

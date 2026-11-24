@@ -347,7 +347,12 @@ class Emotes private constructor(
         }
 
         private suspend fun get(client: HttpClient, url: String): String? {
-            val response = client.get(url) { header(HttpHeaders.UserAgent, ChatSocket.USER_AGENT) }
+            // Asked again each launch, but conditionally (no-cache): with the
+            // client's cache the site answers "not modified" until the list changes.
+            val response = client.get(url) {
+                header(HttpHeaders.UserAgent, ChatSocket.USER_AGENT)
+                header(HttpHeaders.CacheControl, "no-cache")
+            }
             return if (response.status.isSuccess()) response.bodyAsText() else null
         }
     }

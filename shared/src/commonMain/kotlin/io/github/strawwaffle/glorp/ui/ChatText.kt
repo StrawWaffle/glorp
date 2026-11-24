@@ -71,6 +71,9 @@ import kotlin.time.Clock
  * phone: at a steady 40 messages a second, janky frames fell from 52% to 14%
  * and CPU by 30%. Dev builds can draw the old way with `--es chattext 0`.
  */
+/** The chat's one text measurer, shared by its lines (none outside a chat). */
+internal val LocalChatMeasurer = androidx.compose.runtime.staticCompositionLocalOf<TextMeasurer?> { null }
+
 object ChatRendering {
     var singleNode = true
 
@@ -176,6 +179,40 @@ internal class PreparedLine(
     /** Embeds by key, for a tap on an `embed` annotation. */
     val embeds: Map<String, io.github.strawwaffle.glorp.site.Embed>,
 ) {
+    /**
+     * When only sprite strips are moving in this line: how long until the
+     * next one steps, so it can sleep till then. Null when anything else
+     * moves (a shake, a fade, an overlay, a rainbow, a combo), which needs
+     * frames as before.
+     */
+    fun nextStepMs(now: Long): Long? {
+        if (rainbowName != null) return null
+        var next = Long.MAX_VALUE
+        for (item in items) {
+            when (item) {
+                is InlineItem.ComboItem -> if (item.moves(now)) return null
+                is InlineItem.EmoteItem -> {
+                    if (item.sentAt <= 0) continue
+                    val t = now - item.sentAt
+                    val e = item.emote
+                    if (e.motions.any { t >= it.delayMs && t < it.endMs }) return null
+                    if (e.overlays.any { o -> o.motions.any { t >= it.delayMs && t < it.endMs } }) return null
+                    val s = e.sprite ?: continue
+                    if (s.frameAt(t) == null) {
+                        // Waiting out its delay: until it starts.
+                        if (t < s.delayMs) next = minOf(next, s.delayMs - t)
+                        continue
+                    }
+                    val stepMs = (s.durationMs / s.frames.coerceAtLeast(1)).coerceAtLeast(1)
+                    val into = (t - s.delayMs) % stepMs
+                    next = minOf(next, stepMs - into, s.totalMs - t)
+                }
+                else -> {}
+            }
+        }
+        return if (next == Long.MAX_VALUE) null else next
+    }
+
     /** Whether something is moving that needs every frame: a strip stepping, an emote shaking, turning or sliding. */
     fun movesFast(now: Long): Boolean = items.any { item ->
         if (item !is InlineItem.EmoteItem || item.sentAt <= 0) return@any false
@@ -210,27 +247,50 @@ internal sealed interface LineTap {
  */
 internal object ChatImages {
     private const val MOST = 160
-    private val painters = mutableStateMapOf<String, Painter>()
-    private val order = LinkedHashSet<String>()
+    // One state slot per picture: a line drawing it is redrawn when that one
+    // loads, not when any does. Kept in order of use, so the emotes drawn most
+    // stay and the least used go first.
+    private val slots = LinkedHashMap<String, androidx.compose.runtime.MutableState<Painter?>>(16, 0.75f, true)
     private val loading = HashSet<String>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    /** Pictures that play by themselves (GIF, animated PNG or AVIF): a line drawing one gets a layer of its own. */
+    private val playing = mutableStateMapOf<String, Boolean>()
+
+    fun plays(url: String): Boolean = playing[url] == true
+
     fun get(url: String, context: PlatformContext): Painter? {
-        painters[url]?.let { return it }
+        val slot = slots.getOrPut(url) { androidx.compose.runtime.mutableStateOf(null) }
+        slot.value?.let { return it }
         if (loading.add(url)) {
             scope.launch {
                 val loader = SingletonImageLoader.get(context)
-                val request = ImageRequest.Builder(context).data(url).size(coil3.size.Size.ORIGINAL).build()
+                // Cached by the file's own name: the site puts its version in
+                // the address, which changes on every release though the picture doesn't.
+                val key = cacheKey(url)
+                val request = ImageRequest.Builder(context).data(url).size(coil3.size.Size.ORIGINAL)
+                    .memoryCacheKey(key).diskCacheKey(key).build()
                 val result = runCatching { loader.execute(request) }.getOrNull()
                 loading.remove(url)
                 if (result is SuccessResult) {
-                    painters[url] = playingPainter(result.image, context) ?: result.image.asPainter(context)
-                    order.remove(url); order.add(url)
-                    while (order.size > MOST) painters.remove(order.first().also { order.remove(it) })
+                    val moving = playingPainter(result.image, context)
+                    if (moving != null) playing[url] = true
+                    slots.getOrPut(url) { androidx.compose.runtime.mutableStateOf(null) }.value = moving ?: result.image.asPainter(context)
+                    while (slots.size > MOST) {
+                        val oldest = slots.keys.first()
+                        slots.remove(oldest)?.value = null
+                        playing.remove(oldest)
+                    }
                 }
             }
         }
         return null
+    }
+
+    /** The picture's file name (`66596c571d8e5.png`), unique per upload; the whole address for anything else. */
+    internal fun cacheKey(url: String): String {
+        val name = url.substringBefore('?').substringAfterLast('/')
+        return if (url.startsWith("data:") || name.length < 8) url else "pic:$name"
     }
 }
 
@@ -273,7 +333,8 @@ internal fun ChatText(
     onHold: (() -> Unit)?,
 ) {
     val context = LocalPlatformContext.current
-    val measurer = rememberTextMeasurer(cacheSize = 0)
+    // One measurer for the whole chat (LocalChatMeasurer), not one per line.
+    val measurer = LocalChatMeasurer.current ?: rememberTextMeasurer(cacheSize = 0)
     val holder = remember { LayoutHolder() }
     // Platform marks are vectors, made once each for this line.
     val platforms = HashMap<String, Painter>()
@@ -289,14 +350,19 @@ internal fun ChatText(
     if (fixed == null && animate && prepared.moves(Clock.System.now().toEpochMilliseconds())) {
         LaunchedEffect(prepared) {
             while (true) {
-                val now = Clock.System.now().toEpochMilliseconds()
                 withFrameMillis { }
+                // The time of the frame being drawn, not of before it was waited for.
+                val now = Clock.System.now().toEpochMilliseconds()
                 clock.longValue = now
                 if (!prepared.moves(now)) break
+                // A strip stepping (and nothing else moving) only needs a new
+                // frame when its next step comes: most step every 50 to 100 ms.
+                val step = prepared.nextStepMs(now)
+                if (step != null) { delay(step.coerceAtLeast(8)); continue }
                 // A rainbow sweeping, a tint changing, tears falling over an
                 // emote: 30 frames a second looks the same and halves the
-                // drawing in a busy chat. Shakes, spins and strips get every frame.
-                // So does everything while chat runs busy (see ChatRendering.busy).
+                // drawing in a busy chat. Shakes, spins and slides get every frame;
+                // so does everything while chat runs busy (see ChatRendering.busy).
                 delay(if (prepared.movesFast(now) && !ChatRendering.busy) 8 else 33)
             }
             clock.longValue = SETTLED_MS
@@ -378,7 +444,9 @@ internal fun ChatText(
     }
     // A line whose pictures move draws them in a layer of their own, so each
     // new frame of an emote re-records only the pictures, not the line's text.
-    val layer = remember(prepared) { animate && prepared.moves(Clock.System.now().toEpochMilliseconds()) }
+    // So does one with a picture that plays by itself (a GIF): its frames would re-record the text too.
+    val playsItself = prepared.items.any { it is InlineItem.EmoteItem && ChatImages.plays(it.emote.url) }
+    val layer = remember(prepared, playsItself) { playsItself || (animate && prepared.moves(Clock.System.now().toEpochMilliseconds())) }
     Layout(modifier.then(semantics).then(taps).then(drawText).then(if (layer) Modifier.graphicsLayer() else Modifier).then(drawPictures)) { _, constraints ->
         val layout = measurer.measure(
             prepared.text,

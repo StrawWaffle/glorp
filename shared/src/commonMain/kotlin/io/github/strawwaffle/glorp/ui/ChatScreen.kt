@@ -303,7 +303,9 @@ private fun ChatBody(
         LaunchedEffect(displayed) { if (following) list.scrollToItem(0) }
         LaunchedEffect(following) { onReading(!following) }
         DisposableEffect(Unit) { onDispose { onReading(false) } }
-        Box(Modifier.fillMaxWidth().weight(1f)) {
+        // One text measurer for every line of the chat (see ChatText).
+        val chatMeasurer = androidx.compose.ui.text.rememberTextMeasurer(cacheSize = 0)
+        Box(Modifier.fillMaxWidth().weight(1f)) { CompositionLocalProvider(LocalChatMeasurer provides chatMeasurer) {
             if (displayed.isEmpty()) {
                 Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (state != SocketState.Stopped) {
@@ -370,7 +372,7 @@ private fun ChatBody(
                         .background(Palette.NavyLight, RoundedCornerShape(16.dp)),
                 ) { Text("Newest messages", color = Palette.White, fontSize = 13.sp) }
             }
-        }
+        } }
         if (account != null) {
             ChatInput(input, emotes, account, connected = state == SocketState.Connected, onSend)
         } else {
@@ -623,7 +625,7 @@ internal fun ChatRow(
     if (titles != null && media.isNotEmpty()) LaunchedEffect(line.id) { media.forEach(titles::request) }
     val knownTitles = media.map { titles?.titleOf(it) }
     // The trial: one element per line (see ChatText); a line it can't draw keeps the old way.
-    val comboMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val comboMeasurer = LocalChatMeasurer.current ?: androidx.compose.ui.text.rememberTextMeasurer()
     val prepared = if (!ChatRendering.singleNode) null
     else remember(line, continued, flairs, emotes, density, me, look, censored, knownTitles) {
         prepare(
