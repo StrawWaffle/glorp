@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Glorp sign-in
 // @namespace    https://strawwaffle.github.io/glorp/
-// @version      1.0
+// @version      1.1
 // @description  Signs Glorp in from destiny.gg on a computer: shows the code Glorp scans, made from the site's login cookies, without the developer tools.
 // @match        https://www.destiny.gg/*
 // @match        https://www.omniliberal.dev/*
@@ -88,8 +88,10 @@
       if (!sid) {
         body.innerHTML =
           "<p class='problem'>Your userscript manager didn't give this script the login cookies.</p>" +
-          "<p>In Violentmonkey, allow HTTP-only cookies for this script and in Violentmonkey's own settings, then reload this page. " +
-          "In Tampermonkey, only the beta can read them. Or sign in on this site first, with Remember me ticked.</p>" +
+          "<p>In Violentmonkey, tick <b>Allow GM_cookie to access HTTP-only cookies</b> in two places, then reload this page:</p>" +
+          "<ol><li>Violentmonkey's dashboard, <b>Settings</b>.</li>" +
+          "<li>This script's own <b>Settings</b> tab: in the dashboard, open <b>Glorp sign-in</b> with its edit button.</li></ol>" +
+          "<p>In Tampermonkey, only the beta can read them. Or you may not be signed in here: sign in with Remember me ticked.</p>" +
           "<p class='quiet'>Without a manager that can, <a href='https://strawwaffle.github.io/glorp/signin/?site=" + encodeURIComponent(site) + "'>Glorp's sign-in page</a> shows how to copy them by hand.</p>";
         return;
       }
