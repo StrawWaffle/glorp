@@ -30,9 +30,13 @@ class EventsTest {
 
     @Test
     fun readsDeathsPostsAndTheVestaboard() {
+        // The name goes before the text, as the site shows it, and isn't repeated when the text has it.
         val death = line("""DEATH {"nick":"Pal","data":"Pal died of dysentery","timestamp":5}""")
-        assertNull(death.nick)
-        assertEquals("Pal died of dysentery", death.event!!.header)
+        assertEquals("Pal", death.nick)
+        assertEquals("died of dysentery", death.event!!.header)
+        val crushed = line("""DEATH {"nick":"Pal","data":"got crushed by kitty litter","timestamp":6}""")
+        assertEquals("Pal", crushed.nick)
+        assertEquals("got crushed by kitty litter", crushed.event!!.header)
         val post = line("""XPOST {"handle":"destiny","text":"new video","url":"https://x.com/destiny/status/1","timestamp":5}""")
         assertEquals("@destiny posted on X", post.event!!.header)
         assertEquals("https://x.com/destiny/status/1", post.event!!.link)

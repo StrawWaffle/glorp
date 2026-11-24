@@ -106,7 +106,11 @@ internal fun parseEventLine(event: String, payload: String, now: () -> Long): Ch
     }
     // `/die`: the message names who died, so no name goes before it.
     "DEATH" -> chatJson.decodeFromString<WireDeath>(payload).takeIf { it.data.isNotBlank() }?.let { d ->
-        ChatLine.event(EventLine(EventLine.Kind.Death, d.data), null, emptyList(), "", d.timestamp ?: now(), null)
+        // Who it happened to: the text ("got crushed by kitty litter") leaves the name out, as chat-gui shows it before.
+        val nick = d.nick.takeIf { it.isNotBlank() }
+        // Some deaths name them in the text too ("Pal died of dysentery"): not twice.
+        val text = if (nick != null && d.data.startsWith("$nick ", ignoreCase = true)) d.data.substring(nick.length + 1) else d.data
+        ChatLine.event(EventLine(EventLine.Kind.Death, text), nick, d.features, "", d.timestamp ?: now(), null)
     }
     "XPOST" -> chatJson.decodeFromString<WireXPost>(payload).takeIf { it.handle.isNotEmpty() }?.let { x ->
         ChatLine.event(
