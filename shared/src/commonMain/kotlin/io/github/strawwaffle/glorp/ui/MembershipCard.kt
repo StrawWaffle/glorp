@@ -53,6 +53,9 @@ private val CardLine = Color(0xFF43484E)
 private val CardInk = Color(0xFFEDEEF0)
 private val CardPhotoBack = Color(0xFF212225)
 
+/** The site's own card colour, whatever the theme: its text is the site's light ink. */
+private val CardBack = Color(0xFF18191B)
+
 private fun standingColor(standing: String?): Color = when (standing) {
     "decorated" -> Color(0xFFFFC53D)
     "noteworthy" -> Color(0xFFFAD173)
@@ -73,14 +76,14 @@ private fun standingColor(standing: String?): Color = when (standing) {
 fun MembershipCard(card: ProfileCard, modifier: Modifier = Modifier) {
     var back by rememberSaveable(card.name) { mutableStateOf(false) }
     Column(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).border(1.dp, CardLine, RoundedCornerShape(10.dp)).background(Palette.Black),
+        modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).border(1.dp, CardLine, RoundedCornerShape(10.dp)).background(CardBack),
     ) {
         Box(Modifier.fillMaxWidth().height(6.dp).background(CardStripe))
         if (!back) Front(card) else Back(card)
         // As the site's flip button: the other side.
         Text(
             if (back) "Show front" else "Show back",
-            color = Palette.Blue,
+            color = CardSince,
             fontSize = 14.sp,
             modifier = Modifier.fillMaxWidth().clickable { back = !back }.padding(horizontal = 16.dp, vertical = 12.dp),
         )
