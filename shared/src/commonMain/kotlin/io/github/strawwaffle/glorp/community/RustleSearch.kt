@@ -435,7 +435,7 @@ private sealed interface Item {
 private fun utc(at: Long): String = Instant.fromEpochMilliseconds(at).toString()
 
 /** `2026-11-23T03:23:32…` in the phone's time ([local]) or UTC. */
-private fun stamp(at: Long, local: Boolean): String = utc(if (local) at + localOffsetMillis(at) else at)
+internal fun stamp(at: Long, local: Boolean): String = utc(if (local) at + localOffsetMillis(at) else at)
 
 /** A small toggle, as the site's range buttons. */
 @Composable
@@ -477,7 +477,7 @@ private fun items(results: List<LogMessage>, local: Boolean): List<Item> {
 }
 
 @Composable
-private fun DayDivider(label: String) {
+internal fun DayDivider(label: String) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -560,7 +560,7 @@ private fun Hint(text: String) {
 }
 
 @Composable
-private fun LogRow(
+internal fun LogRow(
     env: CommunityEnv,
     line: ChatLine,
     continued: Boolean,

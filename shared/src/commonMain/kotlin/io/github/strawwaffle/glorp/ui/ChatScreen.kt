@@ -26,6 +26,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.border
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.InlineTextContent
@@ -382,6 +386,7 @@ private fun ChatBody(
                     onClose = { closedMention = stuck.id },
                 )
             }
+            ModWarning(modNotes(input.watch), Modifier.align(Alignment.TopStart).padding(6.dp))
             Column(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalAlignment = Alignment.End) {
                 if (pinned != null && pinned.dismissed) Tab("Pinned message", Palette.NavyLight) { onShowPin(true) }
             }
@@ -439,6 +444,44 @@ private fun StickyMention(line: ChatLine, modifier: Modifier, onShow: () -> Unit
 }
 
 /** A small button over the top of chat, for what's waiting: whispers, a closed pin. */
+/**
+ * Nukes and mutelinks: a warning triangle at the top left of chat while any
+ * is on, which opens into a card saying what (and closes again), as the
+ * pinned message does.
+ */
+@Composable
+private fun ModWarning(notes: List<String>, modifier: Modifier) {
+    if (notes.isEmpty()) return
+    var open by remember { mutableStateOf(false) }
+    val tile = Palette.Tile ?: Palette.Navy
+    Column(
+        modifier.widthIn(max = 300.dp).background(tile, RoundedCornerShape(10.dp))
+            .border(1.dp, Palette.Orange.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+            .clickable(onClickLabel = if (open) "Close" else "What's on") { open = !open }
+            .semantics(mergeDescendants = true) { contentDescription = if (open) notes.joinToString(". ") else "Warning: ${notes.size} on" }
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
+                val orange = Palette.Orange
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(size.width / 2, size.height * 0.06f)
+                    lineTo(size.width * 0.97f, size.height * 0.92f)
+                    lineTo(size.width * 0.03f, size.height * 0.92f)
+                    close()
+                }
+                drawPath(path, orange)
+                val ink = Color(0xFF1A1A1A)
+                drawLine(ink, androidx.compose.ui.geometry.Offset(size.width / 2, size.height * 0.36f), androidx.compose.ui.geometry.Offset(size.width / 2, size.height * 0.64f), strokeWidth = size.width * 0.11f)
+                drawCircle(ink, radius = size.width * 0.065f, center = androidx.compose.ui.geometry.Offset(size.width / 2, size.height * 0.78f))
+            }
+            if (notes.size > 1 && !open) Text("${notes.size}", color = Palette.Orange, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
+            if (open) Text("Careful what you send", color = Palette.Orange, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
+        }
+        if (open) for (note in notes) Text(note, color = Palette.White, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
 @Composable
 private fun Tab(text: String, color: Color, onClick: () -> Unit) {
     Text(
@@ -682,6 +725,8 @@ internal fun ChatRow(
     // theme's mention bar, where it has one (Aerith's teal).
     val bar = event?.let(::eventColor) ?: Palette.Orange.takeIf { line.spotlightedBy != null }
         ?: tag?.let(::tagColor) ?: Palette.MentionBar?.takeIf { singled }
+    // Aerith's rows: a marked line's background rounded off on the right.
+    val rowShape = if (Palette.Tile != null && background != Color.Transparent) RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp) else androidx.compose.ui.graphics.RectangleShape
     // From someone watching another stream: faded as the site's eye button does.
     val faded = look.otherStreams == OtherStreams.Dim && !mentionsMe && !highlighted &&
         fromOtherStream(line, me, look.playing)
@@ -696,7 +741,7 @@ internal fun ChatRow(
             // As Text would: the app's text style (its font, how lines are spaced) under chat's own.
             LocalTextStyle.current.merge(TextStyle(color = Palette.White, fontSize = 14.sp, lineHeight = LINE_HEIGHT)),
             density,
-            Modifier.fillMaxWidth().then(if (faded) Modifier.alpha(0.3f) else Modifier).background(background)
+            Modifier.fillMaxWidth().then(if (faded) Modifier.alpha(0.3f) else Modifier).background(background, rowShape)
                 .then(if (bar == null) Modifier else Modifier.drawBehind { drawRect(bar, size = Size(TAG_BAR.toPx(), size.height)) })
                 .padding(horizontal = 10.dp, vertical = 2.dp),
             animate = look.animations,
@@ -750,7 +795,7 @@ internal fun ChatRow(
         // Kept only for a rainbow name: saving it redraws the row, which every
         // row would otherwise do twice.
         onTextLayout = if (rainbowName != null) { { layout = it } } else { {} },
-        modifier = Modifier.fillMaxWidth().then(if (faded) Modifier.alpha(0.3f) else Modifier).background(background)
+        modifier = Modifier.fillMaxWidth().then(if (faded) Modifier.alpha(0.3f) else Modifier).background(background, rowShape)
             .then(if (bar == null) Modifier else Modifier.drawBehind { drawRect(bar, size = Size(TAG_BAR.toPx(), size.height)) })
             .then(
                 if (onHold == null) Modifier

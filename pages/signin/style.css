@@ -44,8 +44,9 @@
   color-scheme: dark;
 }
 
+/* Light: the system's choice unless the page's switch (theme.js) says otherwise. */
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme="dark"]) {
     --bg: #eef6e2;
     --panel: #fbfef5;
     --panel-border: #d3e5bb;
@@ -64,6 +65,26 @@
     --silhouette-filter: none;
     color-scheme: light;
   }
+}
+
+:root[data-theme="light"] {
+  --bg: #eef6e2;
+  --panel: #fbfef5;
+  --panel-border: #d3e5bb;
+  --panel-shadow: #bfd6a2;
+  --text: #1c2a12;
+  --muted: #5d7249;
+  --primary: #b7fa44;
+  --primary-shadow: #78b52a;
+  --primary-text: #13240a;
+  --button: #f4f9ea;
+  --button-shadow: #d3e5bb;
+  --field: #ffffff;
+  --link: #3f7d12;
+  --warn: #9a5b00;
+  --silhouette: 0.08;
+  --silhouette-filter: none;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -263,3 +284,25 @@ button:disabled {
 .actions { display: flex; gap: 10px; margin: 16px 0 10px; flex-wrap: wrap; }
 
 footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 8px; }
+
+/* System, light or dark (theme.js), in the top corner. */
+.theme-switch {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  background: var(--button);
+  border: 2px solid var(--panel-border);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+.theme-switch button {
+  font-size: 13px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.theme-switch button:active { translate: none; box-shadow: none; }
+.theme-switch button[aria-pressed="true"] { background: var(--primary); color: var(--primary-text); }

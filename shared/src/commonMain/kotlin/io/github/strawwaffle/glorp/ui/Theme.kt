@@ -53,6 +53,15 @@ object Palette {
 
     /** A tagged user's lines, with "make tagged users stand out" on. */
     val Tagged get() = theme.tagged
+
+    /** The message field and its outline (null: none). */
+    val Field get() = theme.field
+    val FieldBorder get() = theme.fieldBorder
+
+    /** Round tiles behind buttons, in themes that have them (null: plain buttons). */
+    val Tile get() = theme.tile
+    val BarTile get() = theme.barTile
+    val OnBarTile get() = theme.onBarTile
 }
 
 /** A set of colours for the whole app. */
@@ -74,33 +83,67 @@ enum class ColorTheme(
     val mention: Color,
     val mentionBar: Color?,
     val tagged: Color,
+    /** The message field, and its outline where the theme draws one. */
+    val field: Color,
+    val fieldBorder: Color? = null,
+    /** Round tiles behind the chat's buttons and the bar's, where the theme has them (Aerith's). */
+    val tile: Color? = null,
+    val barTile: Color? = null,
+    val onBarTile: Color = onBar,
 ) {
+    // Glorp's own, from its homepage: near-black green and lime, or pale green.
     Glorp(
-        "Glorp", light = false,
-        background = Color(0xFF111113), surface = Color(0xFF0C1D40), raised = Color(0xFF15326C),
-        action = Color(0xFF0090FF), text = Color(0xFFEDEEF0), attention = Color(0xFFF3B122),
-        accent = Color(0xFF8BD450), textDim = Color(0xFF9EA3AD), greentext = Color(0xFF6CA528),
-        bar = Color(0xFF0C1D40), onBar = Color(0xFFEDEEF0), onAction = Color(0xFFEDEEF0),
-        mention = Color(0x24F3B122), mentionBar = null, tagged = Color(0xFF232323),
+        "Glorp dark", light = false,
+        background = Color(0xFF0A0F08), surface = Color(0xFF131B10), raised = Color(0xFF1B2716),
+        action = Color(0xFFB7FA44), text = Color(0xFFEEF6E4), attention = Color(0xFFFFC94D),
+        accent = Color(0xFFB7FA44), textDim = Color(0xFF9EB38C), greentext = Color(0xFF8BD450),
+        bar = Color(0xFF131B10), onBar = Color(0xFFEEF6E4), onAction = Color(0xFF13240A),
+        mention = Color(0xFF1F2B0F), mentionBar = Color(0xFFB7FA44), tagged = Color(0xFF1B2716),
+        field = Color(0xFF0C1209), fieldBorder = Color(0xFF26361D),
+    ),
+    GlorpLight(
+        "Glorp light", light = true,
+        background = Color(0xFFFBFEF5), surface = Color(0xFFEEF6E2), raised = Color(0xFFD3E5BB),
+        action = Color(0xFF3F7D12), text = Color(0xFF1C2A12), attention = Color(0xFF9A5B00),
+        accent = Color(0xFF6FAE1F), textDim = Color(0xFF5D7249), greentext = Color(0xFF4E8F1A),
+        bar = Color(0xFFB7FA44), onBar = Color(0xFF13240A), onAction = Color(0xFFFFFFFF),
+        mention = Color(0xFFEAF7D0), mentionBar = Color(0xFF78B52A), tagged = Color(0xFFEEF6E2),
+        field = Color(0xFFFFFFFF), fieldBorder = Color(0xFFD3E5BB),
+    ),
+
+    // destiny.gg's chat as the site draws it (chat-gui's stylesheet).
+    Destiny(
+        "destiny.gg", light = false,
+        background = Color(0xFF080808), surface = Color(0xFF151515), raised = Color(0xFF222222),
+        action = Color(0xFF02C2FF), text = Color(0xFFDEDEDE), attention = Color(0xFFF3B122),
+        accent = Color(0xFF61BD4F), textDim = Color(0xFF999999), greentext = Color(0xFF6CA528),
+        bar = Color(0xFF111113), onBar = Color(0xFFDEDEDE), onAction = Color(0xFF080808),
+        mention = Color(0xFF06263E), mentionBar = null, tagged = Color(0xFF151515),
+        field = Color(0xFF111111), fieldBorder = Color(0xFF222222),
     ),
 
     // Aerith's themes for the site, light and dark: cream and brown, a
-    // sky-blue bar, teal for mentions. Stolen from Aerith, with thanks.
+    // sky-blue bar, teal for mentions, buttons on round tiles. Stolen from
+    // Aerith, with thanks.
     AerithLight(
         "Aerith light", light = true,
-        background = Color(0xFFFAF8E8), surface = Color(0xFFEAE7D2), raised = Color(0xFFDCD6B8),
+        background = Color(0xFFFAF8E8), surface = Color(0xFFEFECD8), raised = Color(0xFFDCD6B8),
         action = Color(0xFF308FD6), text = Color(0xFF5A4A38), attention = Color(0xFFD9801A),
         accent = Color(0xFF2FA88A), textDim = Color(0xFF918168), greentext = Color(0xFF55A637),
         bar = Color(0xFF6FB4EC), onBar = Color(0xFFFFFFFF), onAction = Color(0xFFFFFFFF),
         mention = Color(0xFFE4F6F0), mentionBar = Color(0xFF6DE1C1), tagged = Color(0xFFEFE9D2),
+        field = Color(0xFFFFFFFF), fieldBorder = Color(0xFFB3A68A),
+        tile = Color(0xFFEFECD8), barTile = Color(0xFFFAF8E8), onBarTile = Color(0xFF5A4A38),
     ),
     AerithDark(
         "Aerith dark", light = false,
         background = Color(0xFF2B3444), surface = Color(0xFF1F2A3C), raised = Color(0xFF3B444E),
         action = Color(0xFF7BC3E9), text = Color(0xFFF1ECDA), attention = Color(0xFFFFAB4A),
-        accent = Color(0xFF6DE1C1), textDim = Color(0xFFB6AE98), greentext = Color(0xFF7DCF9B),
-        bar = Color(0xFF3F6F9E), onBar = Color(0xFFFFFFFF), onAction = Color(0xFF1A2332),
+        accent = Color(0xFF6DE1C1), textDim = Color(0xFFB6AE98), greentext = Color(0xFF85D28B),
+        bar = Color(0xFF3F6F9E), onBar = Color(0xFFF3EEDC), onAction = Color(0xFF1A2332),
         mention = Color(0xFF27463F), mentionBar = Color(0xFF6DE1C1), tagged = Color(0xFF243040),
+        field = Color(0xFF1A2332), fieldBorder = Color(0xFF6FB4EC),
+        tile = Color(0xFF243040), barTile = Color(0xFF2B3444), onBarTile = Color(0xFFF3EEDC),
     ),
 }
 

@@ -66,14 +66,14 @@ class NotifyOptions(private val prefs: ChatPrefs, private val settings: ChatSett
     val whispers: Boolean get() = (settings["notificationwhisper"] as? JsonPrimitive)?.booleanOrNull == true
     val any: Boolean get() = live || mentions || whispers
 
-    /** Minutes between looks; Android allows no less than 15. */
+    /** Minutes between looks. Under 15, Android's own lower limit for repeating work, each check books the next. */
     val intervalMinutes: Int get() = prefs.get(INTERVAL)?.toIntOrNull()?.takeIf { it in INTERVALS } ?: 30
 
     fun setLive(on: Boolean) = prefs.put(LIVE, on.toString())
     fun setInterval(minutes: Int) = prefs.put(INTERVAL, minutes.toString())
 
     companion object {
-        val INTERVALS = listOf(15, 30, 60)
+        val INTERVALS = listOf(5, 10, 15, 30, 60)
 
         /** Left by the running app for the background check: the site's address and the signed-in name. */
         const val ORIGIN = "notify.origin"
@@ -116,7 +116,10 @@ class AlertCheck(
         if (options.live) found(listOfNotNull(live()))
         if (cookies != null && options.whispers) found(whispers(cookies))
         if (nick != null && options.mentions) {
+            // polecat.me first; Glorp's own service when polecat can't be asked; the site's list last.
+            val fromPolecat = polecatMentions(nick)
             when {
+                fromPolecat != null -> found(fromPolecat)
                 server != null -> found(serverMentions(server, nick))
                 cookies != null -> found(mentions(nick))
             }
@@ -165,6 +168,24 @@ class AlertCheck(
                 // it may have scrolled out of what chat keeps.
                 val iso = Instant.fromEpochMilliseconds(m.atSeconds * 1000).toString()
                 val link = LogMessage("Destinygg", m.text, iso, m.nick, m.atSeconds * 1000).siteLink()
+                Alert(Alert.Kind.Mention, "${m.nick} mentioned you", m.text, link)
+            }
+    }
+
+    /**
+     * Mentions from polecat.me's logger: any sign-in, exact to the second, so
+     * tapping one opens straight to it. Shares its marker with the service's,
+     * so switching between the two never repeats one. Null when polecat
+     * couldn't be asked (resting after its limit, or down).
+     */
+    private suspend fun polecatMentions(nick: String): List<Alert>? {
+        val found = io.github.strawwaffle.glorp.community.Polecat(client).mentions(nick, size = POLECAT_PAGE) ?: return null
+        val seen = prefs.get(SERVER_SEEN)?.toLongOrNull()
+        prefs.put(SERVER_SEEN, maxOf(found.maxOfOrNull { it.at } ?: 0, seen ?: kotlin.time.Clock.System.now().toEpochMilliseconds()).toString())
+        if (seen == null) return emptyList()
+        return found.filter { it.at > seen && !it.nick.equals(nick, ignoreCase = true) && it.nick !in ignored }
+            .sortedBy { it.at }.takeLast(MAX_EACH).map { m ->
+                val link = LogMessage("Destinygg", m.text, Instant.fromEpochMilliseconds(m.at).toString(), m.nick, m.at).siteLink()
                 Alert(Alert.Kind.Mention, "${m.nick} mentioned you", m.text, link)
             }
     }
@@ -228,6 +249,7 @@ class AlertCheck(
         private const val MENTIONS_SEEN = "notify.mentions.seen"
         private const val SERVER_SEEN = "notify.server.seen"
         private const val MENTIONS_LIMIT = 10
+        private const val POLECAT_PAGE = 20
         private const val MAX_EACH = 5
     }
 }

@@ -60,12 +60,15 @@ the way it does in a browser.
   screen off. On Kick it sits about 4 seconds behind live. Other platforms use
   their web player.
 - Notifications tell you when Destiny goes live, when someone mentions you,
-  and when you get a whisper, without chat open.
+  and when you get a whisper, without chat open. Mentions come from
+  polecat.me's chat logs, so they work with any sign-in, as often as every
+  5 minutes.
 - Before you send, Glorp warns you if the message would hit a nuke, mutelinks
-  or a banned phrase. The lists come from vyneer.me, as they did for the d.gg
-  utilities userscript.
-- Chat log search from rustlesearch.dev, the poll archive and movie nights
-  are built in. YouTube and Rumble links show their titles.
+  or a banned phrase. While a nuke or mutelinks is on, a warning triangle
+  sits at the top left of chat; tap it to see what. The lists come from
+  vyneer.me, as they did for the d.gg utilities userscript.
+- Chat log search from rustlesearch.dev, every message that ever mentioned
+  you from polecat.me, the poll archive and movie nights are built in. YouTube and Rumble links show their titles.
 - Busy chat stays smooth. Glorp prepares new messages away from the screen's
   own work and lets a flood in a few rows at a time.
 - Glorp updates itself from its releases. Menu → Report a problem opens a
@@ -73,7 +76,8 @@ the way it does in a browser.
 
 ### Glorp's own
 
-Three themes, Glorp's own and Aerith's light and dark. Emoji name icons that
+Five themes: Glorp's green in dark and light, destiny.gg's own, and Aerith's
+light and dark with her round buttons and glowing input. Emoji name icons that
 only you see. Chat from other streams dimmed or hidden. Your choice of text
 size and font. Your latest mention stays at the top until you close it, and
 your own alert words warn you before sending. You pick which platform plays
@@ -83,9 +87,11 @@ Destiny when he's live on several. Test versions, which install as
 ### On a computer
 
 The [Glorp userscript](https://strawwaffle.github.io/glorp/userscript/glorp.user.js)
-adds a Glorp button to destiny.gg's chat, next to the eye. It brings the
-themes, name icons, hiding other streams' chat and sticky mentions to the
-site, and signs Glorp in on your phone from there. Hidden phrases, hidden
+adds a Glorp button to destiny.gg's chat, next to the eye, and a mentions
+button by the whisper one. It brings the themes, name icons, hiding other
+streams' chat, sticky mentions and polecat.me's mentions to the site, and
+signs Glorp in on your phone from there. It tells you in chat when a new
+version is out. Hidden phrases, hidden
 flairs and alert words came to Glorp from the d.gg utilities userscript, so
 on a computer that script does them.
 
@@ -135,7 +141,8 @@ No GitHub account? Whisper StrawWaffle in destiny.gg chat.
 - [rustlesearch.dev](https://rustlesearch.dev/), and Mitch's
   [mitchdev.net](https://mitchdev.net/dgg/) and
   [dinkdonk.mov](https://dinkdonk.mov/), whose data the community screens
-  show. vyneer.me, whose lists the warnings use.
+  show. vyneer.me, whose lists the warnings use. polecat.me, whose chat logs
+  the mentions come from.
 - The "AngelThump Edge Picker" userscript. Glorp picks between AngelThump's
   servers the way it does.
 - [FUTO's Grayjay](https://grayjay.app/). YouTube plays through Grayjay's

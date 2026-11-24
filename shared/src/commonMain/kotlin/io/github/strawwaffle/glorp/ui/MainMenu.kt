@@ -59,7 +59,7 @@ fun MainMenu(
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
     onSettings: () -> Unit,
-    /** Opens a community screen: "rustle", "polls" or "dinkdonk". */
+    /** Opens a community screen: "rustle", "polls", "dinkdonk" or "mentions". */
     onCommunity: (String) -> Unit = {},
     unreadWhispers: Int = 0,
     onWhispers: () -> Unit = {},
@@ -120,6 +120,7 @@ fun MainMenu(
         }
 
         item { Heading("Community") }
+        item { Item("Mentions", if (account != null) "Messages naming you, from polecat.me" else "Messages naming someone, from polecat.me", { onCommunity("mentions") }) }
         item { Item("Chat log search", "rustlesearch.dev", { onCommunity("rustle") }) }
         item { Item("Poll archive", "mitchdev.net", { onCommunity("polls") }) }
         item { Item("Movie nights", "dinkdonk.mov", { onCommunity("dinkdonk") }) }

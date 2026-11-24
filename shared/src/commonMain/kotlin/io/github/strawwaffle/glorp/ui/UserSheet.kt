@@ -101,7 +101,8 @@ fun UserSheet(
     val features = found?.features ?: line?.features.orEmpty()
     val clipboard = LocalClipboardManager.current
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = Palette.Navy) {
+    // Aerith's card: the chat's own colour under it, dashed lines between parts, buttons on tiles.
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = if (Palette.Tile != null) Palette.Black else Palette.Navy) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 8.dp)) {
             // Who.
             Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -156,7 +157,7 @@ fun UserSheet(
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
-                        .background(Palette.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .background(Palette.Tile ?: Palette.Black.copy(alpha = 0.4f), RoundedCornerShape(if (Palette.Tile != null) 10.dp else 8.dp))
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 )
                 Action("Copy message") { clipboard.setText(AnnotatedString(line.text)); onDismiss() }
@@ -207,7 +208,16 @@ private fun Detail(text: String, color: Color = Palette.TextDim, onClick: (() ->
 )
 
 @Composable
-private fun Divider() = HorizontalDivider(Modifier.padding(vertical = 4.dp), color = Palette.NavyLight)
+private fun Divider() {
+    if (Palette.Tile == null) return HorizontalDivider(Modifier.padding(vertical = 4.dp), color = Palette.NavyLight)
+    val color = Palette.NavyLight
+    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).height(1.dp)) {
+        drawLine(
+            color, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(size.width, 0f), strokeWidth = size.height,
+            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
+        )
+    }
+}
 
 /** A full-width row, at least 48 dp tall. */
 @Composable
@@ -215,8 +225,10 @@ private fun Action(label: String, color: Color = Palette.White, onClick: () -> U
     label,
     color = color,
     fontSize = 15.sp,
-    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick)
-        .padding(horizontal = 20.dp, vertical = 13.dp),
+    modifier = Modifier.fillMaxWidth()
+        .then(Palette.Tile?.let { Modifier.padding(horizontal = 16.dp, vertical = 3.dp).background(it, RoundedCornerShape(10.dp)) } ?: Modifier)
+        .heightIn(min = 48.dp).clickable(onClick = onClick)
+        .padding(horizontal = if (Palette.Tile != null) 14.dp else 20.dp, vertical = 13.dp),
 )
 
 /** A moderator's action with its lengths; a ban asks for a second tap. */
@@ -236,7 +248,7 @@ private fun Durations(label: String, durations: List<String>, confirm: Boolean, 
                     color = if (d == armed) Palette.Black else Palette.White,
                     fontSize = 14.sp,
                     modifier = Modifier.heightIn(min = 40.dp)
-                        .background(if (d == armed) Palette.Orange else Palette.NavyLight, RoundedCornerShape(8.dp))
+                        .background(if (d == armed) Palette.Orange else Palette.Tile ?: Palette.NavyLight, RoundedCornerShape(if (Palette.Tile != null) 10.dp else 8.dp))
                         .clickable { if (!confirm || armed == d) onPick(d) else armed = d }
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                 )

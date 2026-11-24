@@ -467,7 +467,7 @@ fun GlorpApp(
                         )
                     }
                 }
-                "rustle", "polls", "dinkdonk" -> {
+                "rustle", "polls", "dinkdonk", "mentions" -> {
                     {
                         // Made again only when what's in it changes: a new one on
                         // every chat message would redraw these screens each time.
@@ -485,6 +485,7 @@ fun GlorpApp(
                             // A new link or name starts the search afresh, even with the screen open.
                             "rustle" -> key(communityArg) { RustleSearchScreen(env) }
                             "polls" -> PollArchiveScreen(env)
+                            "mentions" -> key(communityArg) { io.github.strawwaffle.glorp.community.MentionsScreen(env) }
                             else -> DinkDonkScreen(env)
                         }
                     }

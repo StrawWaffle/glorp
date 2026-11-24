@@ -53,6 +53,10 @@ class LookBack(
     }
 
     suspend fun mentions(nick: String, limit: Int): Result {
+        // polecat.me's logger first: any sign-in, and it keeps everything.
+        io.github.strawwaffle.glorp.community.Polecat(client).mentions(nick, size = limit.coerceAtLeast(1))?.let { found ->
+            return Result.Lines(found.take(limit).map { it.logLine() }.reversed(), "polecat.me")
+        }
         if (cookies != null) {
             val body = siteGet("/api/chat/mentions", nick, limit) ?: return Result.Failed("No mentions for $nick received. Try again later.")
             return parseSiteMentions(body)?.let { Result.Lines(it.takeLast(limit), null) } ?: Result.Failed("No mentions for $nick received. Try again later.")

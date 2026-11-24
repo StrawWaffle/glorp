@@ -3,12 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'none'">
 <title>Glorp, destiny.gg chat and bigscreen for Android</title>
 <meta name="description" content="An unofficial destiny.gg app for Android: the site's chat, bigscreen's streams in a native player, and a few things of its own.">
 <link rel="icon" href="glorp.png">
 <link rel="stylesheet" href="signin/style.css">
 <link rel="stylesheet" href="home.css">
+<script src="theme.js"></script>
 </head>
 <body>
 <main class="wide">
@@ -55,9 +56,9 @@
     <h2>Better on a phone</h2>
     <ul class="checks">
       <li>Kick, Twitch, YouTube and AngelThump play in Android's own player, with a quality menu, picture in picture and sound with the screen off. On Kick it sits about 4 seconds behind live.</li>
-      <li>Notifications tell you when Destiny goes live, when someone mentions you, and when you get a whisper, without chat open.</li>
-      <li>Before you send, Glorp warns you if the message would hit a nuke, mutelinks or a banned phrase.</li>
-      <li>Chat log search from rustlesearch.dev, the poll archive and movie nights are built in.</li>
+      <li>Notifications tell you when Destiny goes live, when someone mentions you, and when you get a whisper, without chat open. Mentions come from polecat.me's chat logs, so any sign-in works.</li>
+      <li>Before you send, Glorp warns you if the message would hit a nuke, mutelinks or a banned phrase. While one is on, a warning triangle sits at the top left of chat.</li>
+      <li>Chat log search from rustlesearch.dev, every message that ever mentioned you from polecat.me, the poll archive and movie nights are built in.</li>
       <li>YouTube and Rumble links in chat show their titles.</li>
       <li>Busy chat stays smooth. Chat only stays connected while Glorp is on screen, and only the rows you can see get drawn.</li>
       <li>Glorp updates itself. Menu → Report a problem opens a GitHub issue with the details filled in.</li>
@@ -67,7 +68,7 @@
   <section class="panel">
     <h2>Glorp's own</h2>
     <ul class="checks">
-      <li>Three themes, Glorp's own and Aerith's light and dark.</li>
+      <li>Five themes: Glorp's green in dark and light, destiny.gg's own, and Aerith's light and dark with her round buttons and glowing input.</li>
       <li>Emoji name icons, a private tag only you see.</li>
       <li>Chat from people watching other streams, dimmed like the site's eye button or hidden.</li>
       <li>Your choice of text size, and of your phone's font or the site's.</li>
@@ -102,7 +103,7 @@
   </section>
 
   <footer>
-    Glorp is free for non-commercial use. YouTube plays through FUTO's Grayjay plugin. The community screens use rustlesearch.dev, and Mitch's mitchdev.net and dinkdonk.mov. The warnings use vyneer.me's lists. Thanks to all of them.
+    Glorp is free for non-commercial use. YouTube plays through FUTO's Grayjay plugin. The community screens use rustlesearch.dev, and Mitch's mitchdev.net and dinkdonk.mov. The warnings use vyneer.me's lists, and the mentions polecat.me's chat logs. Thanks to all of them.
     <br>Set in Nunito and Gaegu, under the SIL Open Font License.
   </footer>
 </main>

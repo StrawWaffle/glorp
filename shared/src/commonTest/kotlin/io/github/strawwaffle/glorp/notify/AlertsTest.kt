@@ -24,6 +24,8 @@ class AlertsTest {
     private var conversations = "[]"
     private val requests = mutableListOf<String>()
     private var served = "[]"
+    /** What polecat.me answers; null: it's down. */
+    private var polecat: String? = null
 
     private val client = HttpClient(MockEngine { request ->
         requests += request.url.encodedPath
@@ -34,6 +36,7 @@ class AlertsTest {
             )
             "/api/chat/mentions" -> respond("""{"success":true,"data":$mentions}""", headers = json)
             "/m/mentions" -> respond("""{"mentions":$served}""", headers = json)
+            "/api/mentions/Me" -> polecat?.let { respond(it, headers = json) } ?: respond("", io.ktor.http.HttpStatusCode.BadGateway)
             "/api/messages/conversations" -> respond("""{"data":{"results":$conversations}}""", headers = json)
             else -> respond("", io.ktor.http.HttpStatusCode.NotFound)
         }
@@ -103,16 +106,34 @@ class AlertsTest {
         assertEquals(listOf("Pal mentioned you"), alerts.map { it.title })
         // The exact time: the link goes straight to the message.
         assertEquals(second, (rustleLinkOf(alerts[0].open) as RustleLink.Around).message.at)
-        assertTrue(requests.all { it == "/m/mentions" })
+        // polecat.me was down each time, so the service answered.
+        assertTrue(requests.all { it == "/m/mentions" || it == "/api/mentions/Me" })
     }
 
     @Test
-    fun signedOutAsksOnlyForLive() = runTest {
+    fun polecatComesFirst() = runTest {
+        settings.set("notificationhighlight", JsonPrimitive(true))
+        val check = { AlertCheck(client, site, prefs, options, null, "Me", server = "https://glorp.example/m/") }
+        val first = kotlin.time.Clock.System.now().toEpochMilliseconds() + 60_000
+        val second = first + 61_000
+        polecat = """[{"id":1,"date":$first,"nick":"Friend","flairs":"","text":"hey Me"}]"""
+        assertEquals(emptyList(), check().run())
+        polecat = """[{"id":2,"date":$second,"nick":"Pal","flairs":"","text":"Me?"},{"id":1,"date":$first,"nick":"Friend","flairs":"","text":"hey Me"}]"""
+        val alerts = check().run()
+        assertEquals(listOf("Pal mentioned you"), alerts.map { it.title })
+        assertEquals(second, (rustleLinkOf(alerts[0].open) as RustleLink.Around).message.at)
+        // The service wasn't needed.
+        assertTrue("/m/mentions" !in requests)
+    }
+
+    @Test
+    fun withoutTheSitesLoginNoWhispers() = runTest {
         options.setLive(true)
         settings.set("notificationhighlight", JsonPrimitive(true))
         settings.set("notificationwhisper", JsonPrimitive(true))
         check(signedIn = false).run()
-        assertEquals(listOf("/api/info/stream"), requests)
+        // Mentions come from polecat.me's logs, which need no login; whispers need the site's.
+        assertEquals(listOf("/api/info/stream", "/api/mentions/Me"), requests)
     }
 
     @Test

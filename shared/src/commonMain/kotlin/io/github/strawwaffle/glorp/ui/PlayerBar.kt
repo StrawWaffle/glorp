@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -97,8 +98,11 @@ fun PlayerBar(
 
 @Composable
 private fun BarIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
+    // Aerith's bar: each button on a round tile of its own.
+    val tile = Palette.BarTile
     Box(Modifier.size(48.dp).clickable(onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, contentDescription = label, tint = Palette.OnBar, modifier = Modifier.size(22.dp))
+        if (tile != null) Box(Modifier.size(36.dp).background(tile, RoundedCornerShape(10.dp)))
+        Icon(icon, contentDescription = label, tint = if (tile != null) Palette.OnBarTile else Palette.OnBar, modifier = Modifier.size(22.dp))
     }
 }
 

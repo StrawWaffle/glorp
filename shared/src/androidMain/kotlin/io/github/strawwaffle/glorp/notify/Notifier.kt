@@ -55,16 +55,28 @@ object Notifier {
         }
         val interval = options.intervalMinutes * 60_000L
         val current = jobs.getPendingJob(JOB_ID)
-        if (current != null && current.intervalMillis == interval && current.isRequireBatteryNotLow) return
-        jobs.schedule(
-            JobInfo.Builder(JOB_ID, ComponentName(context, AlertJob::class.java))
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-                .setRequiresBatteryNotLow(true)
-                .setPeriodic(interval)
-                .setPersisted(true)
-                .build(),
-        )
+        // Android repeats a job no more often than every 15 minutes. Shorter
+        // than that, each check is a one-off that books the next when it's
+        // done (see AlertJob); Android may still hold them back while the phone sleeps.
+        val repeating = interval >= MIN_PERIODIC
+        if (current != null && current.isRequireBatteryNotLow &&
+            (if (repeating) current.isPeriodic && current.intervalMillis == interval else !current.isPeriodic && current.minLatencyMillis == interval)
+        ) return
+        val builder = JobInfo.Builder(JOB_ID, ComponentName(context, AlertJob::class.java))
+            .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+            .setRequiresBatteryNotLow(true)
+            .setPersisted(true)
+        jobs.schedule(if (repeating) builder.setPeriodic(interval).build() else builder.setMinimumLatency(interval).build())
     }
+
+    /** After a one-off check: the next one (see [schedule]). */
+    fun next(context: Context) {
+        val prefs = SharedChatPrefs(context)
+        val options = NotifyOptions(prefs, ChatSettings(prefs))
+        if (options.any && options.intervalMinutes * 60_000L < MIN_PERIODIC) schedule(context)
+    }
+
+    private const val MIN_PERIODIC = 15 * 60_000L
 
     fun permitted(context: Context): Boolean =
         Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -157,6 +169,8 @@ class AlertJob : JobService() {
                 AppLog.note("notify", "background check failed", e)
             }
             jobFinished(params, false)
+            // A one-off check (under 15 minutes apart) books the next itself.
+            Notifier.next(applicationContext)
         }
         return true
     }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Glorp
 // @namespace    https://strawwaffle.github.io/glorp/
-// @version      2.2
+// @version      2.3
 // @description  Glorp's own chat features in destiny.gg's chat on a computer: themes, name icons, hiding other streams' chat, sticky mentions, settings synced with the Glorp app, and signing Glorp in without the developer tools.
 // @match        https://www.destiny.gg/*
 // @match        https://www.omniliberal.dev/*
@@ -13,6 +13,7 @@
 // @grant        GM_registerMenuCommand
 // @connect      netlify.app
 // @connect      strawwaffle.github.io
+// @connect      polecat.me
 // @connect      cdn.destiny.gg
 // @connect      cdn.omniliberal.dev
 // @require      https://raw.githubusercontent.com/StrawWaffle/glorp/7188e9b8b52cfc8829608c7cc163713e455f6291/pages/signin/qrcode.js#sha256=18ae399f81182bc9de916e9c77b195df20cc58d6f2d55a62b085a299f1bf1780
@@ -147,11 +148,15 @@
   // The app's colours by role (Theme.kt). The site's stylesheet uses a handful
   // of colours for each role; every rule using one gets the theme's colour instead.
   var THEMES = {
-    Glorp: { bg: "#111113", surface: "#0c1d40", raised: "#15326c", action: "#0090ff", text: "#edeef0", dim: "#9ea3ad", green: "#6ca528", mention: "rgba(243,177,34,0.14)", tagged: "#232323", faint: "#5c6068" },
-    AerithLight: { light: true, bg: "#faf8e8", surface: "#eae7d2", raised: "#dcd6b8", action: "#308fd6", text: "#5a4a38", dim: "#918168", green: "#55a637", mention: "#e4f6f0", tagged: "#efe9d2", faint: "#b3a78e" },
-    AerithDark: { bg: "#2b3444", surface: "#1f2a3c", raised: "#3b444e", action: "#7bc3e9", text: "#f1ecda", dim: "#b6ae98", green: "#7dcf9b", mention: "#27463f", tagged: "#243040", faint: "#717888" },
+    // Glorp's own, from its homepage: near-black green and lime, or pale green.
+    Glorp: { bg: "#0a0f08", surface: "#131b10", raised: "#1b2716", action: "#b7fa44", text: "#eef6e4", dim: "#9eb38c", green: "#8bd450", mention: "#1f2b0f", tagged: "#1b2716", faint: "#5d7249", mentionBar: "#b7fa44" },
+    GlorpLight: { light: true, bg: "#fbfef5", surface: "#eef6e2", raised: "#d3e5bb", action: "#3f7d12", text: "#1c2a12", dim: "#5d7249", green: "#4e8f1a", mention: "#eaf7d0", tagged: "#eef6e2", faint: "#9eb38c", mentionBar: "#78b52a" },
+    // Aerith's: cream and brown or slate, a sky-blue bar, teal for mentions, buttons on round tiles.
+    AerithLight: { light: true, bg: "#faf8e8", surface: "#efecd8", raised: "#dcd6b8", action: "#308fd6", text: "#5a4a38", dim: "#918168", green: "#55a637", mention: "#e4f6f0", tagged: "#efe9d2", faint: "#b3a68a", mentionBar: "#6de1c1", tile: "#efecd8", field: "#ffffff", fieldBorder: "#b3a68a", dash: "#dcd6b8" },
+    AerithDark: { bg: "#2b3444", surface: "#1f2a3c", raised: "#3b444e", action: "#7bc3e9", text: "#f1ecda", dim: "#b6ae98", green: "#85d28b", mention: "#27463f", tagged: "#243040", faint: "#717888", mentionBar: "#6de1c1", tile: "#243040", field: "#1a2332", fieldBorder: "#6fb4ec", dash: "#3b4658" },
   };
-  var THEME_LABELS = [["", "The site's own"], ["Glorp", "Glorp"], ["AerithLight", "Aerith light"], ["AerithDark", "Aerith dark"]];
+  // "Destiny" (destiny.gg) is the site as it is: picking it here syncs it to the app.
+  var THEME_LABELS = [["", "The site's own (this browser only)"], ["Glorp", "Glorp dark"], ["GlorpLight", "Glorp light"], ["Destiny", "destiny.gg"], ["AerithLight", "Aerith light"], ["AerithDark", "Aerith dark"]];
   // chat-gui's colours (abstracts/_vars.scss) and the role each plays.
   var ROLES = {
     "rgb(8, 8, 8)": "bg", "rgb(3, 3, 3)": "bg", "rgb(17, 17, 17)": "bg", "rgb(0, 0, 0)": "bg",
@@ -203,8 +208,27 @@
         "\n.msg-chat a.externallink{color:" + t.action + " !important}";
       // The site's icons are light shapes for a dark page: on a light theme, darkened.
       if (t.light) css += "\n.btn-icon,.chat-menu-close{filter:invert(1) brightness(.45)}";
+      // A bar down the left of lines that mention you, where the theme has one.
+      if (t.mentionBar) css += "\n.msg-chat.msg-highlight{box-shadow:inset .3em 0 0 " + t.mentionBar + "}";
+      if (t.tile) css += aerithShapes(t);
       themeStyle.textContent = css;
     });
+  }
+
+  /** Aerith's shapes: buttons on round tiles, a round glowing input, rounded rows and menus, dashed lines. */
+  function aerithShapes(t) {
+    return "\n#chat-tools-wrap .chat-tool-btn{background:" + t.tile + ";border-radius:10px;margin:0 .15em}" +
+      "\n#chat-tools-wrap .chat-tool-btn .btn-icon{opacity:.75}" +
+      "\n#chat-input-control{background:" + t.field + " !important;color:" + t.text + " !important;border:2px solid " + t.fieldBorder + " !important;border-radius:12px !important}" +
+      "\n#chat-input-control:focus{box-shadow:0 0 6px " + t.fieldBorder + " !important}" +
+      "\n#chat-input-control::placeholder{color:" + t.dim + " !important}" +
+      "\n.msg-chat.msg-highlight,.msg-chat.msg-tagged{border-radius:0 8px 8px 0}" +
+      "\n.chat-menu .chat-menu-inner{border-radius:12px !important}" +
+      "\n#chat-user-info .floating-window{border-radius:12px}" +
+      "\n#chat-user-info .user-identity,#chat-user-info .user-info h5,.chat-menu .toolbar{border-bottom:1px dashed " + t.dash + " !important}" +
+      "\n#chat-user-info .chat-tool-btn{background:" + t.tile + ";border-radius:10px;margin:.15em}" +
+      "\n#chat-user-info button,.chat-menu .btn,#glorp-settings .btn{border-radius:9999px !important;background:" + t.tile + " !important;border-color:" + t.tile + " !important;color:" + t.text + " !important}" +
+      "\n.chat-menu input.form-control,.chat-menu select{border-radius:9999px !important;background:" + t.field + " !important}";
   }
 
   // ---- Name icons -------------------------------------------------------------
@@ -317,6 +341,141 @@
       lines.appendChild(el("div", { "class": "msg-chat msg-info" }, [text]));
       if (bottom) lines.scrollTop = lines.scrollHeight;
     })();
+  }
+
+  // ---- Mentions ---------------------------------------------------------------------
+  // What polecat.me's chat logger has of messages naming you, newest first,
+  // in a menu of its own beside the whisper button. polecat allows 60
+  // requests a minute; past that, or on a 429, it isn't asked until it says.
+  var POLECAT = "https://polecat.me";
+  var polecatRest = 0;
+  var mentions = { nick: null, lines: [], loading: false, ended: false, failed: false };
+  var emoteNames = null;
+  function loadEmoteNames() {
+    if (emoteNames) return Promise.resolve(emoteNames);
+    var cdn = site === "omniliberal.dev" ? "https://cdn.omniliberal.dev" : "https://cdn.destiny.gg";
+    return request("GET", cdn + "/emotes/emotes.json").then(function (r) {
+      emoteNames = new Set(JSON.parse(r.text).map(function (e) { return e.prefix; }));
+      return emoteNames;
+    }).catch(function () { emoteNames = new Set(); return emoteNames; });
+  }
+  function myNick() {
+    var input = document.getElementById("chat-input-control");
+    var m = input && /^Write something (\S+) \.\.\.$/.exec(input.placeholder || "");
+    return m ? m[1] : null;
+  }
+  function polecatPage(nick, offset) {
+    if (Date.now() < polecatRest) return Promise.reject(new Error("resting"));
+    return new Promise(function (resolve, reject) {
+      GM.xmlHttpRequest({
+        method: "GET", url: POLECAT + "/api/mentions/" + encodeURIComponent(nick) + "?size=50&offset=" + offset, timeout: 15000,
+        onload: function (r) {
+          var head = r.responseHeaders || "";
+          var left = /ratelimit-remaining:\s*(\d+)/i.exec(head);
+          if (r.status === 429 || (left && left[1] === "0")) {
+            var wait = /retry-after:\s*(\d+)/i.exec(head) || /ratelimit-reset:\s*(\d+)/i.exec(head);
+            polecatRest = Date.now() + Math.min(3600, wait ? +wait[1] : 60) * 1000;
+          }
+          if (r.status !== 200) return reject(new Error(String(r.status)));
+          try { resolve(JSON.parse(r.responseText)); } catch (e) { reject(e); }
+        },
+        onerror: function () { reject(new Error("network")); },
+        ontimeout: function () { reject(new Error("timeout")); },
+      });
+    });
+  }
+  function moreMentions() {
+    var m = mentions;
+    if (!m.nick || m.loading || m.ended) return;
+    m.loading = true; m.failed = false; renderMentions();
+    Promise.all([polecatPage(m.nick, m.lines.length), loadEmoteNames()]).then(function (got) {
+      if (m !== mentions) return;
+      var page = got[0].sort(function (a, b) { return b.date - a.date; });
+      var known = new Set(m.lines.map(function (l) { return l.id; }));
+      page.forEach(function (l) { if (!known.has(l.id)) m.lines.push(l); });
+      if (page.length < 50) m.ended = true;
+    }).catch(function () { if (m === mentions) m.failed = true; }).then(function () {
+      if (m !== mentions) return;
+      m.loading = false; renderMentions();
+    });
+  }
+  function showMentionsOf(nick) {
+    mentions = { nick: nick, lines: [], loading: false, ended: false, failed: false };
+    renderMentions();
+    moreMentions();
+  }
+  /** One logged message in the chat's own markup, emotes as the site's emote classes draw them. */
+  function mentionLine(l) {
+    var text = el("span", { "class": "text" });
+    (l.text || "").split(/(\s+)/).forEach(function (word) {
+      if (emoteNames && emoteNames.has(word)) text.appendChild(el("div", { "class": "emote " + word, title: word, text: word }));
+      else text.appendChild(document.createTextNode(word));
+    });
+    var when = new Date(l.date);
+    var line = el("div", { "class": "msg-chat msg-user glorp-mention-line", title: "Open the chat around this on rustlesearch.dev" }, [
+      el("time", { "class": "time", text: ("0" + when.getHours()).slice(-2) + ":" + ("0" + when.getMinutes()).slice(-2) + " " }),
+      el("a", { "class": "user", text: l.nick }), el("span", { "class": "ctrl", text: ": " }), text,
+    ]);
+    line.addEventListener("click", function () {
+      var u = "https://rustlesearch.dev/surrounds?channel=Destinygg&date=" + encodeURIComponent(new Date(l.date).toISOString()) + "&username=" + encodeURIComponent(l.nick);
+      window.open(u, "_blank", "noopener");
+    });
+    return line;
+  }
+  function renderMentions() {
+    var box = mentionsPanel && mentionsPanel.querySelector("#glorp-mentions-list");
+    if (!box) return;
+    var m = mentions;
+    box.textContent = "";
+    if (!m.nick) { box.appendChild(el("p", { "class": "glorp-note", text: "Type a name above to see the messages naming it." })); return; }
+    var day = null;
+    m.lines.forEach(function (l) {
+      var d = new Date(l.date).toDateString();
+      if (d !== day) { day = d; box.appendChild(el("div", { "class": "glorp-day", text: d })); }
+      box.appendChild(mentionLine(l));
+    });
+    var end = m.loading ? "Loading…" : m.failed ? "polecat.me isn't answering, or asked to wait a minute. Scroll again to retry."
+      : m.ended ? (m.lines.length ? "No older mentions." : "No mentions of " + m.nick + ".") : "";
+    if (end) box.appendChild(el("p", { "class": "glorp-note", text: end }));
+  }
+  var mentionsPanel = null;
+  function buildMentions() {
+    var nameIn = el("input", { "class": "form-control", placeholder: "Name", spellcheck: "false" });
+    var list = el("div", { id: "glorp-mentions-list", "class": "chat-lines" });
+    mentionsPanel = el("div", { id: "glorp-mentions", "class": "chat-menu left" }, [
+      el("div", { "class": "chat-menu-inner" }, [
+        el("div", { "class": "toolbar" }, [el("h5", {}, [el("span", { text: "Mentions" }), el("i", { "class": "chat-menu-close", onclick: function () { closeMentions(); } })])]),
+        el("form", { "class": "glorp-mentions-name", onsubmit: function (e) { e.preventDefault(); var n = nameIn.value.trim(); if (n) showMentionsOf(n); } }, [nameIn, el("button", { "class": "btn btn-dark", type: "submit", text: "Show" })]),
+        el("div", { "class": "scrollable", style: "overflow-y:auto;flex:1" }, [list]),
+        el("p", { "class": "glorp-note glorp-credit" }, ["From ", el("a", { href: POLECAT + "/mentions", target: "_blank", rel: "noopener", text: "polecat.me" }), "'s chat logs"]),
+      ]),
+    ]);
+    var scroller = mentionsPanel.querySelector(".scrollable");
+    scroller.addEventListener("scroll", function () {
+      if (scroller.scrollTop + scroller.clientHeight > scroller.scrollHeight - 200) {
+        if (mentions.failed) mentions.failed = false;
+        moreMentions();
+      }
+    }, { passive: true });
+    document.getElementById("chat").appendChild(mentionsPanel);
+    mentionsPanel._name = nameIn;
+  }
+  var mentionsButton = null;
+  function closeMentions() {
+    if (mentionsPanel) mentionsPanel.classList.remove("active");
+    if (mentionsButton) mentionsButton.classList.remove("active");
+  }
+  function toggleMentions() {
+    var open = !mentionsPanel.classList.contains("active");
+    document.querySelectorAll("#chat .chat-menu.active").forEach(function (m) { if (m !== mentionsPanel) m.classList.remove("active"); });
+    if (panel) { panel.classList.remove("active"); }
+    var g = document.getElementById("chat-glorp-btn"); if (g) g.classList.remove("active");
+    mentionsPanel.classList.toggle("active", open);
+    mentionsButton.classList.toggle("active", open);
+    if (!open) return;
+    var me = myNick();
+    if (!mentions.nick && me) { mentionsPanel._name.value = me; showMentionsOf(me); }
+    else if (!mentions.nick) renderMentions();
   }
 
   // ---- The panel ----------------------------------------------------------------------
@@ -528,6 +687,14 @@
     var style = document.createElement("style");
     style.textContent =
       "#chat-glorp-btn .btn-icon{background:url(" + ICON + ") center/contain no-repeat}" +
+      // An @ in a circle, drawn as the site's own icons are (white strokes, faded until hovered).
+      "#chat-glorp-mentions-btn .btn-icon{background:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8'/%3E%3C/svg%3E\") center/contain no-repeat}" +
+      "#glorp-mentions .chat-menu-inner{display:flex;flex-direction:column}" +
+      "#glorp-mentions .glorp-mentions-name{display:flex;gap:.4em;margin:.6em}#glorp-mentions .glorp-mentions-name input{flex:1;min-width:0;border-radius:.25em;padding:.3em}" +
+      "#glorp-mentions .chat-lines{overflow:visible;height:auto}" +
+      "#glorp-mentions .glorp-mention-line{cursor:pointer;padding:.15em .6em}#glorp-mentions .glorp-mention-line:hover{background:rgba(127,127,127,.12)}" +
+      "#glorp-mentions .glorp-day{text-align:center;font-size:.85em;opacity:.6;margin:.6em 0 .2em}" +
+      "#glorp-mentions .glorp-note{opacity:.7;font-size:.9em;margin:.6em}#glorp-mentions .glorp-credit{margin:.4em .6em}" +
       // As the site lays out its own settings menu (menus/_settings.scss).
       "#glorp-settings-form{margin:.9em 0}" +
       "#glorp-settings .form-group{margin:.9em;display:block;position:relative}" +
@@ -551,6 +718,12 @@
     var button = el("a", { id: "chat-glorp-btn", "class": "chat-tool-btn", title: "Glorp", "aria-label": "Glorp" }, [el("i", { "class": "btn-icon" })]);
     groups[1].insertBefore(button, groups[1].firstChild);
     buildPanel();
+    mentionsButton = el("a", { id: "chat-glorp-mentions-btn", "class": "chat-tool-btn", title: "Mentions", "aria-label": "Mentions" }, [el("i", { "class": "btn-icon" })]);
+    var whisper = document.getElementById("chat-whisper-btn");
+    if (whisper && whisper.parentNode === groups[0]) groups[0].insertBefore(mentionsButton, whisper.nextSibling);
+    else groups[0].appendChild(mentionsButton);
+    buildMentions();
+    mentionsButton.addEventListener("click", function (e) { e.stopPropagation(); toggleMentions(); });
     button.addEventListener("click", function (e) {
       e.stopPropagation();
       // As the site's own menus: one open at a time.
@@ -558,13 +731,14 @@
       panel.classList.toggle("active");
       button.classList.toggle("active", panel.classList.contains("active"));
       if (panel.classList.contains("active")) syncSoon();
+      closeMentions();
     });
     ["chat-emoticon-btn", "chat-whisper-btn", "chat-settings-btn", "chat-users-btn"].forEach(function (id) {
       var b = document.getElementById(id);
-      if (b) b.addEventListener("click", function () { panel.classList.remove("active"); button.classList.remove("active"); });
+      if (b) b.addEventListener("click", function () { panel.classList.remove("active"); button.classList.remove("active"); closeMentions(); });
     });
     var output = document.getElementById("chat-output-frame");
-    if (output) output.addEventListener("click", function () { panel.classList.remove("active"); button.classList.remove("active"); });
+    if (output) output.addEventListener("click", function () { panel.classList.remove("active"); button.classList.remove("active"); closeMentions(); });
 
     // The sticky mention bar, over the top of chat.
     stuck = el("div", { id: "glorp-stuck", hidden: "" }, [

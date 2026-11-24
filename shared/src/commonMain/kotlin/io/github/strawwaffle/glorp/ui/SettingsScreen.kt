@@ -550,8 +550,8 @@ private fun NotificationSettings(
         SwitchRow("Destiny goes live", null, live) { on -> turn(on) { options.setLive(on); live = on } }
         SwitchRow(
             "Someone mentions me",
-            (if (mentionsService) null else signedOutNote)
-                ?: "Tapping it opens the chat around the message, even once it has left chat. Follows your account, as on the site",
+            // From polecat.me's logger (Glorp's own service as a backup), which needs no sign-in.
+            "Found in polecat.me's chat logs. Tapping it opens the chat around the message, even once it has left chat. Follows your account, as on the site",
             options.mentions,
         ) { on -> turn(on) { settings.setBool("notificationhighlight", on) } }
         SwitchRow(
@@ -561,7 +561,7 @@ private fun NotificationSettings(
         ) { on -> turn(on) { settings.setBool("notificationwhisper", on) } }
         Choices(
             "Look every",
-            "Sooner means more checks. Each check is one small request per kind turned on",
+            "Sooner means more checks: one small request per kind turned on. Under 15 minutes, Android may wait longer while the phone sleeps",
             NotifyOptions.INTERVALS,
             interval,
             label = { if (it < 60) "$it min" else "${it / 60} h" },

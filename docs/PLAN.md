@@ -306,8 +306,14 @@ Nothing is shown while the app is on screen.
 chat with chat-gui's backoff, two hours of messages in memory, and
 `GET /mentions?nick=&since=` (exact times, any sign-in, no login held,
 nothing stored about who asks). Runs on a VPS through Komodo, rebuilt from
-`server/` on new commits. The app uses it when `glorp.mentionsUrl` is set in
-gradle.properties, else the site's list with cookies. Pull, not push: no
+`server/` on new commits. Since 2026-11-24 it is the backup: mentions come
+first from polecat.me's chat logger (`community/Polecat.kt`,
+`/api/mentions/<nick>?size&offset`, 60 requests a minute, followed by its
+`RateLimit-*` headers), which also feeds the Mentions screen and the
+userscript's mentions list. The app falls back on the service when
+`glorp.mentionsUrl` is set in gradle.properties, else the site's list with
+cookies. Checks can run every 5 or 10 minutes as chained one-off jobs, since
+Android repeats jobs no more often than every 15. Pull, not push: no
 Google push service, and no list of users anywhere.
 
 ## From d.gg utilities (read 2026-11-23)

@@ -97,5 +97,6 @@ ul.checks li::before {
 }
 
 @media (prefers-color-scheme: light) {
-  .intro h1 { color: var(--primary-shadow); }
+  :root:not([data-theme="dark"]) .intro h1 { color: var(--primary-shadow); }
 }
+:root[data-theme="light"] .intro h1 { color: var(--primary-shadow); }

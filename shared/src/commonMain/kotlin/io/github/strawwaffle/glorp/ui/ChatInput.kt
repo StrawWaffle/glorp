@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -169,8 +170,6 @@ fun ChatInput(
                 fontSize = 13.sp,
                 modifier = Modifier.fillMaxWidth().background(WarningTint).padding(horizontal = 12.dp, vertical = 6.dp),
             )
-        } else {
-            ModNotes(watch)
         }
         when {
             suggestions.isNotEmpty() -> SuggestionStrip(suggestions, emotes, ::take)
@@ -219,7 +218,8 @@ fun ChatInput(
                             else -> false
                         }
                     }
-                    .background(if (warning != null) WarningTint else Palette.Black, RoundedCornerShape(6.dp))
+                    .then(Palette.FieldBorder?.let { Modifier.border(if (Palette.Tile != null) 2.dp else 1.dp, it, fieldShape()) } ?: Modifier)
+                    .background(if (warning != null) WarningTint else Palette.Field, fieldShape())
                     .padding(horizontal = 10.dp, vertical = 9.dp),
                 decorationBox = { field ->
                     Box {
@@ -308,32 +308,25 @@ private fun HistoryStrip(recent: List<String>, onPick: (String) -> Unit) {
 
 private val WarningTint = Color(0xFF5A1A12)
 
-/** What's running that could catch a message: nukes and mutelinks, one dim line. */
-@Composable
-private fun ModNotes(watch: ModWatch) {
-    val notes = buildList {
-        watch.mutelinks?.takeIf { it.active }?.let {
-            add(if (it.status == "all") "Mutelinks: any link, ${it.duration}" else "Mutelinks on, ${it.duration}")
-        }
-        for (nuke in watch.nukes) add("Nuked: ${nuke.word} (${nuke.type} ${nuke.duration})")
+/** What's running that could catch a message: nukes and mutelinks, a line each (see ModWarning). */
+internal fun modNotes(watch: ModWatch): List<String> = buildList {
+    watch.mutelinks?.takeIf { it.active }?.let {
+        add(if (it.status == "all") "Mutelinks: any link, ${it.duration}" else "Mutelinks: links naming someone, ${it.duration}")
     }
-    if (notes.isEmpty()) return
-    Text(
-        notes.joinToString(" · "),
-        color = Palette.Orange,
-        fontSize = 12.sp,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-    )
+    for (nuke in watch.nukes) add("Nuked: ${nuke.word} (${nuke.type} ${nuke.duration})")
 }
+
+/** The message field's corners: Aerith's round, others nearly square. */
+private fun fieldShape() = RoundedCornerShape(if (Palette.Tile != null) 12.dp else 6.dp)
 
 /** A plain drawn face: the button that swaps the keyboard for the emote picker. */
 @Composable
 private fun EmoteButton(open: Boolean, onClick: () -> Unit) {
     val color = if (open) Palette.Blue else Palette.TextDim
+    val tile = Palette.Tile
     Box(
         Modifier.size(44.dp)
+            .then(if (tile == null) Modifier else Modifier.padding(3.dp).background(tile, RoundedCornerShape(10.dp)))
             .clickable(onClickLabel = if (open) "Keyboard" else "Emotes", role = Role.Button, onClick = onClick)
             .semantics { contentDescription = if (open) "Keyboard" else "Emotes" },
         contentAlignment = Alignment.Center,
