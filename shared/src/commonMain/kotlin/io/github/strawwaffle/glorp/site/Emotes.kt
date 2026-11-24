@@ -49,6 +49,8 @@ data class Emote(
     val verticalAlign: Float = 0f,
     /** Whether the picture tiles across (`background-repeat`, by default): a strip starting off its edge (CuckCrab's 704px) shows its other end. */
     val repeatX: Boolean = true,
+    /** `mask-image: radial-gradient(black a%, transparent b%)` as a and b: ARRIVE's combo fading at its edges. */
+    val radialMask: Pair<Float, Float>? = null,
     /** What its `::before` and `::after` draw over it: GSN's dolphins, BEARSLEEP's 💤. */
     val overlays: List<Overlay> = emptyList(),
 ) {
@@ -96,7 +98,42 @@ data class Overlay(
     val image: String? = null,
     /** A `mask-image: linear-gradient(angle, black a%, transparent b%)`: angle in degrees, a and b as fractions. */
     val mask: List<Float>? = null,
+    /** For a picture: `background-size` width in px (the height keeps its shape), `background-position` in px, and whether it tiles across. */
+    val backgroundWidth: Float? = null,
+    val backgroundX: Float = 0f,
+    val backgroundY: Float = 0f,
+    val repeatX: Boolean = false,
+    /** Its height as a fraction of the emote's (`height: 100%`). */
+    val heightFraction: Float? = null,
+    /** In the flow of the emote's box (`display: block`, not absolutely placed): an ::after comes below a ::before. */
+    val flow: Boolean = false,
+    /** `font-family` asks for a monospace face (HACKERMAN's code). */
+    val monospace: Boolean = false,
+    /** `box-shadow`s, still: a box drawn with edges and glows rather than text or a picture (HACKERMAN's scan line). */
+    val boxShadows: List<BoxShadow>? = null,
 )
+
+/** One `box-shadow`: offset and blur in px, colour 0xAARRGGBB, `inset` or around the box. */
+data class BoxShadow(val dx: Float, val dy: Float, val blur: Float, val argb: Long, val inset: Boolean)
+
+/** A `box-shadow` list, or null for `none` or what can't be read. */
+internal fun readBoxShadows(value: String): List<BoxShadow>? {
+    if (value.trim() == "none") return null
+    val out = ArrayList<BoxShadow>()
+    var depth = 0
+    var start = 0
+    val parts = ArrayList<String>()
+    for ((i, c) in value.withIndex()) {
+        when (c) { '(' -> depth++; ')' -> depth--; ',' -> if (depth == 0) { parts += value.substring(start, i); start = i + 1 } }
+    }
+    parts += value.substring(start)
+    for (part in parts) {
+        val inset = "inset" in part
+        val glow = readFilter("drop-shadow(${part.replace("inset", "").trim()})")?.glows?.firstOrNull() ?: return null
+        out += BoxShadow(glow.dx, glow.dy, glow.blur, glow.argb, inset)
+    }
+    return out
+}
 
 /** A sprite strip animation, as the stylesheet runs it. */
 data class Sprite(
@@ -114,6 +151,9 @@ data class Sprite(
     val delayMs: Long = 0,
     /** How far each step moves the strip, in px, where it isn't the emote's width (PepoPunch's 56 in a 47 px box). */
     val stepX: Int? = null,
+    /** `animation-direction`: `reverse` runs it backwards, `alternate` every other run backwards (BONK: both). */
+    val reverse: Boolean = false,
+    val alternate: Boolean = false,
 ) {
     /** When it stops, from when the message was sent. */
     val totalMs: Long get() = if (iterations == Int.MAX_VALUE) Long.MAX_VALUE else delayMs + durationMs * iterations
@@ -122,7 +162,9 @@ data class Sprite(
     fun frameAt(at: Long): Int? {
         val t = at - delayMs
         if (t < 0 || at >= totalMs) return null
-        return ((t % durationMs) * frames / durationMs).toInt()
+        val k = ((t % durationMs) * frames / durationMs).toInt()
+        val backwards = reverse xor (alternate && (t / durationMs) % 2 == 1L)
+        return if (backwards) frames - 1 - k else k
     }
 }
 
@@ -358,11 +400,18 @@ private fun build(
             .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.filter != null || it.background != null || it.origin != null || it.clip != null || it.width != null || it.marginLeft != null || it.left != null || it.z != null } },
         originX = originX, originY = originY, rest = rest,
         marginLeft = marginLeft, marginRight = marginRight, verticalAlign = verticalAlign,
+        radialMask = (decls.value("mask-image") ?: decls.value("-webkit-mask-image"))?.let(::readRadialMask),
         repeatX = decls.value("background-repeat")?.trim()?.let { it == "repeat" || it == "repeat-x" || it.startsWith("repeat ") } ?: (decls.value("background")?.contains("no-repeat") != true),
         // A ::before or ::after inherits the emote's custom properties (NoTears' `--t-NoTears`).
         overlays = overlayDecls.mapNotNull { part ->
             val withVars = HashMap(part).apply { decls.filterKeys { it.startsWith("--") }.forEach { (k, v) -> putIfAbsent(k, v) } }
             overlayOf(withVars, moving, url)
+        }.let { parts ->
+            // Two blocks in the box's flow stack: the ::after starts below the ::before (ARRIVE's combo copies).
+            val first = parts.firstOrNull()
+            if (parts.size == 2 && first != null && first.flow && parts[1].flow) {
+                parts.take(1) + parts[1].copy(top = parts[1].top + first.top + (first.heightPx ?: (first.fontSize * 1.2f)))
+            } else parts
         },
     )
 }
@@ -610,10 +659,18 @@ private fun spriteOf(
         val to = strip.end?.let(resolve) ?: ownX.takeIf { it != from } ?: strip.positions.lastOrNull()?.let(resolve) ?: ownX
         val startX = kotlin.math.round(-from).toInt()
         val stepX = ((from - to) / steps).takeIf { it != 0.0 }?.let { kotlin.math.round(it).toInt() }
-        return Sprite(sheetWidth, steps, durationMs.coerceAtLeast(0), iterations, "forwards" in rest || "both" in rest, startX, times.getOrElse(1) { 0L }, stepX)
+        val words = rest.split(Regex("""\s+"""))
+        return Sprite(
+            sheetWidth, steps, durationMs.coerceAtLeast(0), iterations, "forwards" in rest || "both" in rest, startX, times.getOrElse(1) { 0L }, stepX,
+            reverse = "reverse" in words || "alternate-reverse" in words, alternate = "alternate" in words || "alternate-reverse" in words,
+        )
     }
     return null
 }
+
+/** `radial-gradient(black a%, transparent b%)` as fractions; null for any other mask. */
+private fun readRadialMask(value: String): Pair<Float, Float>? =
+    Regex("""radial-gradient\(\s*black\s+([\d.]+)%\s*,\s*transparent\s+([\d.]+)%\s*\)""").find(value)?.groupValues?.let { it[1].toFloat() / 100f to it[2].toFloat() / 100f }
 
 /** The `::before` and `::after` rules of an emote, in that order, as far as there are any. */
 private fun overlayRules(rules: Map<String, Decls>, prefix: String): List<Decls> =
@@ -633,7 +690,9 @@ private fun overlayOf(decls: Decls, moving: Map<String, List<KeyFrame>>, emoteUr
             if (url.startsWith("http") || url.startsWith("data:")) url else emoteUrl.substringBeforeLast('/') + "/" + url
         }
     }
-    if (text.isBlank() && image == null) return null
+    val shadows = decls.value("box-shadow")?.let(::readBoxShadows)
+    val animated = decls.value("animation")?.let { a -> topLevelParts(a).any { part -> part.trim().split(Regex("""\s+""")).any { w -> moving[w]?.any { it.boxShadows != null } == true } } } == true
+    if (text.isBlank() && image == null && shadows == null && !animated) return null
     fun len(name: String) = decls.value(name)?.trim()?.let { if (it == "0") 0.0 else pxRegex.find(it)?.groupValues?.get(1)?.toDouble() }?.toFloat()
     val fontSize = len("font-size") ?: 13f
     val argb = decls.value("color")?.let { readFilter("drop-shadow(0 0 0 $it)")?.glows?.firstOrNull()?.argb }
@@ -670,5 +729,13 @@ private fun overlayOf(decls: Decls, moving: Map<String, List<KeyFrame>>, emoteUr
         blend = decls.value("mix-blend-mode")?.trim()?.takeIf { it != "normal" },
         image = image,
         mask = mask,
+        backgroundWidth = decls.value("background-size")?.trim()?.split(Regex("""\s+"""))?.firstOrNull()?.let { pxRegex.find(it)?.groupValues?.get(1)?.toFloat() },
+        backgroundX = decls.value("background-position")?.trim()?.split(Regex("""\s+"""))?.getOrNull(0)?.let { if (it == "0") 0f else pxRegex.find(it)?.groupValues?.get(1)?.toFloat() } ?: 0f,
+        backgroundY = decls.value("background-position")?.trim()?.split(Regex("""\s+"""))?.getOrNull(1)?.let { if (it == "0") 0f else pxRegex.find(it)?.groupValues?.get(1)?.toFloat() } ?: 0f,
+        repeatX = decls.value("background-repeat")?.trim()?.let { it == "repeat-x" || it == "repeat" } ?: false,
+        heightFraction = decls.value("height")?.trim()?.takeIf { it.endsWith("%") }?.removeSuffix("%")?.toFloatOrNull()?.div(100f),
+        flow = decls.value("position")?.trim() != "absolute" && decls.value("top") == null && decls.value("left") == null && decls.value("right") == null,
+        monospace = decls.value("font-family")?.contains("mono", ignoreCase = true) == true || decls.value("font-family")?.contains("Courier", ignoreCase = true) == true,
+        boxShadows = shadows ?: if (animated) emptyList() else null,
     )
 }

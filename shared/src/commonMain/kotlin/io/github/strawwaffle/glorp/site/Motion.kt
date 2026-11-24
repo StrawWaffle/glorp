@@ -39,6 +39,8 @@ data class Pose(
     val letterPx: Float = Float.NaN,
     /** For an [Overlay] placed by `right` keyframes (NoTears' banana flying back): its `right` in px. */
     val rightPx: Float = Float.NaN,
+    /** An overlay box's `box-shadow`s at this moment. */
+    val boxShadows: List<io.github.strawwaffle.glorp.site.BoxShadow>? = null,
     /** `skew()` in degrees, applied after the scale (CROPSTINY, YAM, pepeJAM). */
     val skewX: Float = 0f,
     val skewY: Float = 0f,
@@ -75,6 +77,8 @@ data class KeyFrame(
     val right: Float? = null,
     /** `z-index`, which changes in steps. */
     val z: Float? = null,
+    /** An overlay box's `box-shadow`s, which change in steps. */
+    val boxShadows: List<io.github.strawwaffle.glorp.site.BoxShadow>? = null,
     /** `width` and `margin-left` in px as written; in an emote's [Motion], the change from its own. */
     val width: Float? = null,
     val marginLeft: Float? = null,
@@ -176,6 +180,7 @@ data class Motion(
             Pose(lerp(a.tx, b.tx, f), lerp(a.ty, b.ty, f), lerp(a.rotate, b.rotate, f), lerp(a.sx, b.sx, f), lerp(a.sy, b.sy, f), skewX = lerp(a.skewX, b.skewX, f), skewY = lerp(a.skewY, b.skewY, f))
         }?.let { pose = pose.copy(tx = it.tx, ty = it.ty, rotate = it.rotate, sx = it.sx, sy = it.sy, skewX = it.skewX, skewY = it.skewY) }
         stepAt(p) { it.z }?.let { pose = pose.copy(z = it) }
+        stepAt(p) { it.boxShadows }?.let { pose = pose.copy(boxShadows = it) }
         interpolate(p, { it.opacity }, 1f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(opacity = it) }
         interpolate(p, { it.filter }, base.filter) { a, b, f -> a.mix(b, f) }?.let { pose = pose.copy(filter = it) }
         interpolate(p, { it.background }, 0f to 0f) { a, b, f -> lerp(a.first, b.first, f) to lerp(a.second, b.second, f) }
@@ -289,7 +294,8 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
             val letterSpacing = px("letter-spacing")
             val right = px("right")
             val z = decls["z-index"]?.trim()?.toFloatOrNull()
-            if (right == null && z == null && transform == null && opacity == null && filter == null && background == null && origin == null && clip == null && width == null &&
+            val shadows = decls["box-shadow"]?.let(::readBoxShadows)
+            if (shadows == null && right == null && z == null && transform == null && opacity == null && filter == null && background == null && origin == null && clip == null && width == null &&
                 marginLeft == null && top == null && left == null && content == null && fontSize == null && lineHeight == null && widthFraction == null && letterSpacing == null
             ) continue
             for (at in s.groupValues[1].split(',')) {
@@ -299,7 +305,7 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
                     else -> word.removeSuffix("%").toFloatOrNull()?.div(100f)
                 } ?: continue
                 frames += KeyFrame(offset, transform, opacity, filter, background, origin, clip = clip, width = width, marginLeft = marginLeft, top = top, left = left, easing = stepEasing,
-                    content = content, fontSize = fontSize, lineHeight = lineHeight, widthFraction = widthFraction, letterSpacing = letterSpacing, right = right, z = z,
+                    content = content, fontSize = fontSize, lineHeight = lineHeight, widthFraction = widthFraction, letterSpacing = letterSpacing, right = right, z = z, boxShadows = shadows,
                 )
             }
         }

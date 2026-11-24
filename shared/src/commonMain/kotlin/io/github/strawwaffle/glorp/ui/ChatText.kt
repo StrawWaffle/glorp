@@ -490,8 +490,20 @@ private fun DrawScope.drawEmote(
                 close()
             }
         }
+        val radial = emote.radialMask
+        if (radial != null) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, w, h), Paint())
         if (shape != null) clipPath(shape) { drawSheet(emote, painter, w, h, offset, scale, pose, filter, stages) }
         else drawSheet(emote, painter, w, h, offset, scale, pose, filter, stages)
+        if (radial != null) {
+            // CSS's default: an ellipse the box's shape, reaching its corners.
+            withTransform({ scale(1f, h / w, Offset(w / 2, h / 2)) }) {
+                drawCircle(
+                    Brush.radialGradient(radial.first to androidx.compose.ui.graphics.Color.Black, radial.second to androidx.compose.ui.graphics.Color.Transparent, center = Offset(w / 2, h / 2), radius = w / 2 * 1.4142f),
+                    radius = w, center = Offset(w / 2, h / 2), blendMode = BlendMode.DstIn,
+                )
+            }
+            drawContext.canvas.restore()
+        }
         if (emote.overlays.isNotEmpty()) clipRect(0f, 0f, w, h) {
             for (overlay in emote.overlays) drawOverlay(overlay, at, still, scale, w, h, measurer) { url ->
                 if (url == "inherit") painter else pictures(url)
@@ -516,10 +528,11 @@ private fun DrawScope.drawOverlay(
     val layout: androidx.compose.ui.text.TextLayoutResult?
     val bw: Float
     val bh: Float
-    if (image != null) {
+    val boxes = pose.boxShadows ?: overlay.boxShadows
+    if (image != null || boxes != null) {
         layout = null
         bw = widthPx ?: boxWidth
-        bh = overlay.heightPx?.let { it * scale } ?: boxHeight
+        bh = overlay.heightFraction?.let { it * boxHeight } ?: overlay.heightPx?.let { it * scale } ?: boxHeight
     } else {
         val text = pose.text ?: overlay.text
         val px = (if (pose.fontPx.isNaN()) overlay.fontSize else pose.fontPx) * scale
@@ -535,6 +548,7 @@ private fun DrawScope.drawOverlay(
                 fontSize = sp(px),
                 lineHeight = sp(lineHeight),
                 fontStyle = if (overlay.italic) androidx.compose.ui.text.font.FontStyle.Italic else null,
+                fontFamily = if (overlay.monospace) androidx.compose.ui.text.font.FontFamily.Monospace else null,
                 letterSpacing = sp(letters),
                 shadow = overlay.shadow?.let { androidx.compose.ui.graphics.Shadow(androidx.compose.ui.graphics.Color(it.argb.toInt()), Offset(it.dx * scale, it.dy * scale), it.blur * scale) },
             )
@@ -568,7 +582,20 @@ private fun DrawScope.drawOverlay(
         if (mask != null) drawContext.canvas.saveLayer(bounds, Paint())
         val alpha = pose.opacity.coerceIn(0f, 1f)
         if (layout != null) drawText(layout, alpha = alpha)
-        else pictures(image!!)?.let { p -> with(p) { draw(Size(bw, bh), alpha = alpha) } }
+        else if (image != null) pictures(image)?.let { p ->
+            // As a background: its own size (the width given, the height keeping its shape), placed, tiled across if it repeats.
+            val tileW = overlay.backgroundWidth?.let { it * scale } ?: bw
+            val ratio = p.intrinsicSize.let { if (it.width > 0f && it.height > 0f && it.width.isFinite()) it.height / it.width else bh / bw }
+            val tileH = if (overlay.backgroundWidth != null) tileW * ratio else bh
+            clipRect(0f, 0f, bw, bh) {
+                var tx = overlay.backgroundX * scale
+                do {
+                    translate(tx, overlay.backgroundY * scale) { with(p) { draw(Size(tileW, tileH), alpha = alpha) } }
+                    tx += tileW
+                } while (overlay.repeatX && tileW > 1f && tx < bw)
+            }
+        }
+        else if (boxes != null) drawBoxShadows(boxes, bw, bh, scale, alpha)
         if (mask != null) {
             // CSS angles: 180deg runs top to bottom, 90deg left to right.
             val r = mask[0] * kotlin.math.PI.toFloat() / 180f
@@ -648,11 +675,15 @@ private fun DrawScope.drawSheet(emote: Emote, painter: Painter, w: Float, h: Flo
             translate(left = -offset + pose.bx * scale, top = (emote.offsetY + pose.by) * scale) {
                 with(painter) { draw(Size(emote.sheetWidth * scale, emote.sheetHeight * scale), alpha = pose.opacity.coerceIn(0f, 1f), colorFilter = filter) }
             }
-            // Its next tile, where the strip's end leaves the box short.
+            // Its next tiles, where the strip's end leaves the box short (ARRIVE's combo, many across).
             val sheetPx = emote.sheetWidth * scale
-            if (emote.repeatX && offset - pose.bx * scale + w > sheetPx) {
-                translate(left = -offset + pose.bx * scale + sheetPx, top = (emote.offsetY + pose.by) * scale) {
-                    with(painter) { draw(Size(sheetPx, emote.sheetHeight * scale), alpha = pose.opacity.coerceIn(0f, 1f), colorFilter = filter) }
+            if (emote.repeatX && sheetPx > 1f) {
+                var x = -offset + pose.bx * scale + sheetPx
+                while (x < w) {
+                    translate(left = x, top = (emote.offsetY + pose.by) * scale) {
+                        with(painter) { draw(Size(sheetPx, emote.sheetHeight * scale), alpha = pose.opacity.coerceIn(0f, 1f), colorFilter = filter) }
+                    }
+                    x += sheetPx
                 }
             }
         }
@@ -783,4 +814,34 @@ private fun DrawScope.drawCombo(item: InlineItem.ComboItem, rect: androidx.compo
         outlined(comboPiece(measurer, "C-C-C-COMBO", px, own, bold = big), x + dx.dp.toPx(), cy, alpha = alpha, color = color)
     }
     if (greyFilter != null) drawContext.canvas.restore()
+}
+
+/**
+ * A box drawn only by its `box-shadow`s (HACKERMAN's scan line): an inset
+ * one is a band along the edge it's offset from, one around the box a glow.
+ */
+private fun DrawScope.drawBoxShadows(shadows: List<io.github.strawwaffle.glorp.site.BoxShadow>, w: Float, h: Float, scale: Float, alpha: Float) {
+    for (s in shadows) {
+        val color = androidx.compose.ui.graphics.Color(s.argb.toInt())
+        if (color.alpha == 0f) continue
+        if (s.inset) {
+            val dy = s.dy * scale
+            val dx = s.dx * scale
+            if (dy > 0) drawRect(color, Offset(0f, 0f), Size(w, dy), alpha = alpha)
+            if (dy < 0) drawRect(color, Offset(0f, h + dy), Size(w, -dy), alpha = alpha)
+            if (dx > 0) drawRect(color, Offset(0f, 0f), Size(dx, h), alpha = alpha)
+            if (dx < 0) drawRect(color, Offset(w + dx, 0f), Size(-dx, h), alpha = alpha)
+        } else {
+            val blur = (s.blur * scale).coerceAtLeast(1f)
+            val steps = 5
+            for (i in 1..steps) {
+                val grow = blur * i / steps
+                drawRect(
+                    color, Offset(s.dx * scale - grow, s.dy * scale - grow), Size(w + 2 * grow, h + 2 * grow),
+                    alpha = alpha * color.alpha * (1f - i.toFloat() / (steps + 1)) / steps,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = blur / steps),
+                )
+            }
+        }
+    }
 }
