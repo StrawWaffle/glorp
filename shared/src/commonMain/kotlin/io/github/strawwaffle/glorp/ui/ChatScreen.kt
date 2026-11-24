@@ -1,5 +1,6 @@
 package io.github.strawwaffle.glorp.ui
 
+import androidx.compose.ui.layout.onSizeChanged
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.withFrameNanos
@@ -244,6 +245,26 @@ private fun ChatBody(
         // Hiding other streams' chat keeps what mentions or highlights you, as the site's dimming does.
         val look = LocalChatLook.current
         val hideOthers = look.otherStreams == OtherStreams.Hide && look.playing != null
+        // What rows are prepared and measured with ahead of the screen (see RowPrefetch): as ChatRow and ChatText do it.
+        val outerDensity = LocalDensity.current
+        val rowDensity = remember(outerDensity, look.textScale) {
+            if (look.textScale == 1f) outerDensity else Density(outerDensity.density, outerDensity.fontScale * look.textScale)
+        }
+        val rowStyle = LocalTextStyle.current.merge(TextStyle(color = Palette.White, fontSize = 14.sp, lineHeight = LINE_HEIGHT))
+        val fontResolver = androidx.compose.ui.platform.LocalFontFamilyResolver.current
+        val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
+        val aheadMeasurer = remember(fontResolver, rowDensity, direction) { androidx.compose.ui.text.TextMeasurer(fontResolver, rowDensity, direction, cacheSize = 0) }
+        var listWidth by remember { mutableIntStateOf(0) }
+        val textWidth = listWidth - with(outerDensity) { 20.dp.roundToPx() }
+        val mentionAhead = remember(me) { me?.let(::mentionPattern) }
+        val ahead = remember(flairs, emotes, rowDensity, me, look, rowStyle, textWidth, aheadMeasurer) {
+            RowPrefetch.Context(flairs, emotes, rowDensity, me, mentionAhead, look, rowStyle, textWidth, aheadMeasurer)
+        }
+        SideEffect { RowPrefetch.context = ahead }
+        DisposableEffect(Unit) {
+            io.github.strawwaffle.glorp.chat.LinePrefetch.hook = RowPrefetch::prefetch
+            onDispose { io.github.strawwaffle.glorp.chat.LinePrefetch.hook = null; RowPrefetch.context = null }
+        }
         // Each line is judged once, not again on every update: in busy chat
         // that was every pattern against every kept line several times a second.
         val facts = remember(filter, hideOthers, look.playing, mention, highlighter, me) { LineFacts() }
@@ -324,7 +345,7 @@ private fun ChatBody(
                     )
                 }
             }
-            LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true) {
+            LazyColumn(Modifier.fillMaxSize().onSizeChanged { listWidth = it.width }, state = list, reverseLayout = true) {
                 items(displayed, key = { it.line.id }, contentType = { it.line.kind }) { shown ->
                     val marked = remember(shown.line, highlighter) {
                         shown.line.kind == ChatLine.Kind.User && highlighter.highlights(shown.line.nick, shown.line.text)
@@ -628,7 +649,8 @@ internal fun ChatRow(
     val comboMeasurer = LocalChatMeasurer.current ?: androidx.compose.ui.text.rememberTextMeasurer()
     val prepared = if (!ChatRendering.singleNode) null
     else remember(line, continued, flairs, emotes, density, me, look, censored, knownTitles) {
-        prepare(
+        // Prepared and measured already, off the main thread, if nothing has changed since.
+        RowPrefetch.take(line, continued, flairs, emotes, density, me, look).takeIf { !censored && knownTitles.isEmpty() } ?: prepare(
             line, continued, flairs, emotes, density, me, mention, look, censored, titleOf = { url -> titles?.titleOf(url) },
             comboWidth = { count, ended -> comboWidthDp(comboMeasurer, density, count, ended) },
         )
@@ -1235,3 +1257,67 @@ internal fun AnnotatedString.Builder.appendMentions(text: String, mentioned: Lis
 }
 
 private val mentionWord = Regex("""(^|\s|>)(@?)(\w{3,20})(?=$|\s|[.?!,'])""")
+
+/**
+ * Rows prepared and measured ahead, off the main thread: the chat engine
+ * calls [prefetch] (through [io.github.strawwaffle.glorp.chat.LinePrefetch])
+ * with each batch before the screen gets it, and a row composed for one of
+ * those lines takes it if the screen's settings are still the ones it was
+ * made with. Anything else (a link being looked up, a message hidden behind
+ * <censored>, a new width) is prepared on the main thread as before.
+ */
+internal object RowPrefetch {
+    /** What rows are prepared with: set by the chat screen. */
+    class Context(
+        val flairs: Flairs, val emotes: Emotes, val density: Density, val me: String?, val mention: Regex?,
+        val look: ChatLook, val style: TextStyle, val widthPx: Int, val measurer: androidx.compose.ui.text.TextMeasurer,
+    )
+
+    private class Ready(val line: ChatLine, val continued: Boolean, val context: Context, val prepared: PreparedLine)
+
+    @kotlin.concurrent.Volatile
+    var context: Context? = null
+
+    @kotlin.concurrent.Volatile
+    private var ready: Map<String, Ready> = emptyMap()
+
+    /** How many of the newest lines of each batch are prepared ahead: about a screenful. */
+    private const val NEWEST = 30
+
+    fun take(line: ChatLine, continued: Boolean, flairs: Flairs, emotes: Emotes, density: Density, me: String?, look: ChatLook): PreparedLine? {
+        val r = ready[line.id] ?: return null
+        val c = r.context
+        if (r.line !== line || r.continued != continued || c.flairs !== flairs || c.emotes !== emotes || c.me != me || c.look != look ||
+            c.density.density != density.density || c.density.fontScale != density.fontScale
+        ) return null
+        return r.prepared
+    }
+
+    /** On a background thread: rows for the newest of [lines] not yet ready. */
+    fun prefetch(lines: List<ChatLine>) {
+        val c = context ?: return
+        if (c.widthPx <= 0) return
+        val current = ready
+        val out = HashMap<String, Ready>(current.size + NEWEST)
+        val from = (lines.size - NEWEST).coerceAtLeast(0)
+        for (i in from until lines.size) {
+            val line = lines[i]
+            val continued = i > 0 && continues(lines[i - 1], line)
+            val have = current[line.id]
+            if (have != null && have.line === line && have.continued == continued && have.context === c) { out[line.id] = have; continue }
+            // Lines whose look depends on something still on its way (a video's title) or a tap (<censored>) are left to the screen.
+            if (line.moderated || anyUrl.containsMatchIn(line.text)) continue
+            val prepared = prepare(
+                line, continued, c.flairs, c.emotes, c.density, c.me, c.mention, c.look, censored = false,
+                comboWidth = { count, ended -> comboWidthDp(c.measurer, c.density, count, ended) },
+            )
+            prepared.measured = c.measurer.measure(
+                prepared.text, c.style, placeholders = prepared.placeholders,
+                constraints = androidx.compose.ui.unit.Constraints(maxWidth = c.widthPx), density = c.density,
+            )
+            out[line.id] = Ready(line, continued, c, prepared)
+        }
+        ready = out
+    }
+}
+

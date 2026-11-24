@@ -179,6 +179,10 @@ internal class PreparedLine(
     /** Embeds by key, for a tap on an `embed` annotation. */
     val embeds: Map<String, io.github.strawwaffle.glorp.site.Embed>,
 ) {
+    /** Its text already measured off the main thread (see RowPrefetch); used if the width, style and density still match. */
+    @kotlin.concurrent.Volatile
+    var measured: TextLayoutResult? = null
+
     /**
      * When only sprite strips are moving in this line: how long until the
      * next one steps, so it can sleep till then. Null when anything else
@@ -448,7 +452,11 @@ internal fun ChatText(
     val playsItself = prepared.items.any { it is InlineItem.EmoteItem && ChatImages.plays(it.emote.url) }
     val layer = remember(prepared, playsItself) { playsItself || (animate && prepared.moves(Clock.System.now().toEpochMilliseconds())) }
     Layout(modifier.then(semantics).then(taps).then(drawText).then(if (layer) Modifier.graphicsLayer() else Modifier).then(drawPictures)) { _, constraints ->
-        val layout = measurer.measure(
+        val ready = prepared.measured
+        val layout = if (ready != null && ready.layoutInput.constraints.maxWidth == constraints.maxWidth && ready.layoutInput.style == style &&
+            ready.layoutInput.density.density == density.density && ready.layoutInput.density.fontScale == density.fontScale
+        ) ready
+        else measurer.measure(
             prepared.text,
             style,
             placeholders = prepared.placeholders,
@@ -823,14 +831,17 @@ private fun DrawScope.outlined(layout: androidx.compose.ui.text.TextLayoutResult
 }
 
 /** Combo tail widths by count, state and density: a busy combo is laid out again on every hit. */
-private val comboWidths = HashMap<String, Int>()
+@kotlin.concurrent.Volatile
+private var comboWidths: Map<String, Int> = emptyMap()
 
 /** How wide a combo's tail is at rest, in dp, for its placeholder. */
-internal fun comboWidthDp(measurer: TextMeasurer, density: Density, count: Int, ended: Boolean): Int =
-    comboWidths.getOrPut("$count|$ended|${density.density}|${density.fontScale}") {
-        if (comboWidths.size > 500) comboWidths.clear()
-        measureComboWidth(measurer, density, count, ended)
-    }
+internal fun comboWidthDp(measurer: TextMeasurer, density: Density, count: Int, ended: Boolean): Int {
+    val key = "$count|$ended|${density.density}|${density.fontScale}"
+    comboWidths[key]?.let { return it }
+    val width = measureComboWidth(measurer, density, count, ended)
+    comboWidths = (if (comboWidths.size > 500) emptyMap() else comboWidths) + (key to width)
+    return width
+}
 
 private fun measureComboWidth(measurer: TextMeasurer, density: Density, count: Int, ended: Boolean): Int {
     val base = 14f

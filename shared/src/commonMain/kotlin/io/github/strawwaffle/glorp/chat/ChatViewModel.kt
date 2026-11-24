@@ -879,7 +879,13 @@ class ChatViewModel(
             settings.maxLines.let { if (it != log.capacity) { log.capacity = it; changed = true } }
             // Back at the bottom after reading: down to the usual number again.
             if (log.holding != readingBack) { log.holding = readingBack; changed = true }
-            if (changed && !inBackground) _lines.value = log.snapshot()
+            if (changed && !inBackground) {
+                val snapshot = log.snapshot()
+                // The screen's rows for the newest lines, prepared and measured
+                // here off the main thread, so its frames don't have to.
+                LinePrefetch.hook?.let { prefetch -> withContext(Dispatchers.Default) { runCatching { prefetch(snapshot) } } }
+                _lines.value = snapshot
+            }
             // Reading back, new lines land out of view: once a second is
             // plenty, but back at the bottom it's at once. (Bigger batches in
             // a burst were tried: on a phone they made the slow frames slower.)
@@ -1209,3 +1215,13 @@ class ChatViewModel(
 /** A word that could be a nick, as chat-gui looks for them. */
 private val nickWord = Regex("""\w{3,20}""")
 
+
+/**
+ * Set by the chat screen: given the lines about to be shown, it prepares and
+ * measures rows for the newest of them on a background thread (see the
+ * screen's RowPrefetch). Null when no chat is on screen.
+ */
+object LinePrefetch {
+    @kotlin.concurrent.Volatile
+    var hook: ((List<ChatLine>) -> Unit)? = null
+}

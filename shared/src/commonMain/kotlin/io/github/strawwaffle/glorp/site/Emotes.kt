@@ -219,7 +219,7 @@ class Emotes private constructor(
             val base = el.emoteName?.let(byPrefix::get) ?: return@mapIndexed null
             val added = extra[i]
             if (added.isEmpty() && before[i].isEmpty() && after[i].isEmpty()) base
-            else b.variants.getOrPut(base.prefix + "\u0000" + added.joinToString(";") + "\u0000" + before[i].joinToString(";") + "\u0000" + after[i].joinToString(";")) {
+            else b.variant(base.prefix + "\u0000" + added.joinToString(";") + "\u0000" + before[i].joinToString(";") + "\u0000" + after[i].joinToString(";")) {
                 b.variant(base, added, before[i], after[i])
             }
         }
@@ -237,7 +237,12 @@ class Emotes private constructor(
         val moving: Map<String, List<KeyFrame>>,
         val context: EmoteContext,
     ) {
-        val variants = HashMap<String, Emote>()
+        /** Copied on write: lines are also prepared off the main thread (see LinePrefetch). */
+        @kotlin.concurrent.Volatile
+        var variants: Map<String, Emote> = emptyMap()
+
+        inline fun variant(key: String, make: () -> Emote): Emote =
+            variants[key] ?: make().also { variants = variants + (key to it) }
 
         fun variant(base: Emote, added: List<Pair<String, String>>, before: List<Pair<String, String>> = emptyList(), after: List<Pair<String, String>> = emptyList()): Emote {
             val decls = HashMap<String, MutableList<String>>()
