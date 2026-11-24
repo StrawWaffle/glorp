@@ -18,7 +18,8 @@ affiliated with it.
 <img src="pages/img/chat.webp" alt="Chat with emotes, a subscription, a donation and a combo" width="200">
 <img src="pages/img/stream.webp" alt="A video playing above chat" width="200">
 <img src="pages/img/link-card.webp" alt="A YouTube link's preview card" width="200">
-<img src="pages/img/aerith-light.webp" alt="Chat in the light Aerith theme" width="200">
+<img src="pages/img/aerith-light.webp" alt="Chat in Aerith's light theme" width="200">
+<img src="pages/img/user-card.webp" alt="Someone's menu: your icon for them and their membership card" width="200">
 </p>
 
 ## What it does
@@ -44,9 +45,10 @@ the way it does in a browser.
   can be hidden, and mod notices show.
 - The site's commands work, `/stalk`, `/mentions`, `/tag` and `/maxlines`
   included. The input suggests emotes, names and commands as you type.
-- Tapping a name, the sender's or one in a message, opens that person's
-  membership card from their profile page: photo, team, tier, standing and
-  biography, and on the back their signature.
+- Tapping a name, the sender's or one in a message, opens that person's menu:
+  mention, whisper, their recent messages, highlight, tags, and at the bottom
+  their membership card from their profile page (photo, team, tier, standing
+  and biography, and on the back their signature).
 - Tapping a link shows its preview. Tapping an emote shows who made it and
   lets you favourite it. Hold the emote there to see what it does when
   pointed at on the site. The eye button's same-stream dimming is there too.
@@ -68,7 +70,8 @@ the way it does in a browser.
   sits at the top left of chat; tap it to see what. The lists come from
   vyneer.me, as they did for the d.gg utilities userscript.
 - Chat log search from rustlesearch.dev, every message that ever mentioned
-  you from polecat.me, the poll archive and movie nights are built in. YouTube and Rumble links show their titles.
+  you from polecat.me, the poll archive and movie nights are built in.
+  YouTube and Rumble links show their titles.
 - Busy chat stays smooth. Glorp prepares new messages away from the screen's
   own work and lets a flood in a few rows at a time.
 - Glorp updates itself from its releases. Menu → Report a problem opens a
@@ -81,19 +84,21 @@ light and dark with her round buttons and glowing input. Emoji name icons that
 only you see. Chat from other streams dimmed or hidden. Your choice of text
 size and font. Your latest mention stays at the top until you close it, and
 your own alert words warn you before sending. You pick which platform plays
-Destiny when he's live on several. Test versions, which install as
-*Glorp Probe*, are there for anyone who wants to try what's next.
+Destiny when he's live on several. Settings → Sync keeps all of this the same
+on your other phones. Test versions, which install as *Glorp Probe*, are there
+for anyone who wants to try what's next.
 
-### On a computer
+### On a computer, if you want it
 
-The [Glorp userscript](https://strawwaffle.github.io/glorp/userscript/glorp.user.js)
-adds a Glorp button to destiny.gg's chat, next to the eye, and a mentions
-button by the whisper one. It brings the themes, name icons, hiding other
-streams' chat, sticky mentions and polecat.me's mentions to the site, and
-signs Glorp in on your phone from there. It tells you in chat when a new
-version is out. Hidden phrases, hidden
-flairs and alert words came to Glorp from the d.gg utilities userscript, so
-on a computer that script does them.
+Glorp is a phone app, and the app is where to start. If you also use
+destiny.gg's chat in a browser, the
+[Glorp userscript](https://strawwaffle.github.io/glorp/userscript/glorp.user.js)
+brings a few of Glorp's own things there: the themes, name icons, hiding
+other streams' chat, your latest mention kept in view, polecat.me's mentions,
+and your icon and chat's tag in each name's menu. It does much less than the
+app and needs Violentmonkey. Hidden phrases, hidden flairs and alert words
+came to Glorp from the d.gg utilities userscript, so on a computer that
+script does them.
 
 Settings → Sync keeps Glorp's own settings the same in the app, on other
 phones and in the userscript. The sync service only stores them encrypted
