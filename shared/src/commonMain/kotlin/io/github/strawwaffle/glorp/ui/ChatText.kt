@@ -458,10 +458,19 @@ private fun DrawScope.drawOverlay(overlay: io.github.strawwaffle.glorp.site.Over
     if (pose.opacity <= 0f || pose.sx == 0f || pose.sy == 0f) return
     val px = overlay.fontSize * scale
     val color = overlay.argb?.let { androidx.compose.ui.graphics.Color(it.toInt()) } ?: androidx.compose.ui.graphics.Color.White
-    val key = "${overlay.text}|$px|${overlay.argb}|$density|$fontScale"
+    val key = "${overlay.text}|$px|${overlay.argb}|${overlay.italic}|${overlay.letterSpacing}|${overlay.shadow}|$density|$fontScale"
     val layout = overlayLayouts.getOrPut(key) {
         if (overlayLayouts.size > 200) overlayLayouts.clear()
-        measurer.measure(overlay.text, TextStyle(color = color, fontSize = (px / fontScale / density).sp, lineHeight = (px * 1.2f / fontScale / density).sp), softWrap = false, density = this)
+        val sp = { v: Float -> (v / fontScale / density).sp }
+        val style = TextStyle(
+            color = color,
+            fontSize = sp(px),
+            lineHeight = sp(px * 1.2f),
+            fontStyle = if (overlay.italic) androidx.compose.ui.text.font.FontStyle.Italic else null,
+            letterSpacing = sp(overlay.letterSpacing * scale),
+            shadow = overlay.shadow?.let { androidx.compose.ui.graphics.Shadow(androidx.compose.ui.graphics.Color(it.argb.toInt()), Offset(it.dx * scale, it.dy * scale), it.blur * scale) },
+        )
+        measurer.measure(overlay.text, style, softWrap = false, density = this)
     }
     val bw = layout.size.width.toFloat()
     val bh = layout.size.height.toFloat()

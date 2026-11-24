@@ -77,6 +77,11 @@ data class Overlay(
     val originX: Float,
     val originY: Float,
     val motions: List<Motion>,
+    val italic: Boolean = false,
+    /** `letter-spacing` in px. */
+    val letterSpacing: Float = 0f,
+    /** `text-shadow`: offset and blur in px, colour 0xAARRGGBB. */
+    val shadow: Filter.Glow? = null,
 )
 
 /** A sprite strip animation, as the stylesheet runs it. */
@@ -286,14 +291,14 @@ private fun build(
     val size = decls.backgroundSize()
     var sheetWidth = size?.first ?: imageWidth.toDouble()
     var sheetHeight = size?.second ?: if (size != null && imageWidth > 0) size.first * imageHeight / imageWidth else imageHeight.toDouble()
-    var offset = decls.backgroundX()
-    var offsetY = decls.backgroundY()
+    var offset = decls.backgroundX(width, sheetWidth)
+    var offsetY = decls.backgroundY(height, sheetHeight)
     // No emote may be bigger than a line can take: a stylesheet this parser
     // misreads must not draw a picture over chat.
     val shrink = minOf(1.0, MAX_HEIGHT / height, MAX_WIDTH / width)
     width *= shrink; height *= shrink; sheetWidth *= shrink; sheetHeight *= shrink; offset *= shrink; offsetY *= shrink
     val animation = decls.value("animation")?.let { listOf(it) }
-    var sprite = animation?.let { spriteOf(it, sheetWidth.toInt(), width.toInt(), keyframes, -decls.backgroundX()) { token -> decls.resolvePx(token) } }
+    var sprite = animation?.let { spriteOf(it, sheetWidth.toInt(), width.toInt(), keyframes, -decls.backgroundX(width, sheetWidth)) { token -> decls.resolvePx(token) } }
         ?.let { sp -> sp.copy(startX = sp.startX?.let { (it * shrink).toInt() }, stepX = sp.stepX?.let { (it * shrink).toInt() }?.takeIf { it != width.toInt() }) }
     var motions = animation?.let { motionsOf(topLevelParts(it.last()), moving) }.orEmpty()
     // Longhands after the shorthand change every animation in it (`.emote.SOY + .emote.Clap`).
@@ -418,15 +423,38 @@ private fun Decls.backgroundSize(): Pair<Double, Double?>? {
 }
 
 /** How far left `background-position` shifts the picture, in px (0 for keywords like `center`). */
-/** The `background-position` y in px (down), when given as a length. */
-private fun Decls.backgroundY(): Double {
-    val second = value("background-position")?.trim()?.split(Regex("""\s+"""))?.getOrNull(1) ?: return 0.0
-    return if (second == "0") 0.0 else pxRegex.find(second)?.groupValues?.get(1)?.toDouble() ?: 0.0
+/**
+ * Where `background-position` puts the picture in the emote's box, as how far
+ * left ([backgroundX], positive) or down ([backgroundY]) it is shifted, in px.
+ * Keywords and percentages place it by the space left over, as CSS does:
+ * `center` a picture wider than its box (ACKSHUALLY) shows its middle.
+ */
+private fun Decls.backgroundX(box: Double, sheet: Double): Double {
+    val (x, _) = backgroundWords() ?: return 0.0
+    return -(position(x, box - sheet) ?: 0.0)
 }
 
-private fun Decls.backgroundX(): Double {
-    val first = value("background-position")?.split(Regex("""\s+"""))?.firstOrNull() ?: return 0.0
-    return pxRegex.find(first)?.groupValues?.get(1)?.toDouble()?.let { -it }?.coerceAtLeast(0.0) ?: 0.0
+private fun Decls.backgroundY(box: Double, sheet: Double): Double {
+    val (_, y) = backgroundWords() ?: return 0.0
+    return position(y, box - sheet) ?: 0.0
+}
+
+/** The x and y words of `background-position`, the y `center` when left out; `top`/`bottom` alone are the y. */
+private fun Decls.backgroundWords(): Pair<String, String>? {
+    val words = value("background-position")?.trim()?.split(Regex("""\s+""")) ?: return null
+    if (words.size == 1 && (words[0] == "top" || words[0] == "bottom")) return "center" to words[0]
+    val (x, y) = if (words.size >= 2 && (words[0] == "top" || words[0] == "bottom")) words[1] to words[0] else words[0] to (words.getOrNull(1) ?: "center")
+    return x to y
+}
+
+/** One background-position word as an offset in px, given the room ([free] = box − picture). */
+private fun position(word: String, free: Double): Double? = when {
+    word == "0" -> 0.0
+    word == "left" || word == "top" -> 0.0
+    word == "center" -> free / 2
+    word == "right" || word == "bottom" -> free
+    word.endsWith("%") -> word.removeSuffix("%").toDoubleOrNull()?.let { it / 100 * free }
+    else -> pxRegex.find(word)?.groupValues?.get(1)?.toDouble()
 }
 
 /**
@@ -581,5 +609,9 @@ private fun overlayOf(decls: Decls, moving: Map<String, List<KeyFrame>>): Overla
             f.copy(top = f.top?.let { it - top }, left = f.left?.let { it - (left ?: 0f) }, origin = f.originText?.let { readOrigin(it, box, box) })
         })
     }
-    return Overlay(text, fontSize, argb, left, len("right"), top, rest, originX, originY, motions)
+    val shadow = decls.value("text-shadow")?.takeIf { it.trim() != "none" }?.let { readFilter("drop-shadow(${it.substringBefore(',')})")?.glows?.firstOrNull() }
+    return Overlay(
+        text, fontSize, argb, left, len("right"), top, rest, originX, originY, motions,
+        italic = decls.value("font-style")?.trim() == "italic", letterSpacing = len("letter-spacing") ?: 0f, shadow = shadow,
+    )
 }

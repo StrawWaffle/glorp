@@ -50,6 +50,8 @@ data class KeyFrame(
     val origin: Pair<Float, Float>? = null,
     /** `clip-path: polygon()` as x, y fractions of the emote's box. */
     val clip: List<Float>? = null,
+    /** `animation-timing-function` set in this keyframe: how the stretch from here to the next one eases. */
+    val easing: Easing? = null,
     /** `width` and `margin-left` in px as written; in an emote's [Motion], the change from its own. */
     val width: Float? = null,
     val marginLeft: Float? = null,
@@ -192,12 +194,13 @@ data class Motion(
      */
     private inline fun <T> interpolate(p: Float, pick: (KeyFrame) -> T?, rest: T, mix: (T, T, Float) -> T): T? {
         var before: Pair<Float, T>? = null
+        var beforeFrame: KeyFrame? = null
         var after: Pair<Float, T>? = null
         var any = false
         for (frame in frames) {
             val value = pick(frame) ?: continue
             any = true
-            if (frame.at <= p) before = frame.at to value
+            if (frame.at <= p) { before = frame.at to value; beforeFrame = frame }
             if (frame.at >= p && after == null) after = frame.at to value
         }
         if (!any) return null
@@ -205,7 +208,8 @@ data class Motion(
         val to = after ?: (1f to rest)
         if (to.first <= from.first) return from.second
         val local = (p - from.first) / (to.first - from.first)
-        return mix(from.second, to.second, easing.of(local))
+        // A keyframe's own timing function eases the stretch after it, as in CSS.
+        return mix(from.second, to.second, (beforeFrame?.easing ?: easing).of(local))
     }
 }
 
@@ -232,13 +236,14 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
             val top = px("top")
             val left = px("left")
             if (transform == null && opacity == null && filter == null && background == null && origin == null && clip == null && width == null && marginLeft == null && top == null && left == null) continue
+            val stepEasing = decls["animation-timing-function"]?.let(::readEasing)
             for (at in s.groupValues[1].split(',')) {
                 val offset = when (val word = at.trim().lowercase()) {
                     "from" -> 0f
                     "to" -> 1f
                     else -> word.removeSuffix("%").toFloatOrNull()?.div(100f)
                 } ?: continue
-                frames += KeyFrame(offset, transform, opacity, filter, background, origin, clip = clip, width = width, marginLeft = marginLeft, top = top, left = left)
+                frames += KeyFrame(offset, transform, opacity, filter, background, origin, clip = clip, width = width, marginLeft = marginLeft, top = top, left = left, easing = stepEasing)
             }
         }
         if (frames.isNotEmpty()) out[match.groupValues[1]] = frames.sortedBy { it.at }
@@ -270,6 +275,27 @@ internal fun readPolygon(value: String): List<Float>? {
         for (v in xy) out += (if (v == "0") 0f else v.takeIf { it.endsWith("%") }?.removeSuffix("%")?.toFloatOrNull()?.div(100f)) ?: return null
     }
     return out.takeIf { it.size >= 6 }
+}
+
+/** One timing function: `ease-in`, `cubic-bezier(…)`, `steps(4, end)`. */
+internal fun readEasing(value: String): Easing? {
+    val v = value.trim().lowercase()
+    val fn = Regex("""^(cubic-bezier|steps)\((.*)\)$""").find(v)
+    if (fn != null) {
+        val args = fn.groupValues[2].split(',').map { it.trim() }
+        return if (fn.groupValues[1] == "steps") Easing.Steps(args[0].toIntOrNull() ?: 1, args.getOrNull(1)?.let { it == "start" || it == "jump-start" } == true)
+        else args.mapNotNull { it.toFloatOrNull() }.takeIf { it.size == 4 }?.let { Easing.Bezier(it[0], it[1], it[2], it[3]) }
+    }
+    return when (v) {
+        "linear" -> Easing.Linear
+        "ease" -> Easing.Ease
+        "ease-in" -> Easing.EaseIn
+        "ease-out" -> Easing.EaseOut
+        "ease-in-out" -> Easing.EaseInOut
+        "step-start" -> Easing.Steps(1, true)
+        "step-end" -> Easing.Steps(1, false)
+        else -> null
+    }
 }
 
 private fun declarations(body: String): Map<String, String> {
