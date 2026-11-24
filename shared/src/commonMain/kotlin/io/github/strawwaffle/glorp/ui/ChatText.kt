@@ -432,7 +432,10 @@ private fun DrawScope.drawEmote(
     }
     val playing = sprite?.frameAt(at) != null
     val base = if (playing) sprite?.startX ?: emote.offsetX else emote.offsetX
-    val offset = (base + frame * (sprite?.stepX ?: emote.width)) * scale
+    val sheetPx = emote.sheetWidth * scale
+    val raw = (base + frame * (sprite?.stepX ?: emote.width)) * scale
+    // A tiling picture wraps round; one that doesn't is simply off to the side.
+    val offset = if (emote.repeatX && sheetPx > 0f) ((raw % sheetPx) + sheetPx) % sheetPx else raw
     val stages = pose.filter.colorStages()
     val filter = stages.firstOrNull()?.let { ColorFilter.colorMatrix(ColorMatrix(it)) }
     // A keyframe's own pivot (BLADE stabs from its corner) over the emote's.
@@ -610,6 +613,13 @@ private fun DrawScope.drawSheet(emote: Emote, painter: Painter, w: Float, h: Flo
             // A picture slid inside its box (GIGACHAD arriving) as well.
             translate(left = -offset + pose.bx * scale, top = (emote.offsetY + pose.by) * scale) {
                 with(painter) { draw(Size(emote.sheetWidth * scale, emote.sheetHeight * scale), alpha = pose.opacity.coerceIn(0f, 1f), colorFilter = filter) }
+            }
+            // Its next tile, where the strip's end leaves the box short.
+            val sheetPx = emote.sheetWidth * scale
+            if (emote.repeatX && offset - pose.bx * scale + w > sheetPx) {
+                translate(left = -offset + pose.bx * scale + sheetPx, top = (emote.offsetY + pose.by) * scale) {
+                    with(painter) { draw(Size(sheetPx, emote.sheetHeight * scale), alpha = pose.opacity.coerceIn(0f, 1f), colorFilter = filter) }
+                }
             }
         }
     }

@@ -47,6 +47,8 @@ data class Emote(
     val marginRight: Float = 0f,
     /** `vertical-align` in px: negative lowers it (BUTTSTINY's -5px). */
     val verticalAlign: Float = 0f,
+    /** Whether the picture tiles across (`background-repeat`, by default): a strip starting off its edge (CuckCrab's 704px) shows its other end. */
+    val repeatX: Boolean = true,
     /** What its `::before` and `::after` draw over it: GSN's dolphins, BEARSLEEP's 💤. */
     val overlays: List<Overlay> = emptyList(),
 ) {
@@ -356,6 +358,7 @@ private fun build(
             .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.filter != null || it.background != null || it.origin != null || it.clip != null || it.width != null || it.marginLeft != null || it.left != null || it.z != null } },
         originX = originX, originY = originY, rest = rest,
         marginLeft = marginLeft, marginRight = marginRight, verticalAlign = verticalAlign,
+        repeatX = decls.value("background-repeat")?.trim()?.let { it == "repeat" || it == "repeat-x" || it.startsWith("repeat ") } ?: (decls.value("background")?.contains("no-repeat") != true),
         // A ::before or ::after inherits the emote's custom properties (NoTears' `--t-NoTears`).
         overlays = overlayDecls.mapNotNull { part ->
             val withVars = HashMap(part).apply { decls.filterKeys { it.startsWith("--") }.forEach { (k, v) -> putIfAbsent(k, v) } }

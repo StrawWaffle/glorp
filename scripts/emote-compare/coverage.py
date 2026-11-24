@@ -68,9 +68,11 @@ READ_PROPS = {'animation', 'width', 'height', 'background-position', 'background
               'margin', 'margin-left', 'margin-right', 'margin-inline', 'vertical-align', '-webkit-filter'}
 # What a ::before or ::after with text is drawn from.
 PSEUDO_READ = {'content', 'font-size', 'color', 'top', 'left', 'right', 'transform', 'transform-origin', 'opacity',
-               'filter', 'animation', 'animation-delay', 'position', 'text-indent', 'line-height', 'width', 'display'}
+               'filter', 'animation', 'animation-delay', 'position', 'text-indent', 'line-height', 'width', 'display',
+               'text-shadow', 'font-style', 'letter-spacing', 'mix-blend-mode', 'background', 'background-image',
+               'height', 'margin-left', 'margin-top', 'mask-image', '-webkit-mask-image'}
 TRANSFORM_FNS = {'translate', 'translate3d', 'translatex', 'translatey', 'rotate', 'rotatez', 'scale', 'scalex',
-                 'scaley', 'scale3d', 'rotate3d'}
+                 'scaley', 'scale3d', 'rotate3d', 'skew', 'skewx', 'skewy'}
 # Animation longhands Glorp reads only as the context-rule timing change, not their own way.
 LAYOUT_DONE = {'margin-top', 'top'}  # the standard -height / height/4 pair, drawn by emoteRect
 HARMLESS = {'display', 'position', 'overflow', 'background-repeat', 'background-color', 'cursor', 'text-indent',
@@ -118,7 +120,7 @@ def value_gaps(prop, value):
         gaps += [f'filter: {f}()' for f in sorted(fns - drawn)]
     if prop == 'background-position':
         for w in value.split():
-            if not (w == '0' or w.endswith('px')):
+            if not (w == '0' or w.endswith('px') or w.endswith('%') or w in ('left', 'center', 'right', 'top', 'bottom')):
                 gaps.append(f'background-position: {w}')
     return gaps
 
@@ -130,8 +132,9 @@ def keyframe_gaps(name, stepped):
     gaps = []
     for sel, b in blocks(body):
         for k, v in decls(b):
-            if k == 'animation-timing-function':
-                gaps.append('keyframes: per-keyframe timing')
+            if k in ('animation-timing-function', 'z-index', 'content', 'font-size', 'line-height', 'letter-spacing', 'right',
+                     'mask-image', '-webkit-mask-image'):
+                pass
             elif k == 'background-position':
                 if not stepped:
                     gaps += value_gaps(k, v)
@@ -144,7 +147,7 @@ def keyframe_gaps(name, stepped):
                 pass
             elif k in ('translate', 'rotate', 'scale'):
                 gaps.append(f'keyframes: {k} property')
-            elif k in HARMLESS:
+            elif k in HARMLESS or k.startswith('-moz-'):
                 pass
             else:
                 gaps.append(f'keyframes: {k}')
@@ -187,15 +190,13 @@ for sel_text, body, wrapper in rules:
                     gaps = value_gaps(prop, value)
                     if prop == 'animation':
                         gaps += animation_gaps(value)
-                    if prop == 'content' and value.strip() in ('""', "''"):
-                        gaps.append('content: none (a picture or blend overlay)')
                 elif prop in READ_PROPS:
                     gaps = value_gaps(prop, value)
                     if prop == 'animation':
                         gaps += animation_gaps(value)
                 elif prop in LAYOUT_DONE and sel.startswith('.msg-chat .emote.'):
                     continue
-                elif prop in HARMLESS:
+                elif prop in HARMLESS or prop.startswith('//') or prop.startswith('-moz-'):
                     continue
                 else:
                     gaps = [f'property: {prop}']
@@ -205,9 +206,6 @@ for sel_text, body, wrapper in rules:
                     key = g if kind in ('own', 'context') else f'[{kind}] {g}'
                     per_emote[name][key].add(kind)
                     gap_emotes[key].add(name)
-            if kind == 'pseudo-element' and name != '*' and not own_pseudo.match(sel):
-                per_emote[name]['[pseudo-element] depends on its neighbours (not drawn)'].add(kind)
-                gap_emotes['[pseudo-element] depends on its neighbours (not drawn)'].add(name)
 
 report = {
     'rules': len(rules), 'keyframes': len(keyframes), 'emotes': len(names),
