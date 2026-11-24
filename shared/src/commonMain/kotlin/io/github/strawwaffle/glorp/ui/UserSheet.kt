@@ -55,6 +55,9 @@ class UserActions(
     val lookUp: suspend (String) -> UserLookup,
     /** What's already known about someone (looked up lately), to open their sheet with. */
     val known: (String) -> UserLookup? = { null },
+    /** Their membership card from their profile page (photo, team, signature…), and what's kept of it. */
+    val profile: suspend (String) -> io.github.strawwaffle.glorp.site.ProfileCard? = { null },
+    val knownProfile: (String) -> io.github.strawwaffle.glorp.site.ProfileCard? = { null },
     /** Opens the chat log search for a name. */
     val recent: (String) -> Unit,
     val ignore: (String) -> Unit,
@@ -86,6 +89,10 @@ fun UserSheet(
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val lookup by produceState(actions.known(nick), nick) { value = actions.lookUp(nick) }
     val found = (lookup as? UserLookup.Found)?.info
+    // Their card, read from their profile page once the name is known to exist.
+    val card by produceState(actions.knownProfile(nick), nick, lookup is UserLookup.Found) {
+        if (lookup is UserLookup.Found && value == null) value = actions.profile(nick)
+    }
     val key = nick.lowercase()
     val me = account?.nick?.lowercase()
     val self = key == me
@@ -126,10 +133,14 @@ fun UserSheet(
                 found?.watching?.let { embed ->
                     Detail("Watching ${embed.id} on ${PlatformIcons.name(embed.platform)}", Palette.Blue) { actions.watch(embed); onDismiss() }
                 }
-                found?.createdDate?.let(::joined)?.let { Detail("Joined $it") }
-                found?.age?.let { Detail("Age: ${ageLabel(it)}") }
-                found?.gender?.let { Detail("Gender: ${genderLabel(it)}") }
-                found?.bio?.let { Detail("Bio: $it") }
+                val shownCard = card
+                if (shownCard != null) MembershipCard(shownCard, Modifier.padding(vertical = 6.dp))
+                else {
+                    found?.createdDate?.let(::joined)?.let { Detail("Joined $it") }
+                    found?.age?.let { Detail("Age: ${ageLabel(it)}") }
+                    found?.gender?.let { Detail("Gender: ${genderLabel(it)}") }
+                    found?.bio?.let { Detail("Bio: $it") }
+                }
                 if (note.isNotEmpty()) Detail("Tag: $note")
                 val badges = flairs.badges(features)
                 if (badges.isNotEmpty()) Detail(badges.joinToString(", ") { it.label })

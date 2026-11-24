@@ -687,6 +687,22 @@ class ChatViewModel(
         return found
     }
 
+    /** Someone's membership card from their profile page, kept a few minutes as [lookUp]'s details are. */
+    suspend fun lookUpProfile(nick: String): io.github.strawwaffle.glorp.site.ProfileCard? {
+        val key = nick.lowercase()
+        val now = Clock.System.now().toEpochMilliseconds()
+        profiles[key]?.takeIf { now - it.second < 5 * 60_000 }?.let { return it.first }
+        val card = io.github.strawwaffle.glorp.site.lookUpProfile(client, site, nick) ?: return null
+        profiles[key] = card to now
+        while (profiles.size > 50) profiles.remove(profiles.keys.first())
+        return card
+    }
+
+    fun knownProfile(nick: String): io.github.strawwaffle.glorp.site.ProfileCard? =
+        profiles[nick.lowercase()]?.takeIf { Clock.System.now().toEpochMilliseconds() - it.second < 5 * 60_000 }?.first
+
+    private val profiles = LinkedHashMap<String, Pair<io.github.strawwaffle.glorp.site.ProfileCard, Long>>()
+
     /** Peeks at what [lookUp] keeps, for a sheet to start from. */
     fun knownLookup(nick: String): io.github.strawwaffle.glorp.site.UserLookup? =
         lookups[nick.lowercase()]?.takeIf { Clock.System.now().toEpochMilliseconds() - it.second < 5 * 60_000 }?.first
