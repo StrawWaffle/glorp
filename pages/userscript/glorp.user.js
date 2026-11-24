@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Glorp
 // @namespace    https://strawwaffle.github.io/glorp/
-// @version      2.4
+// @version      2.5
 // @description  Glorp's own chat features in destiny.gg's chat on a computer: themes, name icons, hiding other streams' chat, sticky mentions, settings synced with the Glorp app, and signing Glorp in without the developer tools.
 // @match        https://www.destiny.gg/*
 // @match        https://www.omniliberal.dev/*
@@ -150,11 +150,11 @@
   // of colours for each role; every rule using one gets the theme's colour instead.
   var THEMES = {
     // Glorp's own, from its homepage: near-black green and lime, or pale green.
-    Glorp: { bg: "#0a0f08", surface: "#131b10", raised: "#1b2716", action: "#b7fa44", text: "#eef6e4", dim: "#9eb38c", green: "#8bd450", mention: "#1f2b0f", tagged: "#1b2716", faint: "#5d7249", mentionBar: "#b7fa44", page: "#0a0f08", card: "#131b10", bar: "#131b10", onBar: "#eef6e4", actionBg: "#263a10" },
-    GlorpLight: { light: true, bg: "#fbfef5", surface: "#eef6e2", raised: "#d3e5bb", action: "#3f7d12", text: "#1c2a12", dim: "#5d7249", green: "#4e8f1a", mention: "#eaf7d0", tagged: "#eef6e2", faint: "#9eb38c", mentionBar: "#78b52a", page: "#eef6e2", card: "#fbfef5", bar: "#b7fa44", onBar: "#13240a", actionBg: "#e3f5c4" },
+    Glorp: { bg: "#0a0f08", surface: "#131b10", raised: "#1b2716", action: "#b7fa44", text: "#eef6e4", dim: "#9eb38c", green: "#8bd450", mention: "#1f2b0f", tagged: "#1b2716", faint: "#5d7249", mentionBar: "#b7fa44", page: "#0a0f08", card: "#131b10", bar: "#131b10", onBar: "#eef6e4", actionBg: "#263a10", actionFill: "#3d6b14" },
+    GlorpLight: { light: true, bg: "#fbfef5", surface: "#eef6e2", raised: "#d3e5bb", action: "#3f7d12", text: "#1c2a12", dim: "#5d7249", green: "#4e8f1a", mention: "#eaf7d0", tagged: "#eef6e2", faint: "#9eb38c", mentionBar: "#78b52a", page: "#eef6e2", card: "#fbfef5", bar: "#b7fa44", onBar: "#13240a", actionBg: "#e3f5c4", actionFill: "#3f7d12" },
     // Aerith's: cream and brown or slate, a sky-blue bar, teal for mentions, buttons on round tiles.
-    AerithLight: { light: true, bg: "#faf8e8", surface: "#efecd8", raised: "#dcd6b8", action: "#308fd6", text: "#5a4a38", dim: "#918168", green: "#55a637", mention: "#e4f6f0", tagged: "#efe9d2", faint: "#b3a68a", mentionBar: "#6de1c1", tile: "#efecd8", field: "#ffffff", fieldBorder: "#b3a68a", dash: "#dcd6b8", page: "#efe9d2", card: "#faf8e8", bar: "#6fb4ec", onBar: "#ffffff", actionBg: "#e2f0fb" },
-    AerithDark: { bg: "#2b3444", surface: "#1f2a3c", raised: "#3b444e", action: "#7bc3e9", text: "#f1ecda", dim: "#b6ae98", green: "#85d28b", mention: "#27463f", tagged: "#243040", faint: "#717888", mentionBar: "#6de1c1", tile: "#243040", field: "#1a2332", fieldBorder: "#6fb4ec", dash: "#3b4658", page: "#1f2a3c", card: "#2b3444", bar: "#3f6f9e", onBar: "#f3eedc", actionBg: "#2c4a66" },
+    AerithLight: { light: true, bg: "#faf8e8", surface: "#efecd8", raised: "#dcd6b8", action: "#308fd6", text: "#5a4a38", dim: "#918168", green: "#55a637", mention: "#e4f6f0", tagged: "#efe9d2", faint: "#b3a68a", mentionBar: "#6de1c1", tile: "#efecd8", field: "#ffffff", fieldBorder: "#b3a68a", dash: "#dcd6b8", page: "#efe9d2", card: "#faf8e8", bar: "#6fb4ec", onBar: "#ffffff", actionBg: "#e2f0fb", actionFill: "#308fd6" },
+    AerithDark: { bg: "#2b3444", surface: "#1f2a3c", raised: "#3b444e", action: "#7bc3e9", text: "#f1ecda", dim: "#b6ae98", green: "#85d28b", mention: "#27463f", tagged: "#243040", faint: "#717888", mentionBar: "#6de1c1", tile: "#243040", field: "#1a2332", fieldBorder: "#6fb4ec", dash: "#3b4658", page: "#1f2a3c", card: "#2b3444", bar: "#3f6f9e", onBar: "#f3eedc", actionBg: "#2c4a66", actionFill: "#3f6f9e" },
   };
   // "Destiny" (destiny.gg) is the site as it is: picking it here syncs it to the app.
   var THEME_LABELS = [["", "The site's own (this browser only)"], ["Glorp", "Glorp dark"], ["GlorpLight", "Glorp light"], ["Destiny", "destiny.gg"], ["AerithLight", "Aerith light"], ["AerithDark", "Aerith dark"]];
@@ -210,7 +210,13 @@
     var t = THEMES[name];
     if (!t) { themeStyle.textContent = ""; return; }
     readThemeRules().then(function (rules) {
-      var css = rules.map(function (r) { return r[0] + "{" + r[1] + ":" + colour(t, r[2]) + " !important}"; }).join("\n");
+      // A button filled with the action colour takes the deeper shade, which white text reads on.
+      var css = rules.map(function (r) {
+        var role = r[2] === "action" && r[1] === "background-color" ? "actionFill" : r[2];
+        return r[0] + "{" + r[1] + ":" + colour(t, role) + " !important}";
+      }).join("\n");
+      // Glorp's own menus scroll as chat does: a thin see-through handle, no track.
+      css += "\n#glorp-settings .scrollable,#glorp-mentions .scrollable{scrollbar-width:thin;scrollbar-color:" + (t.light ? "rgba(0,0,0,.3)" : "rgba(255,255,255,.4)") + " transparent}";
       // Bigscreen's page around chat: its header on the theme's bar, chat's own top bar on chat's colour.
       css += "\nheader.header,.navbar{background-color:" + colour(t, "bar") + " !important;color:" + colour(t, "onBar") + " !important;border-radius:0 0 12px 12px}" +
         "\n#chat-controls,#chat-panel-embeds{background-color:" + t.bg + " !important}";
@@ -228,7 +234,7 @@
   /** A role's colour in theme [t], with the site-only roles falling back on the chat's. */
   function colour(t, role) {
     if (t[role]) return t[role];
-    return { page: t.surface, card: t.bg, hover: t.tile || t.surface, actionBg: t.mention, bar: t.surface, onBar: t.text }[role] || t.text;
+    return { page: t.surface, card: t.bg, hover: t.tile || t.surface, actionBg: t.mention, actionFill: t.action, bar: t.surface, onBar: t.text }[role] || t.text;
   }
 
   /** Aerith's shapes: buttons on round tiles, a round glowing input, rounded rows and menus, dashed lines. */
@@ -243,7 +249,7 @@
       "\n#chat-user-info .floating-window{border-radius:12px}" +
       "\n#chat-user-info .user-identity,#chat-user-info .user-info h5,.chat-menu .toolbar{border-bottom:1px dashed " + t.dash + " !important}" +
       "\n#chat-user-info .chat-tool-btn{background:" + t.tile + ";border-radius:10px;margin:.15em}" +
-      "\n#chat-user-info button,.chat-menu .btn,#glorp-settings .btn{border-radius:9999px !important;background:" + t.tile + " !important;border-color:" + t.tile + " !important;color:" + t.text + " !important}" +
+      "\n#chat-user-info button:not(.glorp-choice),.chat-menu .btn,#glorp-settings .btn{border-radius:9999px !important;background:" + t.tile + " !important;border-color:" + t.tile + " !important;color:" + t.text + " !important}" +
       "\n.chat-menu input.form-control,.chat-menu select{border-radius:9999px !important;background:" + t.field + " !important}";
   }
 
@@ -359,6 +365,106 @@
     })();
   }
 
+  // ---- The site's user menu ------------------------------------------------------
+  // Two parts added to the menu a name opens (click or right-click), as Aerith's
+  // themes for the site have them: the Glorp icon you give them (synced), and
+  // chat's own tag (colour and note), set through chat's /tag and /untag.
+  var ICON_CHOICES = ["💗", "⭐", "👑", "🍃", "🔥", "💀", "💩", "🐸", "🤡", "🎮"];
+  var TAG_COLOURS = [["green", "#61bd4f"], ["yellow", "#f2d600"], ["orange", "#ffab4a"], ["red", "#eb5a46"], ["purple", "#c377e0"],
+    ["blue", "#0079bf"], ["sky", "#00c2e0"], ["lime", "#51e898"], ["pink", "#ff80ce"], ["black", "#4d4d4d"]];
+  /**
+   * Runs a chat command as if typed and sent, leaving whatever you were
+   * writing in place. chat-gui sends on a keypress with key code 13; that
+   * runs in the page's own world (the site allows inline scripts), where
+   * chat's handlers see the key code.
+   */
+  function chatCommand(text) {
+    if (!document.getElementById("chat-input-control")) return;
+    var code = "(function (text) {" +
+      "var input = document.getElementById('chat-input-control'); var draft = input.value; input.value = text;" +
+      "var e = new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true });" +
+      "Object.defineProperty(e, 'keyCode', { get: function () { return 13; } });" +
+      "Object.defineProperty(e, 'which', { get: function () { return 13; } });" +
+      "input.dispatchEvent(e); input.value = draft; input.dispatchEvent(new Event('input', { bubbles: true }));" +
+      "})(" + JSON.stringify(text) + ");";
+    var script = document.createElement("script");
+    script.textContent = code;
+    (document.head || document.documentElement).appendChild(script);
+    script.remove();
+  }
+  /** The colour and note chat has for [nick], read off their messages. */
+  function chatTag(nick) {
+    var line = document.querySelector('.msg-user[data-username="' + nick.toLowerCase() + '"][class*="msg-tagged-"]');
+    if (!line) return null;
+    var m = /msg-tagged-([a-z]+)/.exec(line.className);
+    return m ? { colour: m[1], note: line.getAttribute("title") || "" } : null;
+  }
+  function renderUserInfo(menu) {
+    var name = menu.querySelector(".user-identity .username");
+    var nick = name && name.textContent.trim();
+    var old = menu.querySelector("#glorp-userinfo");
+    if (old) old.remove();
+    if (!nick) return;
+    var key = nick.toLowerCase();
+    var box = el("div", { id: "glorp-userinfo" });
+    // Your icon for them.
+    box.appendChild(el("h5", { text: "Your icon for them" }));
+    var now = icons()[key];
+    var row = el("div", { "class": "glorp-choices" });
+    ICON_CHOICES.concat(now && ICON_CHOICES.indexOf(now) < 0 ? [now] : []).forEach(function (icon) {
+      row.appendChild(el("button", { type: "button", "class": "glorp-choice" + (icon === now ? " picked" : ""), title: icon === now ? "Remove" : "Use this", text: icon, onclick: function () {
+        var next = Object.assign({}, icons());
+        if (next[key] === icon) delete next[key]; else next[key] = icon;
+        set("nameIcons", next);
+        renderUserInfo(menu);
+      } }));
+    });
+    box.appendChild(row);
+    // Chat's tag.
+    var tag = chatTag(nick);
+    box.appendChild(el("h5", { text: "Tag" }));
+    var picked = tag ? tag.colour : null;
+    var swatches = el("div", { "class": "glorp-choices" });
+    var note = el("input", { "class": "form-control", placeholder: "Why? (a note)", value: tag ? tag.note : "" });
+    TAG_COLOURS.forEach(function (c) {
+      var b = el("button", { type: "button", "class": "glorp-choice glorp-swatch" + (c[0] === picked ? " picked" : ""), title: c[0], style: "background:" + c[1] + ";color:" + c[1] });
+      b.addEventListener("click", function () {
+        picked = c[0];
+        swatches.querySelectorAll(".glorp-swatch").forEach(function (x) { x.classList.toggle("picked", x === b); });
+      });
+      swatches.appendChild(b);
+    });
+    box.appendChild(swatches);
+    box.appendChild(el("div", { "class": "glorp-tagrow" }, [
+      note,
+      el("button", { type: "button", "class": "btn btn-dark", text: "Set", onclick: function () {
+        if (!picked) return;
+        chatCommand("/tag " + nick + " " + picked + (note.value.trim() ? " " + note.value.trim() : ""));
+        setTimeout(function () { renderUserInfo(menu); }, 300);
+      } }),
+      tag ? el("button", { type: "button", "class": "btn btn-dark", text: "Remove", onclick: function () {
+        chatCommand("/untag " + nick);
+        setTimeout(function () { renderUserInfo(menu); }, 300);
+      } }) : null,
+    ]));
+    var info = menu.querySelector(".user-info");
+    var messages = info && Array.prototype.find.call(info.querySelectorAll(":scope > h5"), function (h) { return /^Messages/.test(h.textContent.trim()); });
+    if (messages) info.insertBefore(box, messages);
+    else if (info) info.appendChild(box);
+  }
+  function watchUserInfo() {
+    var menu = document.getElementById("chat-user-info");
+    if (!menu) return;
+    menu.classList.add("glorp-menu");
+    var shownFor = null;
+    new MutationObserver(function () {
+      var open = menu.classList.contains("active");
+      var nick = (menu.querySelector(".user-identity .username") || {}).textContent;
+      if (!open) { shownFor = null; return; }
+      if (nick && nick !== shownFor) { shownFor = nick; renderUserInfo(menu); }
+    }).observe(menu, { attributes: true, attributeFilter: ["class"], subtree: true, childList: true, characterData: true });
+  }
+
   // ---- Mentions ---------------------------------------------------------------------
   // What polecat.me's chat logger has of messages naming you, newest first,
   // in a menu of its own beside the whisper button. polecat allows 60
@@ -458,7 +564,7 @@
   function buildMentions() {
     var nameIn = el("input", { "class": "form-control", placeholder: "Name", spellcheck: "false" });
     var list = el("div", { id: "glorp-mentions-list", "class": "chat-lines" });
-    mentionsPanel = el("div", { id: "glorp-mentions", "class": "chat-menu left" }, [
+    mentionsPanel = el("div", { id: "glorp-mentions", "class": "chat-menu left glorp-menu" }, [
       el("div", { "class": "chat-menu-inner" }, [
         el("div", { "class": "toolbar" }, [el("h5", {}, [el("span", { text: "Mentions" }), el("i", { "class": "chat-menu-close", onclick: function () { closeMentions(); } })])]),
         el("form", { "class": "glorp-mentions-name", onsubmit: function (e) { e.preventDefault(); var n = nameIn.value.trim(); if (n) showMentionsOf(n); } }, [nameIn, el("button", { "class": "btn btn-dark", type: "submit", text: "Show" })]),
@@ -508,7 +614,7 @@
   }
 
   function buildPanel() {
-    panel = el("div", { id: "glorp-settings", "class": "chat-menu right" }, [
+    panel = el("div", { id: "glorp-settings", "class": "chat-menu right glorp-menu" }, [
       el("div", { "class": "chat-menu-inner" }, [
         el("div", { "class": "toolbar" }, [el("h5", {}, [el("span", { text: "Glorp" }), el("i", { "class": "chat-menu-close", onclick: function () { panel.classList.remove("active"); } })])]),
         el("div", { "class": "scrollable", style: "overflow-y:auto" }, [el("div", { "class": "content" }, [el("div", { id: "glorp-settings-form" })])]),
@@ -718,8 +824,18 @@
       "#glorp-settings .checkbox label{margin-bottom:0;cursor:pointer;display:flex;align-items:center}" +
       "#glorp-settings .checkbox input{margin:0 .3em 0 0}" +
       "#glorp-settings select,#glorp-settings input.form-control{border-radius:.25em;padding:.3em;width:100%;box-sizing:border-box}" +
-      "#glorp-settings .btn{background:#222;color:#dedede;border:1px solid #333;border-radius:.25em;padding:.35em .8em;cursor:pointer}" +
-      "#glorp-settings .btn:hover{background:#333}" +
+      ".glorp-menu .btn{background:#222;color:#dedede;border:1px solid #333;border-radius:.25em;padding:.35em .8em;cursor:pointer}" +
+      ".glorp-menu .btn:hover{background:#333}" +
+      ".glorp-menu .scrollable{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.4) transparent}" +
+      // In the site's user menu: your icon for them, and chat's tag.
+      "#glorp-userinfo h5{border-bottom:none !important}" +
+      "#glorp-userinfo .glorp-choices{display:flex;flex-wrap:wrap;gap:.3em;padding:0 .6em .5em}" +
+      "#glorp-userinfo .glorp-choice{width:2em;height:2em;display:inline-flex;align-items:center;justify-content:center;border-radius:.5em;background:rgba(127,127,127,.18);cursor:pointer;border:2px solid transparent;font-size:1em;padding:0}" +
+      "#glorp-userinfo .glorp-choice.picked{border-color:currentColor}" +
+      "#glorp-userinfo .glorp-swatch{width:1.7em;height:1.7em;border-radius:.45em}" +
+      "#glorp-userinfo .glorp-tagrow{display:flex;gap:.4em;padding:0 .6em .6em;align-items:center}" +
+      "#glorp-userinfo .glorp-tagrow input{flex:1;min-width:0;border-radius:9999px;padding:.3em .7em}" +
+      "#glorp-userinfo .btn{border-radius:9999px;padding:.3em .9em}" +
       "#glorp-settings .glorp-note{color:#999;font-size:.9em;margin:.3em .9em}" +
       "#glorp-settings .glorp-row{display:flex;justify-content:space-between;gap:1em}" +
       "#glorp-settings .glorp-add{display:flex;gap:.4em}#glorp-settings .glorp-add input{min-width:0;flex:1}#glorp-settings .glorp-add input+input{flex:0 0 5em}" +
@@ -781,6 +897,7 @@
       decorateAll();
     };
     watchLines();
+    watchUserInfo();
     apply();
     syncSoon();
     checkUpdate().then(function (isNewer) { if (isNewer) tellChat(); }).catch(function () {});
