@@ -134,9 +134,8 @@ fun UserSheet(
                 found?.watching?.let { embed ->
                     Detail("Watching ${embed.id} on ${PlatformIcons.name(embed.platform)}", Palette.Blue) { actions.watch(embed); onDismiss() }
                 }
-                val shownCard = card
-                if (shownCard != null) MembershipCard(shownCard, Modifier.padding(vertical = 6.dp))
-                else {
+                // Their membership card, when there is one, goes at the bottom (below).
+                if (card == null) {
                     found?.createdDate?.let(::joined)?.let { Detail("Joined $it") }
                     found?.age?.let { Detail("Age: ${ageLabel(it)}") }
                     found?.gender?.let { Detail("Gender: ${genderLabel(it)}") }
@@ -164,16 +163,25 @@ fun UserSheet(
             }
 
             Divider()
-            if (account != null && !self) {
-                Action("Mention") { input.mention(nick); onDismiss() }
-                Action("Whisper") { input.whisper(nick); onDismiss() }
-            }
-            Action("Recent messages") { onDismiss(); actions.recent(nick) }
-            if (account != null && !self) {
-                val highlighted = nick in input.highlighted
-                Action(if (highlighted) "Stop highlighting" else "Highlight their messages") {
-                    actions.highlight(nick, !highlighted); onDismiss()
+            // The quick actions two to a row, so they take half the height.
+            val quick = buildList<Pair<String, () -> Unit>> {
+                if (account != null && !self) {
+                    add("Mention" to { input.mention(nick); onDismiss() })
+                    add("Whisper" to { input.whisper(nick); onDismiss() })
                 }
+                add("Recent messages" to { onDismiss(); actions.recent(nick) })
+                if (account != null && !self) {
+                    val highlighted = nick in input.highlighted
+                    add((if (highlighted) "Stop highlighting" else "Highlight") to { actions.highlight(nick, !highlighted); onDismiss() })
+                }
+            }
+            for (pair in quick.chunked(2)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = if (Palette.Tile != null) 10.dp else 0.dp)) {
+                    for ((label, onClick) in pair) Box(Modifier.weight(1f)) { Action(label, compact = true, onClick = onClick) }
+                    if (pair.size == 1) Box(Modifier.weight(1f))
+                }
+            }
+            if (account != null && !self) {
                 TagRow(tag) { color ->
                     if (color == null) input.tags.untag(key) else input.tags.tag(key, color, note)
                 }
@@ -194,6 +202,12 @@ fun UserSheet(
                 Durations("Ban", listOf("1d", "7d", "30d", "Perm"), confirm = true) {
                     actions.command("/ipban $nick $it $nick banned by ${account.nick}."); onDismiss()
                 }
+            }
+
+            // Their membership card last, below what you can do.
+            card?.let { shownCard ->
+                Divider()
+                MembershipCard(shownCard, Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
             }
         }
     }
@@ -219,14 +233,16 @@ private fun Divider() {
     }
 }
 
-/** A full-width row, at least 48 dp tall. */
+/** A full-width row, at least 48 dp tall; [compact] ones sit two to a row. */
 @Composable
-private fun Action(label: String, color: Color = Palette.White, onClick: () -> Unit) = Text(
+private fun Action(label: String, color: Color = Palette.White, compact: Boolean = false, onClick: () -> Unit) = Text(
     label,
     color = color,
     fontSize = 15.sp,
+    maxLines = 1,
+    overflow = TextOverflow.Ellipsis,
     modifier = Modifier.fillMaxWidth()
-        .then(Palette.Tile?.let { Modifier.padding(horizontal = 16.dp, vertical = 3.dp).background(it, RoundedCornerShape(10.dp)) } ?: Modifier)
+        .then(Palette.Tile?.let { Modifier.padding(horizontal = if (compact) 6.dp else 16.dp, vertical = 3.dp).background(it, RoundedCornerShape(10.dp)) } ?: Modifier)
         .heightIn(min = 48.dp).clickable(onClick = onClick)
         .padding(horizontal = if (Palette.Tile != null) 14.dp else 20.dp, vertical = 13.dp),
 )
