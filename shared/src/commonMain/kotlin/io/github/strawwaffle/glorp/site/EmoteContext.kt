@@ -19,10 +19,11 @@ internal class EmoteContext private constructor(
      * The declarations that apply to each emote of [line] beyond its own
      * rules, in cascade order (lowest first); an empty list where none do.
      */
-    fun declarations(line: LineModel): List<List<Pair<String, String>>> = line.emotes.map { el ->
+    fun declarations(line: LineModel, pseudo: String? = null): List<List<Pair<String, String>>> = line.emotes.map { el ->
         val name = el.emoteName ?: return@map emptyList()
         val candidates = byName[name].orEmpty() + byName["*"].orEmpty()
-        candidates.mapNotNull { rule ->
+        // [pseudo] "before" or "after": the rules for that part of it (NoTears' banana beside another NoTears).
+        candidates.filter { it.pseudo == pseudo }.mapNotNull { rule ->
             val spec = rule.selectors.filter { it.matches(el) }.maxOfOrNull { it.specificity } ?: return@mapNotNull null
             Triple(spec, rule.order, rule.declarations)
         }.sortedWith(compareBy({ it.first }, { it.second })).flatMap { it.third }
@@ -47,29 +48,37 @@ internal class EmoteContext private constructor(
             for (match in Regex("""(?:^|(?<=[}]))([^{}@]+)\{([^{}]*)\}""").findAll(css)) {
                 val selectorText = match.groupValues[1].trim()
                 if ("emote" !in selectorText) continue
-                val declarations = match.groupValues[2].split(';').mapNotNull { decl ->
+                val all = match.groupValues[2].split(';').mapNotNull { decl ->
                     val colon = decl.indexOf(':')
                     if (colon <= 0) null
-                    else decl.substring(0, colon).trim().lowercase() to decl.substring(colon + 1).replace("!important", "").trim()
-                }.filter { (name, _) -> name in drawn || name.startsWith("--") }
-                if (declarations.isEmpty()) continue
-                val selectors = splitTopLevel(selectorText, ',').mapNotNull { text ->
-                    // An emote's own rules are read with it; only the ones that depend on context belong here.
-                    if (ownRule.matches(text.trim())) null else runCatching { SelectorParser(text.trim()).complex() }.getOrNull()
-                }.filter { !it.never }
-                if (selectors.isEmpty()) continue
-                val rule = ContextRule(selectors, declarations, order++)
-                val names = selectors.flatMap { it.subjectNames() }.ifEmpty { listOf("*") }.toSet()
-                for (name in names) out.getOrPut(name) { ArrayList() } += rule
+                    else decl.substring(0, colon).trim().let { if (it.startsWith("--")) it else it.lowercase() } to decl.substring(colon + 1).replace("!important", "").trim()
+                }
+                val declarations = all.filter { (name, _) -> name in drawn || name.startsWith("--") }
+                // Selectors by the part of the emote they style: itself, or its ::before or ::after.
+                val byPart = splitTopLevel(selectorText, ',').map { it.trim() }.groupBy { pseudoEnd.find(it)?.groupValues?.get(1) }
+                for ((pseudo, texts) in byPart) {
+                    val decls = if (pseudo == null) declarations else all
+                    if (decls.isEmpty()) continue
+                    val selectors = texts.mapNotNull { text ->
+                        val subject = if (pseudo == null) text else text.removeRange(pseudoEnd.find(text)!!.range)
+                        // An emote's own rules are read with it; only the ones that depend on context belong here.
+                        if (ownRule.matches(subject)) null else runCatching { SelectorParser(subject).complex() }.getOrNull()
+                    }.filter { !it.never }
+                    if (selectors.isEmpty()) continue
+                    val rule = ContextRule(selectors, decls, order++, pseudo)
+                    val names = selectors.flatMap { it.subjectNames() }.ifEmpty { listOf("*") }.toSet()
+                    for (name in names) out.getOrPut(name) { ArrayList() } += rule
+                }
             }
             return EmoteContext(out)
         }
 
         private val ownRule = Regex("""^(?:\.text\s*>\s*)?\.emote\.[A-Za-z0-9_-]+$""")
+        private val pseudoEnd = Regex("""::?(before|after)$""")
     }
 }
 
-private class ContextRule(val selectors: List<Complex>, val declarations: List<Pair<String, String>>, val order: Int)
+private class ContextRule(val selectors: List<Complex>, val declarations: List<Pair<String, String>>, val order: Int, val pseudo: String? = null)
 
 // --- A model of a chat line -------------------------------------------------
 

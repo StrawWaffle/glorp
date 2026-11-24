@@ -37,6 +37,8 @@ data class Pose(
     val lineHeightPx: Float = Float.NaN,
     val widthFraction: Float = Float.NaN,
     val letterPx: Float = Float.NaN,
+    /** For an [Overlay] placed by `right` keyframes (NoTears' banana flying back): its `right` in px. */
+    val rightPx: Float = Float.NaN,
 ) {
     companion object {
         val Rest = Pose()
@@ -64,6 +66,8 @@ data class KeyFrame(
     val lineHeight: Float? = null,
     val widthFraction: Float? = null,
     val letterSpacing: Float? = null,
+    /** An overlay's `right` in px, as written. */
+    val right: Float? = null,
     /** `width` and `margin-left` in px as written; in an emote's [Motion], the change from its own. */
     val width: Float? = null,
     val marginLeft: Float? = null,
@@ -132,6 +136,8 @@ data class Motion(
     val holdLast: Boolean,
     /** The emote's own pivot, where a keyframe sets `transform-origin` and the next doesn't. */
     val restOrigin: Pair<Float, Float> = 0.5f to 0.5f,
+    /** An overlay's own `right`, where its keyframes leave it out; NaN where it has none. */
+    val restRight: Float = Float.NaN,
 ) {
     val endMs: Long get() = if (iterations == Int.MAX_VALUE) Long.MAX_VALUE else delayMs + durationMs * iterations
 
@@ -173,6 +179,9 @@ data class Motion(
         interpolate(p, { it.marginLeft }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dml = it) }
         interpolate(p, { it.top }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dtop = it) }
         interpolate(p, { it.left }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dleft = it) }
+        frames.firstOrNull { it.right != null }?.right?.let { first ->
+            interpolate(p, { it.right }, if (restRight.isNaN()) first else restRight) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(rightPx = it) }
+        }
         if (frames.any { it.content != null || it.fontSize != null || it.lineHeight != null || it.widthFraction != null || it.letterSpacing != null }) {
             stepAt(p) { it.content }?.let { pose = pose.copy(text = it) }
             stepAt(p) { it.fontSize }?.let { pose = pose.copy(fontPx = it) }
@@ -270,7 +279,8 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
             val lineHeight = px("line-height")
             val widthFraction = decls["width"]?.trim()?.takeIf { it.endsWith("%") }?.removeSuffix("%")?.toFloatOrNull()?.div(100f)
             val letterSpacing = px("letter-spacing")
-            if (transform == null && opacity == null && filter == null && background == null && origin == null && clip == null && width == null &&
+            val right = px("right")
+            if (right == null && transform == null && opacity == null && filter == null && background == null && origin == null && clip == null && width == null &&
                 marginLeft == null && top == null && left == null && content == null && fontSize == null && lineHeight == null && widthFraction == null && letterSpacing == null
             ) continue
             for (at in s.groupValues[1].split(',')) {
@@ -280,7 +290,7 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
                     else -> word.removeSuffix("%").toFloatOrNull()?.div(100f)
                 } ?: continue
                 frames += KeyFrame(offset, transform, opacity, filter, background, origin, clip = clip, width = width, marginLeft = marginLeft, top = top, left = left, easing = stepEasing,
-                    content = content, fontSize = fontSize, lineHeight = lineHeight, widthFraction = widthFraction, letterSpacing = letterSpacing,
+                    content = content, fontSize = fontSize, lineHeight = lineHeight, widthFraction = widthFraction, letterSpacing = letterSpacing, right = right,
                 )
             }
         }
@@ -340,7 +350,7 @@ private fun declarations(body: String): Map<String, String> {
     val out = HashMap<String, String>()
     for (decl in body.split(';')) {
         val colon = decl.indexOf(':')
-        if (colon > 0) out[decl.substring(0, colon).trim().lowercase()] = decl.substring(colon + 1).trim()
+        if (colon > 0) out[decl.substring(0, colon).trim().let { if (it.startsWith("--")) it else it.lowercase() }] = decl.substring(colon + 1).trim()
     }
     return out
 }

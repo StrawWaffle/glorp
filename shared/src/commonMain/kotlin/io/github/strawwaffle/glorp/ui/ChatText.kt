@@ -499,7 +499,10 @@ private fun DrawScope.drawOverlay(
         bw = layout.size.width.toFloat()
         bh = layout.size.height.toFloat()
     }
-    val x = (overlay.left?.let { it * scale } ?: overlay.right?.let { boxWidth - it * scale - bw } ?: 0f) + (pose.tx + pose.dleft) * scale
+    val x = when {
+        !pose.rightPx.isNaN() -> boxWidth - pose.rightPx * scale - bw
+        else -> overlay.left?.let { it * scale } ?: overlay.right?.let { boxWidth - it * scale - bw } ?: 0f
+    } + (pose.tx + pose.dleft) * scale
     val y = overlay.top * scale + (pose.ty + pose.dtop) * scale
     val pivot = Offset((if (pose.ox.isNaN()) overlay.originX else pose.ox) * bw, (if (pose.oy.isNaN()) overlay.originY else pose.oy) * bh)
     val stages = pose.filter.colorStages()

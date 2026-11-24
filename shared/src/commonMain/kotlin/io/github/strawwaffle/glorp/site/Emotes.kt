@@ -147,11 +147,15 @@ class Emotes private constructor(
     internal fun inLine(line: LineModel): List<Emote?> {
         val b = builder ?: return line.emotes.map { it.emoteName?.let(byPrefix::get) }
         val extra = b.context.declarations(line)
+        val before = b.context.declarations(line, "before")
+        val after = b.context.declarations(line, "after")
         return line.emotes.mapIndexed { i, el ->
             val base = el.emoteName?.let(byPrefix::get) ?: return@mapIndexed null
             val added = extra[i]
-            if (added.isEmpty()) base
-            else b.variants.getOrPut(base.prefix + "\u0000" + added.joinToString(";")) { b.variant(base, added) }
+            if (added.isEmpty() && before[i].isEmpty() && after[i].isEmpty()) base
+            else b.variants.getOrPut(base.prefix + "\u0000" + added.joinToString(";") + "\u0000" + before[i].joinToString(";") + "\u0000" + after[i].joinToString(";")) {
+                b.variant(base, added, before[i], after[i])
+            }
         }
     }
 
@@ -169,7 +173,7 @@ class Emotes private constructor(
     ) {
         val variants = HashMap<String, Emote>()
 
-        fun variant(base: Emote, added: List<Pair<String, String>>): Emote {
+        fun variant(base: Emote, added: List<Pair<String, String>>, before: List<Pair<String, String>> = emptyList(), after: List<Pair<String, String>> = emptyList()): Emote {
             val decls = HashMap<String, MutableList<String>>()
             own[base.prefix]?.forEach { (k, v) -> decls[k] = v.toMutableList() }
             for ((name, value) in added) decls.getOrPut(name) { ArrayList() } += value
@@ -183,7 +187,16 @@ class Emotes private constructor(
                 image.startsWith("data:") -> base.url
                 else -> base.url.substringBeforeLast('/') + "/" + image
             }
-            return build(base.prefix, url, w, h, base.minimumSubTier, decls, keyframes, moving, overlayRules(own, base.prefix))
+            // Its ::before and ::after: their own rules, then what the line adds.
+            fun part(name: String, more: List<Pair<String, String>>): Decls? {
+                val mine = own["${base.prefix}::$name"]
+                if (mine == null && more.isEmpty()) return null
+                val d = HashMap<String, MutableList<String>>()
+                mine?.forEach { (k, v) -> d[k] = v.toMutableList() }
+                for ((k, v) in more) d.getOrPut(k) { ArrayList() } += v
+                return d
+            }
+            return build(base.prefix, url, w, h, base.minimumSubTier, decls, keyframes, moving, listOfNotNull(part("before", before), part("after", after)))
         }
     }
     val size: Int get() = byPrefix.size
@@ -343,7 +356,11 @@ private fun build(
             .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.filter != null || it.background != null || it.origin != null || it.clip != null || it.width != null || it.marginLeft != null || it.left != null } },
         originX = originX, originY = originY, rest = rest,
         marginLeft = marginLeft, marginRight = marginRight, verticalAlign = verticalAlign,
-        overlays = overlayDecls.mapNotNull { overlayOf(it, moving, url) },
+        // A ::before or ::after inherits the emote's custom properties (NoTears' `--t-NoTears`).
+        overlays = overlayDecls.mapNotNull { part ->
+            val withVars = HashMap(part).apply { decls.filterKeys { it.startsWith("--") }.forEach { (k, v) -> putIfAbsent(k, v) } }
+            overlayOf(withVars, moving, url)
+        },
     )
 }
 
@@ -486,7 +503,8 @@ private fun baseRules(css: String): Map<String, Decls> {
         for (decl in match.groupValues[3].split(';')) {
             val colon = decl.indexOf(':')
             if (colon <= 0) continue
-            val name = decl.substring(0, colon).trim().lowercase()
+            // Custom properties keep their case: `var(--t-NoTears)` names `--t-NoTears`.
+            val name = decl.substring(0, colon).trim().let { if (it.startsWith("--")) it else it.lowercase() }
             decls.getOrPut(name) { ArrayList() }.add(decl.substring(colon + 1).trim())
         }
     }
@@ -628,7 +646,7 @@ private fun overlayOf(decls: Decls, moving: Map<String, List<KeyFrame>>, emoteUr
     decls.value("animation-delay")?.let(::cssMillis)?.let { ms -> motions = motions.map { it.copy(delayMs = ms) } }
     // Its `top` and `left` keyframes as changes from where it stands.
     motions = motions.map { m ->
-        m.copy(restOrigin = originX to originY, frames = m.frames.map { f ->
+        m.copy(restOrigin = originX to originY, restRight = len("right") ?: Float.NaN, frames = m.frames.map { f ->
             f.copy(top = f.top?.let { it - top }, left = f.left?.let { it - (left ?: 0f) }, origin = f.originText?.let { readOrigin(it, box, box) })
         })
     }
