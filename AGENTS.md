@@ -58,6 +58,11 @@
   `rememberme`, one per line, piped from the owner's secrets folder. The next
   launch moves it into the encrypted store and deletes the file. Never put the
   values in the repo or on the host's command line.
+- Emotes are drawn from the site's own `emotes.css`. After changing how
+  (site/Emotes.kt, Motion.kt, Filter.kt, ui/ChatText.kt), run
+  `scripts/emote-compare/compare.sh` with a dev build on the phone: it renders
+  every animated emote with the real stylesheet in headless Chrome next to the
+  app's frames at the same moments, and lists what Glorp doesn't read yet.
 - Chat events the test account can't cause (polls, pins): write frames to
   `files/dev-frames` next to `dev-session`, one per line, as the server sends
   them (`POLLSTART {...}`); `sleep N` waits N ms and `$NOW` becomes the time.
