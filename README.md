@@ -8,7 +8,7 @@ few things the site doesn't have. Chat only stays connected while the app is
 on screen, and only the rows you can see get drawn, so it's light on battery
 and memory.
 
-**[strawwaffle.github.io/glorp](https://strawwaffle.github.io/glorp/)** ·
+**[strawwaffle.dev/glorp](https://strawwaffle.dev/glorp/)** ·
 **[Download the latest release](https://github.com/StrawWaffle/glorp/releases/latest)**
 
 Glorp is a community project. Neither destiny.gg nor Destiny makes it or is
@@ -92,7 +92,7 @@ for anyone who wants to try what's next.
 
 Glorp is a phone app, and the app is where to start. If you also use
 destiny.gg's chat in a browser, the
-[Glorp userscript](https://strawwaffle.github.io/glorp/userscript/glorp.user.js)
+[Glorp userscript](https://strawwaffle.dev/glorp/userscript/glorp.user.js)
 brings a few of Glorp's own things there: the themes, name icons, hiding
 other streams' chat, your latest mention kept in view, polecat.me's mentions,
 and your icon and chat's tag in each name's menu. It does much less than the
@@ -122,12 +122,12 @@ destiny.gg's login page can't run inside an app, because Twitch, Kick and
 Google block sign-in there. Glorp signs in two other ways.
 
 - **From a computer.** This unlocks everything. Open
-  [Glorp's sign-in page](https://strawwaffle.github.io/glorp/signin/) on a
+  [Glorp's sign-in page](https://strawwaffle.dev/glorp/signin/) on a
   computer that's signed in to destiny.gg, copy the two values it asks for
   from the browser, and scan the code it shows with Glorp. The page sends
   nothing anywhere. Its code is in [`pages/signin`](pages/signin). With
   Violentmonkey, or Tampermonkey's beta, the
-  [Glorp userscript](https://strawwaffle.github.io/glorp/userscript/glorp.user.js)
+  [Glorp userscript](https://strawwaffle.dev/glorp/userscript/glorp.user.js)
   reads the two values for you and shows the code on destiny.gg itself.
 - **A login key.** This covers chat and whispers. Create one on your
   account's developer page and paste it into Glorp.

@@ -106,7 +106,7 @@ fun SignInScreen(
 private enum class Way { Choose, Key, Cookies }
 
 /** Where the computer half of the QR sign-in lives. */
-const val SIGN_IN_PAGE = "https://strawwaffle.github.io/glorp/signin/"
+const val SIGN_IN_PAGE = "https://strawwaffle.dev/glorp/signin/"
 
 @Composable
 private fun Option(title: String, detail: String, content: @Composable () -> Unit) {
