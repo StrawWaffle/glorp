@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Glorp
 // @namespace    https://strawwaffle.github.io/glorp/
-// @version      2.5
+// @version      2.6
 // @description  Glorp's own chat features in destiny.gg's chat on a computer: themes, name icons, hiding other streams' chat, sticky mentions, settings synced with the Glorp app, and signing Glorp in without the developer tools.
 // @match        https://www.destiny.gg/*
 // @match        https://www.omniliberal.dev/*
@@ -213,7 +213,9 @@
       // A button filled with the action colour takes the deeper shade, which white text reads on.
       var css = rules.map(function (r) {
         var role = r[2] === "action" && r[1] === "background-color" ? "actionFill" : r[2];
-        return r[0] + "{" + r[1] + ":" + colour(t, role) + " !important}";
+        // A name's colour is its flair's (flairs.css): the theme only recolours names with no flair.
+        var selector = r[1] === "color" ? nameSafe(r[0]) : r[0];
+        return selector + "{" + r[1] + ":" + colour(t, role) + " !important}";
       }).join("\n");
       // Glorp's own menus scroll as chat does: a thin see-through handle, no track.
       css += "\n#glorp-settings .scrollable,#glorp-mentions .scrollable{scrollbar-width:thin;scrollbar-color:" + (t.light ? "rgba(0,0,0,.3)" : "rgba(255,255,255,.4)") + " transparent}";
@@ -229,6 +231,18 @@
       if (t.tile) css += aerithShapes(t);
       themeStyle.textContent = css;
     });
+  }
+
+  /**
+   * A colour rule's selector kept off flaired names, whose colour is their
+   * flair's (flairs.css): `.user` only where the name has no flair, and links
+   * (names are links) never names.
+   */
+  function nameSafe(selector) {
+    return selector.split(",").map(function (part) {
+      part = part.trim().replace(/\.user$/, '.user[class="user"]');
+      return /(^|[\s>+~])a([:.\[][^\s>+~]*)?$/.test(part) ? part + ":not(.user)" : part;
+    }).join(",");
   }
 
   /** A role's colour in theme [t], with the site-only roles falling back on the chat's. */
