@@ -1,6 +1,7 @@
 package io.github.strawwaffle.glorp.chat
 
 import io.github.strawwaffle.glorp.site.Flairs
+import io.github.strawwaffle.glorp.ui.appendMentions
 import io.github.strawwaffle.glorp.site.Site
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -47,8 +48,17 @@ class ChatTest {
     }
 
     @Test
+    fun marksTappableNames() {
+        val text = androidx.compose.ui.text.buildAnnotatedString { appendMentions("hello chatter2, ask @someone_else and chatter2s or email@x.com", listOf("chatter2")) }
+        val nicks = text.getStringAnnotations("nick", 0, text.length).map { it.item }
+        assertEquals(listOf("chatter2", "someone_else"), nicks)
+    }
+
+    @Test
     fun skipsWhatItDoesNotUse() {
-        assertNull(parseFrame("""JOIN {"nick":"someone"}""", now))
+        // Joins and quits are kept now: who is in chat decides which names in a message can be tapped.
+        assertEquals(ChatEvent.Joined("someone"), parseFrame("""JOIN {"nick":"someone"}""", now))
+        assertEquals(ChatEvent.Left("someone"), parseFrame("""QUIT {"nick":"someone"}""", now))
         assertNull(parseFrame("MSG not json", now))
         assertNull(parseFrame("", now))
     }

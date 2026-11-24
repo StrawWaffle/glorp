@@ -1107,7 +1107,7 @@ private fun prepare(
         var emoteIndex = 0
         withStyle(style) {
             for (segment in parts) when (segment) {
-                is Segment.Text -> append(segment.text)
+                is Segment.Text -> appendMentions(segment.text, line.mentioned)
                 is Segment.Link -> withAnnotation("url", segment.url) {
                     withStyle(linkLook) {
                         val title = titleOf(segment.url)
@@ -1209,3 +1209,27 @@ private class RowPacer {
         private const val MOST_BEHIND = 60
     }
 }
+
+/**
+ * chat-gui's MentionedUserFormatter: an `@name` (3 to 20 letters, digits or
+ * underscores, after a space, the start or `>`, before a space, the end or
+ * `.?!,'`) can be tapped whether or not that person is here, the `@` staying
+ * outside; a bare name only if they were in chat when the message came
+ * ([mentioned]). Tapping one opens their card, as the sender's name does.
+ */
+internal fun AnnotatedString.Builder.appendMentions(text: String, mentioned: List<String>) {
+    val names = mentioned.mapTo(HashSet()) { it.lowercase() }
+    var at = 0
+    for (m in mentionWord.findAll(text)) {
+        val at2 = m.groups[2]!!
+        val name = m.groups[3]!!
+        val tappable = at2.value == "@" || name.value.lowercase() in names
+        if (!tappable) continue
+        append(text.substring(at, name.range.first))
+        withAnnotation("nick", name.value) { append(name.value) }
+        at = name.range.last + 1
+    }
+    append(text.substring(at))
+}
+
+private val mentionWord = Regex("""(^|\s|>)(@?)(\w{3,20})(?=$|\s|[.?!,'])""")

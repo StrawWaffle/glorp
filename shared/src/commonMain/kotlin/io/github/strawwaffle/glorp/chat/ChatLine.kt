@@ -37,6 +37,11 @@ data class ChatLine(
     val moderated: Boolean = false,
     /** What the sender was watching on bigscreen when they sent it, as `platform/id` in lower case. */
     val watching: String? = null,
+    /**
+     * Names in the text of people who were in chat when it came, as written:
+     * they can be tapped like the sender's, as in chat-gui (an `@name` always can).
+     */
+    val mentioned: List<String> = emptyList(),
     /** For [Kind.Event]: what happened (a subscription, a donation…). */
     val event: EventLine? = null,
     /** A moderator spotlighted this message (chat-gui's framed messages); who did. */

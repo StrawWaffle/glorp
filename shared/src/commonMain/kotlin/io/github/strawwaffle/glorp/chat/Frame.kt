@@ -41,6 +41,10 @@ sealed interface ChatEvent {
     /** The roster sent on connect, still as the server's JSON (see [rosterNicks]). */
     class Names(val payload: String) : ChatEvent
 
+    /** Someone connected to chat, or left it: who is in chat decides which names in a message can be tapped. */
+    data class Joined(val nick: String) : ChatEvent
+    data class Left(val nick: String) : ChatEvent
+
     /** A poll started, or the one running, sent on connect. */
     data class PollStart(val poll: Poll) : ChatEvent
 
@@ -219,6 +223,8 @@ fun parseFrame(raw: String, now: () -> Long): ChatEvent? {
                 )
             }
             "NAMES" -> ChatEvent.Names(payload)
+            "JOIN" -> rosterNicks(payload).firstOrNull()?.let(ChatEvent::Joined)
+            "QUIT" -> rosterNicks(payload).firstOrNull()?.let(ChatEvent::Left)
             "PRIVMSGSENT" -> ChatEvent.WhisperSent
             "SUBONLY" -> ChatEvent.Notice(subOnlyText(chatJson.decodeFromString<WireSubOnly>(payload)))
             "POLLSTART" -> parsePollStart(payload, now())?.let(ChatEvent::PollStart)

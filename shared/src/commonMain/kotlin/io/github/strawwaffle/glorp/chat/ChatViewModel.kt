@@ -905,7 +905,11 @@ class ChatViewModel(
                 val marked = log.respotlight()
                 added or censored or marked
             }
+            is ChatEvent.Joined -> { present.add(event.nick.lowercase()); false }
+            is ChatEvent.Left -> { present.remove(event.nick.lowercase()); false }
             is ChatEvent.Names -> {
+                present.clear()
+                (parsed.roster ?: rosterNicks(event.payload)).forEach { present.add(it.lowercase()) }
                 // Only someone who can type needs names to complete.
                 if (_account.value != null) input.completer.setRoster(parsed.roster ?: rosterNicks(event.payload))
                 false
@@ -1106,7 +1110,14 @@ class ChatViewModel(
     }
 
     /** A message or whisper: dropped if its sender is ignored, else remembered for autocomplete and logged. */
-    private fun received(line: ChatLine): Boolean {
+    /** Who is in chat now, in lower case: from the roster on connect, then joins and quits. */
+    private val present = HashSet<String>()
+
+    private fun received(incoming: ChatLine): Boolean {
+        // Names of people in chat now become tappable in it, as chat-gui marks them when a message comes.
+        val line = if (incoming.kind != ChatLine.Kind.User || present.isEmpty()) incoming
+        else nickWord.findAll(incoming.text).map { it.value }.filter { it.lowercase() in present }.distinct().toList()
+            .let { if (it.isEmpty()) incoming else incoming.copy(mentioned = it) }
         val nick = line.nick
         if (nick != null) {
             if (nick in input.ignored) return false
@@ -1194,3 +1205,7 @@ class ChatViewModel(
     }
 
 }
+
+/** A word that could be a nick, as chat-gui looks for them. */
+private val nickWord = Regex("""\w{3,20}""")
+
