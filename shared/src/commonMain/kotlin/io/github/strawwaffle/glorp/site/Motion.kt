@@ -39,6 +39,11 @@ data class Pose(
     val letterPx: Float = Float.NaN,
     /** For an [Overlay] placed by `right` keyframes (NoTears' banana flying back): its `right` in px. */
     val rightPx: Float = Float.NaN,
+    /** `skew()` in degrees, applied after the scale (CROPSTINY, YAM, pepeJAM). */
+    val skewX: Float = 0f,
+    val skewY: Float = 0f,
+    /** `z-index` from keyframes: above 0, drawn over its neighbours (BLADE swinging over the next emote). */
+    val z: Float = 0f,
 ) {
     companion object {
         val Rest = Pose()
@@ -68,6 +73,8 @@ data class KeyFrame(
     val letterSpacing: Float? = null,
     /** An overlay's `right` in px, as written. */
     val right: Float? = null,
+    /** `z-index`, which changes in steps. */
+    val z: Float? = null,
     /** `width` and `margin-left` in px as written; in an emote's [Motion], the change from its own. */
     val width: Float? = null,
     val marginLeft: Float? = null,
@@ -166,8 +173,9 @@ data class Motion(
         var pose = base
         // Where a keyframe leaves the transform out, the emote's still one stands in.
         interpolate(p, { it.transform }, base.copy(opacity = 1f, filter = Filter.None)) { a, b, f ->
-            Pose(lerp(a.tx, b.tx, f), lerp(a.ty, b.ty, f), lerp(a.rotate, b.rotate, f), lerp(a.sx, b.sx, f), lerp(a.sy, b.sy, f))
-        }?.let { pose = pose.copy(tx = it.tx, ty = it.ty, rotate = it.rotate, sx = it.sx, sy = it.sy) }
+            Pose(lerp(a.tx, b.tx, f), lerp(a.ty, b.ty, f), lerp(a.rotate, b.rotate, f), lerp(a.sx, b.sx, f), lerp(a.sy, b.sy, f), skewX = lerp(a.skewX, b.skewX, f), skewY = lerp(a.skewY, b.skewY, f))
+        }?.let { pose = pose.copy(tx = it.tx, ty = it.ty, rotate = it.rotate, sx = it.sx, sy = it.sy, skewX = it.skewX, skewY = it.skewY) }
+        stepAt(p) { it.z }?.let { pose = pose.copy(z = it) }
         interpolate(p, { it.opacity }, 1f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(opacity = it) }
         interpolate(p, { it.filter }, base.filter) { a, b, f -> a.mix(b, f) }?.let { pose = pose.copy(filter = it) }
         interpolate(p, { it.background }, 0f to 0f) { a, b, f -> lerp(a.first, b.first, f) to lerp(a.second, b.second, f) }
@@ -280,7 +288,8 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
             val widthFraction = decls["width"]?.trim()?.takeIf { it.endsWith("%") }?.removeSuffix("%")?.toFloatOrNull()?.div(100f)
             val letterSpacing = px("letter-spacing")
             val right = px("right")
-            if (right == null && transform == null && opacity == null && filter == null && background == null && origin == null && clip == null && width == null &&
+            val z = decls["z-index"]?.trim()?.toFloatOrNull()
+            if (right == null && z == null && transform == null && opacity == null && filter == null && background == null && origin == null && clip == null && width == null &&
                 marginLeft == null && top == null && left == null && content == null && fontSize == null && lineHeight == null && widthFraction == null && letterSpacing == null
             ) continue
             for (at in s.groupValues[1].split(',')) {
@@ -290,7 +299,7 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
                     else -> word.removeSuffix("%").toFloatOrNull()?.div(100f)
                 } ?: continue
                 frames += KeyFrame(offset, transform, opacity, filter, background, origin, clip = clip, width = width, marginLeft = marginLeft, top = top, left = left, easing = stepEasing,
-                    content = content, fontSize = fontSize, lineHeight = lineHeight, widthFraction = widthFraction, letterSpacing = letterSpacing, right = right,
+                    content = content, fontSize = fontSize, lineHeight = lineHeight, widthFraction = widthFraction, letterSpacing = letterSpacing, right = right, z = z,
                 )
             }
         }
@@ -394,6 +403,9 @@ internal fun readTransform(written: String): Pose? {
             }
             "scalex" -> pose.copy(sx = pose.sx * (args.firstOrNull()?.let(::number) ?: 1f))
             "scaley" -> pose.copy(sy = pose.sy * (args.firstOrNull()?.let(::number) ?: 1f))
+            "skew" -> pose.copy(skewX = pose.skewX + (args.getOrNull(0)?.let(::angle) ?: 0f), skewY = pose.skewY + (args.getOrNull(1)?.let(::angle) ?: 0f))
+            "skewx" -> pose.copy(skewX = pose.skewX + (args.firstOrNull()?.let(::angle) ?: 0f))
+            "skewy" -> pose.copy(skewY = pose.skewY + (args.firstOrNull()?.let(::angle) ?: 0f))
             "scale3d" -> pose.copy(sx = pose.sx * (args.getOrNull(0)?.let(::number) ?: 1f), sy = pose.sy * (args.getOrNull(1)?.let(::number) ?: 1f))
             else -> return null
         }

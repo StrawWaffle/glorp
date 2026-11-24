@@ -310,8 +310,16 @@ internal fun ChatText(
         val layout = holder.layout ?: return@drawBehind
         val now = clock.longValue
         val rects = layout.placeholderRects
-        prepared.items.forEachIndexed { i, item ->
-            val rect = rects.getOrNull(i) ?: return@forEachIndexed
+        // Emotes raised by a z-index keyframe are drawn after the rest, over them.
+        val raised = prepared.items.indices.filter { i ->
+            val item = prepared.items[i]
+            item is InlineItem.EmoteItem && animate && item.sentAt > 0 && now != SETTLED_MS && item.emote.motions.isNotEmpty() &&
+                item.emote.motions.fold(item.emote.rest) { p, m -> m.apply(now - item.sentAt, p) }.z > 0f
+        }.toSet()
+        val order = if (raised.isEmpty()) prepared.items.indices else prepared.items.indices.filter { it !in raised } + raised
+        for (i in order) {
+            val item = prepared.items[i]
+            val rect = rects.getOrNull(i) ?: continue
             when (item) {
                 is InlineItem.BadgeItem -> ChatImages.get(item.url, context)?.let { p ->
                     translate(rect.left, rect.top) { with(p) { draw(Size(rect.width, rect.height)) } }
@@ -436,6 +444,7 @@ private fun DrawScope.drawEmote(
         translate(dx, dy)
         if (pose.rotate != 0f) rotate(pose.rotate, pivot)
         if (pose.sx != 1f || pose.sy != 1f) scale(pose.sx, pose.sy, pivot)
+        if (pose.skewX != 0f || pose.skewY != 0f) skew(pose.skewX, pose.skewY, pivot)
     }) {
         val shape = pose.clip?.let { c ->
             Path().apply {
@@ -605,4 +614,14 @@ private fun DrawScope.drawSheet(emote: Emote, painter: Painter, w: Float, h: Flo
         }
     }
     repeat(layers.size) { drawContext.canvas.restore() }
+}
+
+/** CSS `skew(x, y)` in degrees about [pivot]. */
+private fun androidx.compose.ui.graphics.drawscope.DrawTransform.skew(xDeg: Float, yDeg: Float, pivot: Offset) {
+    val m = androidx.compose.ui.graphics.Matrix()
+    m.values[androidx.compose.ui.graphics.Matrix.SkewX] = kotlin.math.tan(xDeg * kotlin.math.PI.toFloat() / 180f)
+    m.values[androidx.compose.ui.graphics.Matrix.SkewY] = kotlin.math.tan(yDeg * kotlin.math.PI.toFloat() / 180f)
+    translate(pivot.x, pivot.y)
+    transform(m)
+    translate(-pivot.x, -pivot.y)
 }

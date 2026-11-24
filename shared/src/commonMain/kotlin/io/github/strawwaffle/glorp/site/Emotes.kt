@@ -353,7 +353,7 @@ private fun build(
         // A motion whose keyframes this can't read moves nothing; kept, an endless
         // one would redraw the emote every frame for nothing (EatFresh's x5 combo).
         motions = motions.map { m -> m.slidingFrom(offset, offsetY, shrink).withOrigins(width / shrink, height / shrink, originX to originY).withBox(width / shrink, marginLeft.toDouble(), shrink) }
-            .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.filter != null || it.background != null || it.origin != null || it.clip != null || it.width != null || it.marginLeft != null || it.left != null } },
+            .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.filter != null || it.background != null || it.origin != null || it.clip != null || it.width != null || it.marginLeft != null || it.left != null || it.z != null } },
         originX = originX, originY = originY, rest = rest,
         marginLeft = marginLeft, marginRight = marginRight, verticalAlign = verticalAlign,
         // A ::before or ::after inherits the emote's custom properties (NoTears' `--t-NoTears`).
