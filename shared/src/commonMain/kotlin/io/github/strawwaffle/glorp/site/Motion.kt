@@ -31,6 +31,12 @@ data class Pose(
     /** For an [Overlay]: how far its `top` and `left` keyframes move it, in px. */
     val dtop: Float = 0f,
     val dleft: Float = 0f,
+    /** For an [Overlay] whose keyframes change its text (HACKERMAN typing): the text, and its size, line height, width (fraction of the emote's) and spacing in px. */
+    val text: String? = null,
+    val fontPx: Float = Float.NaN,
+    val lineHeightPx: Float = Float.NaN,
+    val widthFraction: Float = Float.NaN,
+    val letterPx: Float = Float.NaN,
 ) {
     companion object {
         val Rest = Pose()
@@ -52,6 +58,12 @@ data class KeyFrame(
     val clip: List<Float>? = null,
     /** `animation-timing-function` set in this keyframe: how the stretch from here to the next one eases. */
     val easing: Easing? = null,
+    /** An overlay's `content`, `font-size`, `line-height`, `width` (as a fraction) and `letter-spacing`, which change in steps. */
+    val content: String? = null,
+    val fontSize: Float? = null,
+    val lineHeight: Float? = null,
+    val widthFraction: Float? = null,
+    val letterSpacing: Float? = null,
     /** `width` and `margin-left` in px as written; in an emote's [Motion], the change from its own. */
     val width: Float? = null,
     val marginLeft: Float? = null,
@@ -161,7 +173,24 @@ data class Motion(
         interpolate(p, { it.marginLeft }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dml = it) }
         interpolate(p, { it.top }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dtop = it) }
         interpolate(p, { it.left }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dleft = it) }
+        if (frames.any { it.content != null || it.fontSize != null || it.lineHeight != null || it.widthFraction != null || it.letterSpacing != null }) {
+            stepAt(p) { it.content }?.let { pose = pose.copy(text = it) }
+            stepAt(p) { it.fontSize }?.let { pose = pose.copy(fontPx = it) }
+            stepAt(p) { it.lineHeight }?.let { pose = pose.copy(lineHeightPx = it) }
+            stepAt(p) { it.widthFraction }?.let { pose = pose.copy(widthFraction = it) }
+            stepAt(p) { it.letterSpacing }?.let { pose = pose.copy(letterPx = it) }
+        }
         return pose
+    }
+
+    /** The value the last keyframe at or before [p] sets, for what changes in steps (an overlay's text). */
+    private inline fun <T> stepAt(p: Float, pick: (KeyFrame) -> T?): T? {
+        var out: T? = null
+        for (frame in frames) {
+            if (frame.at > p) break
+            pick(frame)?.let { out = it }
+        }
+        return out
     }
 
     /**
@@ -235,15 +264,24 @@ internal fun motionKeyframes(css: String): Map<String, List<KeyFrame>> {
             val marginLeft = px("margin-left")
             val top = px("top")
             val left = px("left")
-            if (transform == null && opacity == null && filter == null && background == null && origin == null && clip == null && width == null && marginLeft == null && top == null && left == null) continue
             val stepEasing = decls["animation-timing-function"]?.let(::readEasing)
+            val content = decls["content"]?.trim()?.let { Regex("""^["'](.*)["']$""").find(it)?.groupValues?.get(1) }
+            val fontSize = px("font-size")
+            val lineHeight = px("line-height")
+            val widthFraction = decls["width"]?.trim()?.takeIf { it.endsWith("%") }?.removeSuffix("%")?.toFloatOrNull()?.div(100f)
+            val letterSpacing = px("letter-spacing")
+            if (transform == null && opacity == null && filter == null && background == null && origin == null && clip == null && width == null &&
+                marginLeft == null && top == null && left == null && content == null && fontSize == null && lineHeight == null && widthFraction == null && letterSpacing == null
+            ) continue
             for (at in s.groupValues[1].split(',')) {
                 val offset = when (val word = at.trim().lowercase()) {
                     "from" -> 0f
                     "to" -> 1f
                     else -> word.removeSuffix("%").toFloatOrNull()?.div(100f)
                 } ?: continue
-                frames += KeyFrame(offset, transform, opacity, filter, background, origin, clip = clip, width = width, marginLeft = marginLeft, top = top, left = left, easing = stepEasing)
+                frames += KeyFrame(offset, transform, opacity, filter, background, origin, clip = clip, width = width, marginLeft = marginLeft, top = top, left = left, easing = stepEasing,
+                    content = content, fontSize = fontSize, lineHeight = lineHeight, widthFraction = widthFraction, letterSpacing = letterSpacing,
+                )
             }
         }
         if (frames.isNotEmpty()) out[match.groupValues[1]] = frames.sortedBy { it.at }

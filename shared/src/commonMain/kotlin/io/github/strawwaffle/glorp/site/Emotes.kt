@@ -82,6 +82,18 @@ data class Overlay(
     val letterSpacing: Float = 0f,
     /** `text-shadow`: offset and blur in px, colour 0xAARRGGBB. */
     val shadow: Filter.Glow? = null,
+    /** `line-height` in px; null for about 1.2 times the font size. */
+    val lineHeight: Float? = null,
+    /** Its box's width, in px or as a fraction of the emote's: text wraps to it, a picture fills it. */
+    val widthPx: Float? = null,
+    val widthFraction: Float? = null,
+    val heightPx: Float? = null,
+    /** `mix-blend-mode`: screen (SNAP's flash), color-burn, luminosity (BERN's second picture). */
+    val blend: String? = null,
+    /** A picture instead of text: its address (a data: one too), or "inherit" for the emote's own. */
+    val image: String? = null,
+    /** A `mask-image: linear-gradient(angle, black a%, transparent b%)`: angle in degrees, a and b as fractions. */
+    val mask: List<Float>? = null,
 )
 
 /** A sprite strip animation, as the stylesheet runs it. */
@@ -331,7 +343,7 @@ private fun build(
             .filter { m -> m.frames.any { it.transform != null || it.opacity != null || it.filter != null || it.background != null || it.origin != null || it.clip != null || it.width != null || it.marginLeft != null || it.left != null } },
         originX = originX, originY = originY, rest = rest,
         marginLeft = marginLeft, marginRight = marginRight, verticalAlign = verticalAlign,
-        overlays = overlayDecls.mapNotNull { overlayOf(it, moving) },
+        overlays = overlayDecls.mapNotNull { overlayOf(it, moving, url) },
     )
 }
 
@@ -587,10 +599,20 @@ private fun overlayRules(rules: Map<String, Decls>, prefix: String): List<Decls>
     listOfNotNull(rules["$prefix::before"], rules["$prefix::after"])
 
 /** A pseudo-element with text to draw, or null (an empty `content`, a picture, nothing). */
-private fun overlayOf(decls: Decls, moving: Map<String, List<KeyFrame>>): Overlay? {
+private fun overlayOf(decls: Decls, moving: Map<String, List<KeyFrame>>, emoteUrl: String): Overlay? {
     val content = decls.value("content")?.trim() ?: return null
-    val text = Regex("""^["'](.*)["']$""").find(content)?.groupValues?.get(1)?.takeIf { it.isNotBlank() } ?: return null
     if (decls.value("display")?.trim() == "none") return null
+    val text = Regex("""^["'](.*)["']$""").find(content)?.groupValues?.get(1) ?: return null
+    // A picture: `background(-image): url(...)` or `inherit`, the emote's own.
+    val background = (decls.value("background-image") ?: decls.value("background"))?.trim()
+    val image = when {
+        background == null -> null
+        background.startsWith("inherit") -> "inherit"
+        else -> Regex("""url\(\s*["']?([^"')]+)["']?\s*\)""").find(background)?.groupValues?.get(1)?.let { url ->
+            if (url.startsWith("http") || url.startsWith("data:")) url else emoteUrl.substringBeforeLast('/') + "/" + url
+        }
+    }
+    if (text.isBlank() && image == null) return null
     fun len(name: String) = decls.value(name)?.trim()?.let { if (it == "0") 0.0 else pxRegex.find(it)?.groupValues?.get(1)?.toDouble() }?.toFloat()
     val fontSize = len("font-size") ?: 13f
     val argb = decls.value("color")?.let { readFilter("drop-shadow(0 0 0 $it)")?.glows?.firstOrNull()?.argb }
@@ -599,8 +621,9 @@ private fun overlayOf(decls: Decls, moving: Map<String, List<KeyFrame>>): Overla
     decls.value("filter")?.let(::readFilter)?.takeIf { !it.isNone }?.let { rest = rest.copy(filter = it) }
     val box = fontSize * 1.2
     val (originX, originY) = readOrigin(decls.value("transform-origin"), (len("width") ?: (fontSize * 1.2f)).toDouble(), box)
-    val top = len("top") ?: 0f
-    val left = len("left")
+    // Absolutely placed by top and left, or (`display: block`) where its margins put it.
+    val top = len("top") ?: len("margin-top") ?: 0f
+    val left = len("left") ?: len("margin-left")
     var motions = decls.value("animation")?.let { motionsOf(topLevelParts(it), moving) }.orEmpty()
     decls.value("animation-delay")?.let(::cssMillis)?.let { ms -> motions = motions.map { it.copy(delayMs = ms) } }
     // Its `top` and `left` keyframes as changes from where it stands.
@@ -610,8 +633,21 @@ private fun overlayOf(decls: Decls, moving: Map<String, List<KeyFrame>>): Overla
         })
     }
     val shadow = decls.value("text-shadow")?.takeIf { it.trim() != "none" }?.let { readFilter("drop-shadow(${it.substringBefore(',')})")?.glows?.firstOrNull() }
+    val width = decls.value("width")?.trim()
+    val mask = (decls.value("mask-image") ?: decls.value("-webkit-mask-image"))?.let { m ->
+        Regex("""linear-gradient\(\s*(-?[\d.]+)deg\s*,\s*black\s+([\d.]+)%\s*,\s*transparent\s+([\d.]+)%\s*\)""").find(m)?.groupValues?.let {
+            listOf(it[1].toFloat(), it[2].toFloat() / 100f, it[3].toFloat() / 100f)
+        }
+    }
     return Overlay(
         text, fontSize, argb, left, len("right"), top, rest, originX, originY, motions,
         italic = decls.value("font-style")?.trim() == "italic", letterSpacing = len("letter-spacing") ?: 0f, shadow = shadow,
+        lineHeight = len("line-height"),
+        widthPx = width?.let { if (it == "0") 0f else pxRegex.find(it)?.groupValues?.get(1)?.toFloat() },
+        widthFraction = width?.takeIf { it.endsWith("%") }?.removeSuffix("%")?.toFloatOrNull()?.div(100f),
+        heightPx = len("height"),
+        blend = decls.value("mix-blend-mode")?.trim()?.takeIf { it != "normal" },
+        image = image,
+        mask = mask,
     )
 }

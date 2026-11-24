@@ -326,7 +326,7 @@ internal fun ChatText(
                 is InlineItem.EmoteItem -> ChatImages.get(item.emote.url, context)?.let { p ->
                     val elapsed = if (!animate || item.sentAt <= 0 || now == SETTLED_MS) SETTLED_MS else now - item.sentAt
                     val at = emoteRect(item.emote, rect)
-                    drawEmote(item.emote, p, at.left, at.top, at.height, elapsed, still = !animate, measurer)
+                    drawEmote(item.emote, p, at.left, at.top, at.height, elapsed, still = !animate, measurer) { url -> ChatImages.get(url, context) }
                 }
             }
         }
@@ -400,7 +400,10 @@ private fun DrawScope.drawRainbow(outline: Pair<Path, androidx.compose.ui.geomet
  * An emote as [EmoteImage] draws it: the frame of its strip for [elapsedMs],
  * placed by its background, moved, turned and scaled about its origin.
  */
-private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top: Float, heightPx: Float, elapsedMs: Long, still: Boolean, measurer: TextMeasurer) {
+private fun DrawScope.drawEmote(
+    emote: Emote, painter: Painter, left: Float, top: Float, heightPx: Float, elapsedMs: Long, still: Boolean,
+    measurer: TextMeasurer, pictures: (String) -> Painter?,
+) {
     val sprite = emote.sprite
     val scale = heightPx / emote.height
     val h = heightPx
@@ -444,7 +447,9 @@ private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top
         if (shape != null) clipPath(shape) { drawSheet(emote, painter, w, h, offset, scale, pose, filter, stages) }
         else drawSheet(emote, painter, w, h, offset, scale, pose, filter, stages)
         if (emote.overlays.isNotEmpty()) clipRect(0f, 0f, w, h) {
-            for (overlay in emote.overlays) drawOverlay(overlay, at, still, scale, w, measurer)
+            for (overlay in emote.overlays) drawOverlay(overlay, at, still, scale, w, h, measurer) { url ->
+                if (url == "inherit") painter else pictures(url)
+            }
         }
     }
 }
@@ -452,43 +457,112 @@ private fun DrawScope.drawEmote(emote: Emote, painter: Painter, left: Float, top
 /** Overlay text laid out once per look, shared by every line: an emoji at a size. */
 private val overlayLayouts = HashMap<String, androidx.compose.ui.text.TextLayoutResult>()
 
-/** A `::before` or `::after`: its text where and as its rules and keyframes put it. */
-private fun DrawScope.drawOverlay(overlay: io.github.strawwaffle.glorp.site.Overlay, at: Long, still: Boolean, scale: Float, boxWidth: Float, measurer: TextMeasurer) {
+/** A `::before` or `::after`: its text or picture where and as its rules and keyframes put it. */
+private fun DrawScope.drawOverlay(
+    overlay: io.github.strawwaffle.glorp.site.Overlay, at: Long, still: Boolean, scale: Float, boxWidth: Float, boxHeight: Float,
+    measurer: TextMeasurer, pictures: (String) -> Painter?,
+) {
     val pose = if (still) overlay.rest else overlay.motions.fold(overlay.rest) { p, m -> m.apply(at, p) }
     if (pose.opacity <= 0f || pose.sx == 0f || pose.sy == 0f) return
-    val px = overlay.fontSize * scale
-    val color = overlay.argb?.let { androidx.compose.ui.graphics.Color(it.toInt()) } ?: androidx.compose.ui.graphics.Color.White
-    val key = "${overlay.text}|$px|${overlay.argb}|${overlay.italic}|${overlay.letterSpacing}|${overlay.shadow}|$density|$fontScale"
-    val layout = overlayLayouts.getOrPut(key) {
-        if (overlayLayouts.size > 200) overlayLayouts.clear()
-        val sp = { v: Float -> (v / fontScale / density).sp }
-        val style = TextStyle(
-            color = color,
-            fontSize = sp(px),
-            lineHeight = sp(px * 1.2f),
-            fontStyle = if (overlay.italic) androidx.compose.ui.text.font.FontStyle.Italic else null,
-            letterSpacing = sp(overlay.letterSpacing * scale),
-            shadow = overlay.shadow?.let { androidx.compose.ui.graphics.Shadow(androidx.compose.ui.graphics.Color(it.argb.toInt()), Offset(it.dx * scale, it.dy * scale), it.blur * scale) },
-        )
-        measurer.measure(overlay.text, style, softWrap = false, density = this)
+    val fraction = if (pose.widthFraction.isNaN()) overlay.widthFraction else pose.widthFraction
+    val widthPx = fraction?.let { it * boxWidth } ?: overlay.widthPx?.let { it * scale }
+    val image = overlay.image
+    val layout: androidx.compose.ui.text.TextLayoutResult?
+    val bw: Float
+    val bh: Float
+    if (image != null) {
+        layout = null
+        bw = widthPx ?: boxWidth
+        bh = overlay.heightPx?.let { it * scale } ?: boxHeight
+    } else {
+        val text = pose.text ?: overlay.text
+        val px = (if (pose.fontPx.isNaN()) overlay.fontSize else pose.fontPx) * scale
+        val lineHeight = (if (pose.lineHeightPx.isNaN()) overlay.lineHeight else pose.lineHeightPx)?.let { it * scale } ?: (px * 1.2f)
+        val letters = (if (pose.letterPx.isNaN()) overlay.letterSpacing else pose.letterPx) * scale
+        val color = overlay.argb?.let { androidx.compose.ui.graphics.Color(it.toInt()) } ?: androidx.compose.ui.graphics.Color.White
+        val key = "$text|$px|$lineHeight|$letters|$widthPx|${overlay.argb}|${overlay.italic}|${overlay.shadow}|$density|$fontScale"
+        layout = overlayLayouts.getOrPut(key) {
+            if (overlayLayouts.size > 200) overlayLayouts.clear()
+            val sp = { v: Float -> (v / fontScale / density).sp }
+            val style = TextStyle(
+                color = color,
+                fontSize = sp(px),
+                lineHeight = sp(lineHeight),
+                fontStyle = if (overlay.italic) androidx.compose.ui.text.font.FontStyle.Italic else null,
+                letterSpacing = sp(letters),
+                shadow = overlay.shadow?.let { androidx.compose.ui.graphics.Shadow(androidx.compose.ui.graphics.Color(it.argb.toInt()), Offset(it.dx * scale, it.dy * scale), it.blur * scale) },
+            )
+            // With a width it wraps to it (HACKERMAN's lines of digits); without, one line.
+            if (widthPx != null && widthPx > 0f) measurer.measure(text, style, constraints = Constraints(maxWidth = widthPx.roundToInt().coerceAtLeast(1)), density = this)
+            else measurer.measure(text, style, softWrap = false, density = this)
+        }
+        bw = layout.size.width.toFloat()
+        bh = layout.size.height.toFloat()
     }
-    val bw = layout.size.width.toFloat()
-    val bh = layout.size.height.toFloat()
     val x = (overlay.left?.let { it * scale } ?: overlay.right?.let { boxWidth - it * scale - bw } ?: 0f) + (pose.tx + pose.dleft) * scale
     val y = overlay.top * scale + (pose.ty + pose.dtop) * scale
     val pivot = Offset((if (pose.ox.isNaN()) overlay.originX else pose.ox) * bw, (if (pose.oy.isNaN()) overlay.originY else pose.oy) * bh)
     val stages = pose.filter.colorStages()
+    val blend = blendOf(overlay.blend)
+    val bounds = androidx.compose.ui.geometry.Rect(0f, 0f, bw, bh)
     withTransform({
         translate(x, y)
         if (pose.rotate != 0f) rotate(pose.rotate, pivot)
         if (pose.sx != 1f || pose.sy != 1f) scale(pose.sx, pose.sy, pivot)
     }) {
+        // Blended with what's under it, its colour stages inside that, and a mask inside those.
+        if (blend != null) drawContext.canvas.saveLayer(bounds, Paint().apply { blendMode = blend })
         for (stage in stages.asReversed()) {
-            drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, bw, bh), Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(stage)) })
+            drawContext.canvas.saveLayer(bounds, Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(stage)) })
         }
-        drawText(layout, alpha = pose.opacity.coerceIn(0f, 1f))
+        val mask = overlay.mask
+        if (mask != null) drawContext.canvas.saveLayer(bounds, Paint())
+        val alpha = pose.opacity.coerceIn(0f, 1f)
+        if (layout != null) drawText(layout, alpha = alpha)
+        else pictures(image!!)?.let { p -> with(p) { draw(Size(bw, bh), alpha = alpha) } }
+        if (mask != null) {
+            // CSS angles: 180deg runs top to bottom, 90deg left to right.
+            val r = mask[0] * kotlin.math.PI.toFloat() / 180f
+            val dx = kotlin.math.sin(r)
+            val dy = -kotlin.math.cos(r)
+            val half = (kotlin.math.abs(bw * dx) + kotlin.math.abs(bh * dy)) / 2
+            val c = Offset(bw / 2, bh / 2)
+            val start = c - Offset(dx * half, dy * half)
+            val end = c + Offset(dx * half, dy * half)
+            drawRect(
+                Brush.linearGradient(
+                    mask[1] to androidx.compose.ui.graphics.Color.Black,
+                    mask[2] to androidx.compose.ui.graphics.Color.Transparent,
+                    start = start, end = end,
+                ),
+                size = Size(bw, bh),
+                blendMode = BlendMode.DstIn,
+            )
+            drawContext.canvas.restore()
+        }
         repeat(stages.size) { drawContext.canvas.restore() }
+        if (blend != null) drawContext.canvas.restore()
     }
+}
+
+/** A CSS `mix-blend-mode` as Compose's. */
+private fun blendOf(name: String?): BlendMode? = when (name) {
+    "multiply" -> BlendMode.Multiply
+    "screen" -> BlendMode.Screen
+    "overlay" -> BlendMode.Overlay
+    "darken" -> BlendMode.Darken
+    "lighten" -> BlendMode.Lighten
+    "color-dodge" -> BlendMode.ColorDodge
+    "color-burn" -> BlendMode.ColorBurn
+    "hard-light" -> BlendMode.Hardlight
+    "soft-light" -> BlendMode.Softlight
+    "difference" -> BlendMode.Difference
+    "exclusion" -> BlendMode.Exclusion
+    "hue" -> BlendMode.Hue
+    "saturation" -> BlendMode.Saturation
+    "color" -> BlendMode.Color
+    "luminosity" -> BlendMode.Luminosity
+    else -> null
 }
 
 private fun DrawScope.drawSheet(emote: Emote, painter: Painter, w: Float, h: Float, offset: Float, scale: Float, pose: Pose, filter: ColorFilter?, stages: List<FloatArray>) {
