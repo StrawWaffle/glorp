@@ -1,0 +1,34 @@
+/* chat-gui's combo styles (assets/chat/css/messages/emote/_combo.scss), compiled by
+   hand for combos.py; SPLAT is replaced with the splat picture's address. */
+.chat-combo { color: #dedede; display: inline-block; position: relative; line-height: 2em; padding-left: 0.6em; }
+.chat-combo i { font-style: normal; display: inline-block; vertical-align: middle; }
+.chat-combo .hit, .chat-combo .combo, .chat-combo .count, .chat-combo .x {
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
+.chat-combo .combo { display: none; color: #999999; font-weight: normal; }
+.chat-combo .hit { color: #fff7f9; animation: emote-hit 600ms 1; font-style: italic; text-transform: uppercase;
+  margin-left: 0; letter-spacing: 0.05em; display: inline-block; }
+.chat-combo .count { font-size: 1.15em; letter-spacing: -0.05em; font-weight: bold; }
+.chat-combo.x5 .count { font-size: 150%; }
+.chat-combo.x10 .count { font-size: 200%; }
+.chat-combo.x10 .combo { font-weight: bold; }
+.chat-combo.x20 .count { font-size: 300%; }
+.chat-combo.x20 .combo { font-weight: bold; }
+.chat-combo.x30 .count { font-size: 400%; }
+.chat-combo.x30 .combo { font-weight: bold; }
+.chat-combo.x50 .count { font-size: 500%; }
+.chat-combo.x50 .combo { font-weight: bold; }
+.chat-combo.combo-complete.x10, .chat-combo.combo-complete.x20, .chat-combo.combo-complete.x30, .chat-combo.combo-complete.x50 {
+  animation: emote-greyout 3500ms 1; background: transparent url('SPLAT') no-repeat center center;
+  background-size: 100% 100%; filter: grayscale(100%); }
+.chat-combo.combo-complete.x10 .combo, .chat-combo.combo-complete.x20 .combo, .chat-combo.combo-complete.x30 .combo,
+.chat-combo.combo-complete.x50 .combo { color: #fff7f9; margin-left: 0.6em; }
+.chat-combo.combo-complete .combo { animation: emote-complete 1000ms 1; display: inline-block; }
+.chat-combo.combo-complete .hit { display: none; }
+@keyframes emote-hit {
+  0% { color: #b91010; font-size: 200%; } 1% { color: #fff7f9; font-size: 190%; }
+  2% { color: #b91010; font-size: 200%; } 3% { color: #fff7f9; font-size: 190%; }
+  4% { color: #b91010; font-size: 200%; } 100% { color: #fff7f9; font-size: 120%; } }
+@keyframes emote-complete {
+  0% { transform: translate(-10px, 0); opacity: 0; } 2% { transform: translate(10px, 0); color: white; opacity: 1; }
+  100% { transform: translate(0, 0); opacity: 1; } }
+@keyframes emote-greyout { 0% { filter: grayscale(0); } 75% { filter: grayscale(0); } 100% { filter: grayscale(100%); } }

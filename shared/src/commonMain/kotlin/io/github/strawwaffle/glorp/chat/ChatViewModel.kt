@@ -1,5 +1,9 @@
 package io.github.strawwaffle.glorp.chat
 
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
 import io.github.strawwaffle.glorp.diag.AppLog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -250,6 +254,7 @@ class ChatViewModel(
         viewModelScope.launch {
             site = Site.discover(client, origin)
             launch { _flairs.value = Flairs.fetch(client, site) }
+            launch { io.github.strawwaffle.glorp.ui.ChatRendering.comboSplat = comboSplat(site) }
             launch {
                 // Chat starts with each emote's own rules; how emotes look beside others follows.
                 val emoteSite = io.github.strawwaffle.glorp.ui.ChatRendering.emoteCdn?.let { site.copy(cdn = it) } ?: site
@@ -1166,4 +1171,26 @@ class ChatViewModel(
         /** chat-gui's `chat.settings.pending`: the user with changes here the account's copy lacks. */
         const val SETTINGS_PENDING = "settings.pending"
     }
+
+    /**
+     * chat-gui's splat behind a finished combo of 10 or more: named, with a
+     * hash, in the chat page's stylesheet, so read from there (once) rather
+     * than kept in the app. Null if it can't be found.
+     */
+    private suspend fun comboSplat(site: Site): String? = try {
+        val css = site.chatCss
+        if (css == null) null
+        else {
+            val response = client.get(css) { header(io.ktor.http.HttpHeaders.UserAgent, ChatSocket.USER_AGENT) }
+            if (!response.status.isSuccess()) null
+            else Regex("""url\(["']?([^)"']*emote-splat[^)"']*)["']?\)""").find(response.bodyAsText())?.groupValues?.get(1)?.let { path ->
+                if (path.startsWith("http")) path else css.substringBeforeLast('/') + "/" + path
+            }
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        null
+    }
+
 }

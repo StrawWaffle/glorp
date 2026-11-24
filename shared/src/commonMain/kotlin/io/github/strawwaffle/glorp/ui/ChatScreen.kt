@@ -623,9 +623,13 @@ internal fun ChatRow(
     if (titles != null && media.isNotEmpty()) LaunchedEffect(line.id) { media.forEach(titles::request) }
     val knownTitles = media.map { titles?.titleOf(it) }
     // The trial: one element per line (see ChatText); a line it can't draw keeps the old way.
+    val comboMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
     val prepared = if (!ChatRendering.singleNode) null
     else remember(line, continued, flairs, emotes, density, me, look, censored, knownTitles) {
-        prepare(line, continued, flairs, emotes, density, me, mention, look, censored, titleOf = { url -> titles?.titleOf(url) })
+        prepare(
+            line, continued, flairs, emotes, density, me, mention, look, censored, titleOf = { url -> titles?.titleOf(url) },
+            comboWidth = { count, ended -> comboWidthDp(comboMeasurer, density, count, ended) },
+        )
     }
     val renderedOld = if (prepared != null) null else remember(line, continued, flairs, emotes, density, me, look, censored, knownTitles) {
         render(
@@ -978,6 +982,8 @@ private fun prepare(
     look: ChatLook,
     censored: Boolean,
     titleOf: (String) -> LinkTitles.Title? = { null },
+    /** A combo's tail width at rest, in dp. */
+    comboWidth: (count: Int, ended: Boolean) -> Int = { _, _ -> 120 },
 ): PreparedLine {
     val placeholders = ArrayList<AnnotatedString.Range<Placeholder>>()
     val items = ArrayList<InlineItem>()
@@ -1023,20 +1029,15 @@ private fun prepare(
             }
             ChatLine.Kind.Combo -> {
                 val emote = emotes[line.text]?.let { emotes.inLine(LineModel.combo(it.prefix, line.comboCount)).firstOrNull() ?: it }
-                if (emote != null) emote(emote, line.lastHitAt.takeIf { it > 0 } ?: line.at) else append(line.text)
-                append("  ")
-                val n = line.comboCount
-                val size = when {
-                    n >= 50 -> 24.sp
-                    n >= 30 -> 22.sp
-                    n >= 20 -> 20.sp
-                    n >= 10 -> 18.sp
-                    n >= 5 -> 16.sp
-                    else -> 14.sp
-                }
-                withStyle(SpanStyle(color = Palette.White, fontWeight = FontWeight.Bold, fontSize = size)) { append("$n") }
-                withStyle(SpanStyle(color = Palette.TextDim, fontSize = 12.sp, fontStyle = FontStyle.Italic)) { append(" X Hits ") }
-                withStyle(SpanStyle(color = Palette.Orange, fontWeight = FontWeight.Bold, fontSize = 12.sp)) { append("C-C-C-COMBO") }
+                // chat-gui puts the line back into the page on every hit and when the combo ends,
+                // which starts the emote's animation over each time.
+                if (emote != null) emote(emote, maxOf(line.lastHitAt.takeIf { it > 0 } ?: line.at, line.comboEndedAt)) else append(line.text)
+                // The count, X and HITS (or, once ended, C-C-C-COMBO), drawn as chat-gui does (see ComboItem).
+                val ended = line.comboEndedAt > 0
+                picture(
+                    InlineItem.ComboItem(line.comboCount, line.lastHitAt.takeIf { it > 0 } ?: line.at, line.comboEndedAt, comboWidth(line.comboCount, ended)),
+                    "${line.comboCount} X ${if (ended) "C-C-C-COMBO" else "Hits"}",
+                )
                 return@buildAnnotatedString
             }
             ChatLine.Kind.Whisper -> {

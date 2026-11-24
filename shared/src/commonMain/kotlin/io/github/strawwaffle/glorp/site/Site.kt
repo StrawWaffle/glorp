@@ -17,6 +17,8 @@ data class Site(
     val origin: String,
     val chatSocketUrl: String,
     val cdn: String,
+    /** The chat page's own stylesheet, where chat-gui's pictures (the combo splat) are named. */
+    val chatCss: String? = null,
 ) {
     /** The site's name as people write it: `destiny.gg`, `omniliberal.dev`. */
     val host: String get() = origin.substringAfter("://").removePrefix("www.").trimEnd('/')
@@ -32,7 +34,8 @@ data class Site(
         fun fromChatPage(origin: String, html: String): Site? {
             val ws = attribute(html, "data-ws-url") ?: return null
             val cdn = attribute(html, "data-cdn") ?: return null
-            return Site(origin.trimEnd('/'), ws, cdn.trimEnd('/'))
+            val css = Regex("""href="(https?://[^"]*chat[^"]*\.css)"""").find(html)?.groupValues?.get(1)
+            return Site(origin.trimEnd('/'), ws, cdn.trimEnd('/'), css)
         }
 
         private fun attribute(html: String, name: String): String? =

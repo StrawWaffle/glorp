@@ -65,6 +65,10 @@ class ChatLog(capacity: Int = DEFAULT_CAPACITY) {
                 return true
             }
         }
+        // Any other message ends a running combo, as in chat-gui.
+        if (last != null && last.kind == ChatLine.Kind.Combo && last.comboEndedAt == 0L) {
+            lines[lines.lastIndex] = last.copy(comboEndedAt = line.at.takeIf { it > 0 } ?: kotlin.time.Clock.System.now().toEpochMilliseconds())
+        }
         lines.addLast(line)
         trim()
         return true

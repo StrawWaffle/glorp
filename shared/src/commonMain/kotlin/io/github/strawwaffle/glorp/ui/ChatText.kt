@@ -105,6 +105,12 @@ object ChatRendering {
      * in. For comparing emotes frame by frame with the site's.
      */
     var clockAt: Long? = null
+
+    /** chat-gui's splat picture for finished combos of 10 and more, once read from the site (see ChatViewModel). */
+    private val splat = androidx.compose.runtime.mutableStateOf<String?>(null)
+    var comboSplat: String?
+        get() = splat.value
+        set(value) { splat.value = value }
 }
 
 /** Something drawn in a line's text, at a placeholder the size of it. */
@@ -119,6 +125,33 @@ internal sealed interface InlineItem {
     }
 
     class BadgeItem(val url: String, val label: String, override val widthDp: Int, override val heightDp: Int) : InlineItem
+
+    /**
+     * A combo's tail, as chat-gui draws it: the count (bigger from 5, 10, 20,
+     * 30 and 50 hits), "X", then "HITS" (which flashes on every hit) while it
+     * runs, or "C-C-C-COMBO" (sliding in) once another message ends it, over
+     * the site's splat fading to grey from 10 hits.
+     */
+    class ComboItem(
+        val count: Int,
+        val lastHitAt: Long,
+        val endedAt: Long,
+        override val widthDp: Int,
+    ) : InlineItem {
+        override val heightDp get() = 28
+        val group get() = when {
+            count >= 50 -> 50; count >= 30 -> 30; count >= 20 -> 20; count >= 10 -> 10; count >= 5 -> 5; else -> 2
+        }
+        /** The count's size, as a multiple of chat's text. */
+        val countScale get() = when (group) { 50 -> 5f; 30 -> 4f; 20 -> 3f; 10 -> 2f; 5 -> 1.5f; else -> 1.15f }
+        fun moves(now: Long) = now - lastHitAt in 0 until HIT_MS || (endedAt > 0 && now - endedAt in 0 until GREYOUT_MS)
+
+        companion object {
+            const val HIT_MS = 600L
+            const val COMPLETE_MS = 1000L
+            const val GREYOUT_MS = 3500L
+        }
+    }
 
     class PlatformItem(val platform: String) : InlineItem {
         override val widthDp get() = 19
@@ -151,7 +184,7 @@ internal class PreparedLine(
     }
 
     /** An emote still moving, or a name in the moving rainbow: the row needs a clock. */
-    fun moves(now: Long): Boolean = rainbowName != null || items.any {
+    fun moves(now: Long): Boolean = rainbowName != null || items.any { it is InlineItem.ComboItem && it.moves(now) } || items.any {
         it is InlineItem.EmoteItem && it.sentAt > 0 &&
             (it.emote.motions.any { m -> m.iterations == Int.MAX_VALUE } || now - it.sentAt < it.emote.settlesAfterMs)
     }
@@ -331,6 +364,7 @@ internal fun ChatText(
                         with(p) { draw(Size(side, side), colorFilter = ColorFilter.tint(color)) }
                     }
                 }
+                is InlineItem.ComboItem -> drawCombo(item, rect, now, measurer) { url -> ChatImages.get(url, context) }
                 is InlineItem.EmoteItem -> ChatImages.get(item.emote.url, context)?.let { p ->
                     val elapsed = if (!animate || item.sentAt <= 0 || now == SETTLED_MS) SETTLED_MS else now - item.sentAt
                     val at = emoteRect(item.emote, rect)
@@ -634,4 +668,119 @@ private fun androidx.compose.ui.graphics.drawscope.DrawTransform.skew(xDeg: Floa
     translate(pivot.x, pivot.y)
     transform(m)
     translate(-pivot.x, -pivot.y)
+}
+
+private val comboText = androidx.compose.ui.graphics.Color(0xFFDEDEDE)
+private val comboLight = androidx.compose.ui.graphics.Color(0xFFFFF7F9)
+private val comboDim = androidx.compose.ui.graphics.Color(0xFF999999)
+private val comboRed = androidx.compose.ui.graphics.Color(0xFFB91010)
+
+/** One piece of a combo's tail, laid out once per look. */
+private fun DrawScope.comboPiece(measurer: TextMeasurer, text: String, px: Float, color: androidx.compose.ui.graphics.Color, bold: Boolean = false, italic: Boolean = false, letters: Float = 0f): androidx.compose.ui.text.TextLayoutResult {
+    val key = "combo|$text|$px|${color.value}|$bold|$italic|$letters|$density|$fontScale"
+    return overlayLayouts.getOrPut(key) {
+        if (overlayLayouts.size > 200) overlayLayouts.clear()
+        val sp = { v: Float -> (v / fontScale / density).sp }
+        measurer.measure(
+            text,
+            TextStyle(
+                color = color, fontSize = sp(px), letterSpacing = sp(letters * px),
+                fontWeight = if (bold) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal,
+                fontStyle = if (italic) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
+            ),
+            softWrap = false, density = this,
+        )
+    }
+}
+
+/** Text with chat-gui's 1px black outline (four shadows). */
+private fun DrawScope.outlined(layout: androidx.compose.ui.text.TextLayoutResult, x: Float, centreY: Float, alpha: Float = 1f, color: androidx.compose.ui.graphics.Color? = null) {
+    val y = centreY - layout.size.height / 2f
+    val o = 1.dp.toPx()
+    for ((dx, dy) in listOf(-o to -o, o to -o, -o to o, o to o)) {
+        drawText(layout, color = androidx.compose.ui.graphics.Color.Black, topLeft = Offset(x + dx, y + dy), alpha = alpha)
+    }
+    if (color != null) drawText(layout, color = color, topLeft = Offset(x, y), alpha = alpha)
+    else drawText(layout, topLeft = Offset(x, y), alpha = alpha)
+}
+
+/** How wide a combo's tail is at rest, in dp, for its placeholder. */
+internal fun comboWidthDp(measurer: TextMeasurer, density: Density, count: Int, ended: Boolean): Int {
+    val base = 14f
+    val group = when { count >= 50 -> 5f; count >= 30 -> 4f; count >= 20 -> 3f; count >= 10 -> 2f; count >= 5 -> 1.5f; else -> 1.15f }
+    fun w(text: String, size: Float, bold: Boolean = false, italic: Boolean = false, letters: Float = 0f) = measurer.measure(
+        text,
+        TextStyle(
+            fontSize = androidx.compose.ui.unit.TextUnit(size, androidx.compose.ui.unit.TextUnitType.Sp), letterSpacing = androidx.compose.ui.unit.TextUnit(letters * size, androidx.compose.ui.unit.TextUnitType.Sp),
+            fontWeight = if (bold) androidx.compose.ui.text.font.FontWeight.Bold else null,
+            fontStyle = if (italic) androidx.compose.ui.text.font.FontStyle.Italic else null,
+        ),
+        softWrap = false, density = density,
+    ).size.width / density.density
+    val space = w(" ", base)
+    val tail = if (ended) (if (count >= 10) base * 0.6f else 0f) + w("C-C-C-COMBO", base, bold = count >= 10) else w("HITS", base, italic = true, letters = 0.05f)
+    return (base * 0.6f + w("$count", base * group, bold = true, letters = -0.05f) + space + w("X", base) + space + tail + 2f).toInt() + 1
+}
+
+/** A combo's tail at [now]: see [InlineItem.ComboItem]. */
+private fun DrawScope.drawCombo(item: InlineItem.ComboItem, rect: androidx.compose.ui.geometry.Rect, now: Long, measurer: TextMeasurer, pictures: (String) -> Painter?) {
+    val px = 14.dp.toPx()
+    val settled = now == SETTLED_MS
+    val ended = item.endedAt > 0
+    val big = item.group >= 10
+    // From 10 hits, a finished combo: the splat behind it, the whole tail greying out over 3.5 s (from 75% of it).
+    var grey = 0f
+    if (ended && big) {
+        val t = if (settled) item.endedAt + InlineItem.ComboItem.GREYOUT_MS else now - item.endedAt
+        grey = ((t.toFloat() / InlineItem.ComboItem.GREYOUT_MS - 0.75f) / 0.25f).coerceIn(0f, 1f)
+    }
+    val greyFilter = if (grey > 0f) io.github.strawwaffle.glorp.site.Filter(listOf(io.github.strawwaffle.glorp.site.Filter.Fn("grayscale", grey))).colorMatrix() else null
+    if (greyFilter != null) drawContext.canvas.saveLayer(rect.inflate(px * 3), Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(greyFilter)) })
+    if (ended && big) {
+        ChatRendering.comboSplat?.let(pictures)?.let { p ->
+            translate(rect.left, rect.top) { with(p) { draw(Size(rect.width, rect.height)) } }
+        }
+    }
+    val cy = rect.center.y
+    var x = rect.left + px * 0.6f
+    val count = comboPiece(measurer, "${item.count}", px * item.countScale, comboText, bold = true, letters = -0.05f)
+    outlined(count, x, cy)
+    x += count.size.width
+    val space = comboPiece(measurer, " ", px, comboText).size.width
+    x += space
+    val cross = comboPiece(measurer, "X", px, comboText)
+    outlined(cross, x, cy)
+    x += cross.size.width + space
+    if (!ended) {
+        // "HITS": red and twice the size at a hit, flickering, shrinking to 120% and fading to light over 0.6 s.
+        val t = now - item.lastHitAt
+        if (!settled && t in 0 until InlineItem.ComboItem.HIT_MS) {
+            val p = t.toFloat() / InlineItem.ComboItem.HIT_MS
+            val (size, color) = when {
+                p < 0.01f -> 2f to comboRed
+                p < 0.02f -> 1.9f to comboLight
+                p < 0.03f -> 2f to comboRed
+                p < 0.04f -> 1.9f to comboLight
+                else -> {
+                    val f = (p - 0.04f) / 0.96f
+                    (2f + (1.2f - 2f) * f) to androidx.compose.ui.graphics.lerp(comboRed, comboLight, f)
+                }
+            }
+            outlined(comboPiece(measurer, "HITS", px * size, comboLight, italic = true, letters = 0.05f), x, cy, color = color)
+        } else {
+            outlined(comboPiece(measurer, "HITS", px, comboLight, italic = true, letters = 0.05f), x, cy)
+        }
+    } else {
+        // "C-C-C-COMBO" comes in from the left, overshoots in white, and settles.
+        val t = if (settled) InlineItem.ComboItem.COMPLETE_MS else now - item.endedAt
+        val p = (t.toFloat() / InlineItem.ComboItem.COMPLETE_MS).coerceIn(0f, 1f)
+        val own = if (big) comboLight else comboDim
+        val (dx, alpha, color) = when {
+            p < 0.02f -> Triple(-10f + 20f * (p / 0.02f), p / 0.02f, androidx.compose.ui.graphics.lerp(own, androidx.compose.ui.graphics.Color.White, p / 0.02f))
+            else -> Triple(10f * (1f - (p - 0.02f) / 0.98f), 1f, androidx.compose.ui.graphics.lerp(androidx.compose.ui.graphics.Color.White, own, (p - 0.02f) / 0.98f))
+        }
+        if (big) x += px * 0.6f
+        outlined(comboPiece(measurer, "C-C-C-COMBO", px, own, bold = big), x + dx.dp.toPx(), cy, alpha = alpha, color = color)
+    }
+    if (greyFilter != null) drawContext.canvas.restore()
 }

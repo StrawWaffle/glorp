@@ -29,6 +29,8 @@ data class ChatLine(
     val comboCount: Int = 0,
     /** For [Kind.Combo]: when the latest of them came; its emote plays again from there, as on the site. */
     val lastHitAt: Long = 0,
+    /** For [Kind.Combo]: when another message ended it (chat-gui's `combo-complete`); 0 while it runs. */
+    val comboEndedAt: Long = 0,
     /** For [Kind.Whisper]: the site's id for it, to mark it read. */
     val messageId: String? = null,
     /** A moderator muted or banned the sender after this was sent; `showremoved` says how it shows. */
