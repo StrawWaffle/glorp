@@ -51,11 +51,12 @@ with memory and battery throughout.
    chat-gui would build, cascading by specificity over the emote's own
    rules; still transforms (mirrored pairs), the animation longhands and a
    combo's own picture are drawn. `RealStylesheetTest` checks it against a
-   saved copy of the site's stylesheet (`-Pglorp.emotes=<dir>`). Still to
-   do: hover and pseudo-element effects, filters other than brightness,
-   keyframes that use variables, emotes
-   overlapping lines the way the site draws them rather than making lines
-   taller.
+   saved copy of the site's stylesheet (`-Pglorp.emotes=<dir>`). Filters,
+   glows, clip paths, skew, z-index, `::before` and `::after` overlays,
+   hover rules (played in the emote card) and emotes overlapping lines as on
+   the site are drawn too. `scripts/emote-compare` checks every animated
+   emote and combo frame by frame against the site in headless Chrome and
+   lists what's still unread.
 3. **Logged in** (started): a login key made on the site's developer page in
    the phone's browser and pasted into the app; chat takes it as the
    `authtoken` cookie. (The site's own login page can't run in a web view:
