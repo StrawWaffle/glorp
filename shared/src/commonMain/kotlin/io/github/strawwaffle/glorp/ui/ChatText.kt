@@ -399,7 +399,7 @@ internal fun ChatText(
             // The rainbow is laid over the name's letters only (SrcAtop), in a
             // layer just the size of the name, so the emotes drawn after can
             // still reach outside the row.
-            drawIntoCanvas { it.saveLayer(rainbow.second.inflate(2f), Paint()) }
+            drawIntoCanvas { it.saveLayer(rainbow.second.inflate(2f), layer()) }
             drawText(layout)
             drawRainbow(rainbow, if (now == SETTLED_MS) 0f else (now % 3_000) / 3_000f)
             drawIntoCanvas { it.restore() }
@@ -415,7 +415,7 @@ internal fun ChatText(
         // Emotes raised by a z-index keyframe are drawn after the rest, over them.
         val raised = prepared.items.indices.filter { i ->
             val item = prepared.items[i]
-            item is InlineItem.EmoteItem && animate && item.sentAt > 0 && now != SETTLED_MS && item.emote.motions.isNotEmpty() &&
+            item is InlineItem.EmoteItem && animate && item.sentAt > 0 && now != SETTLED_MS && item.emote.raisable &&
                 item.emote.motions.fold(item.emote.rest) { p, m -> m.apply(now - item.sentAt, p) }.z > 0f
         }.toSet()
         val order = if (raised.isEmpty()) prepared.items.indices else prepared.items.indices.filter { it !in raised } + raised
@@ -541,8 +541,12 @@ private fun DrawScope.drawEmote(
     val raw = (base + frame * (sprite?.stepX ?: emote.width)) * scale
     // A tiling picture wraps round; one that doesn't is simply off to the side.
     val offset = if (emote.repeatX && sheetPx > 0f) ((raw % sheetPx) + sheetPx) % sheetPx else raw
-    val stages = pose.filter.colorStages()
-    val filter = stages.firstOrNull()?.let { ColorFilter.colorMatrix(ColorMatrix(it)) }
+    // A still filter's stages and colour filter are worked out once per emote, not every frame.
+    val stillFilter = pose.filter === emote.rest.filter
+    val stages = if (stillFilter) emote.restStages else pose.filter.colorStages()
+    val filter = if (stillFilter) {
+        (emote.drawCache as? StillFilter ?: StillFilter(stages.firstOrNull()?.let { ColorFilter.colorMatrix(ColorMatrix(it)) }).also { emote.drawCache = it }).filter
+    } else stages.firstOrNull()?.let { ColorFilter.colorMatrix(ColorMatrix(it)) }
     // A keyframe's own pivot (BLADE stabs from its corner) over the emote's.
     val pivot = Offset((if (pose.ox.isNaN()) emote.originX else pose.ox) * w, (if (pose.oy.isNaN()) emote.originY else pose.oy) * h)
     // `left` keyframes move it from where it stands (GIGACHAD's BLADE sliding in).
@@ -562,7 +566,7 @@ private fun DrawScope.drawEmote(
             }
         }
         val radial = emote.radialMask
-        if (radial != null) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, w, h), Paint())
+        if (radial != null) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, w, h), layer())
         if (shape != null) clipPath(shape) { drawSheet(emote, painter, w, h, offset, scale, pose, filter, stages) }
         else drawSheet(emote, painter, w, h, offset, scale, pose, filter, stages)
         if (radial != null) {
@@ -582,6 +586,18 @@ private fun DrawScope.drawEmote(
         }
     }
 }
+
+/** An emote's still filter as a colour filter, kept on the emote ([Emote.drawCache]). */
+private class StillFilter(val filter: ColorFilter?)
+
+/**
+ * The one paint layers are saved with: Android copies what it needs when a
+ * layer is saved, so it's set and reused rather than made every frame.
+ */
+private val layerPaint = Paint()
+
+private fun layer(colorFilter: ColorFilter? = null, blend: BlendMode = BlendMode.SrcOver): Paint =
+    layerPaint.apply { this.colorFilter = colorFilter; this.blendMode = blend }
 
 /** Overlay text laid out once per look, shared by every line: an emoji at a size. */
 private val overlayLayouts = HashMap<String, androidx.compose.ui.text.TextLayoutResult>()
@@ -645,12 +661,12 @@ private fun DrawScope.drawOverlay(
         if (pose.sx != 1f || pose.sy != 1f) scale(pose.sx, pose.sy, pivot)
     }) {
         // Blended with what's under it, its colour stages inside that, and a mask inside those.
-        if (blend != null) drawContext.canvas.saveLayer(bounds, Paint().apply { blendMode = blend })
+        if (blend != null) drawContext.canvas.saveLayer(bounds, layer(blend = blend))
         for (stage in stages.asReversed()) {
-            drawContext.canvas.saveLayer(bounds, Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(stage)) })
+            drawContext.canvas.saveLayer(bounds, layer(ColorFilter.colorMatrix(ColorMatrix(stage))))
         }
         val mask = overlay.mask
-        if (mask != null) drawContext.canvas.saveLayer(bounds, Paint())
+        if (mask != null) drawContext.canvas.saveLayer(bounds, layer())
         val alpha = pose.opacity.coerceIn(0f, 1f)
         if (layout != null) drawText(layout, alpha = alpha)
         else if (image != null) pictures(image)?.let { p ->
@@ -738,7 +754,7 @@ private fun DrawScope.drawSheet(emote: Emote, painter: Painter, w: Float, h: Flo
     // Each later colour stage in a layer of its own, which clamps what's under it first.
     val layers = stages.drop(1).asReversed()
     for (stage in layers) {
-        drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, w, h), Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(stage)) })
+        drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, w, h), layer(ColorFilter.colorMatrix(ColorMatrix(stage))))
     }
     run {
         clipRect(0f, 0f, w, h) {
@@ -846,7 +862,7 @@ private fun DrawScope.drawCombo(item: InlineItem.ComboItem, rect: androidx.compo
         grey = ((t.toFloat() / InlineItem.ComboItem.GREYOUT_MS - 0.75f) / 0.25f).coerceIn(0f, 1f)
     }
     val greyFilter = if (grey > 0f) io.github.strawwaffle.glorp.site.Filter(listOf(io.github.strawwaffle.glorp.site.Filter.Fn("grayscale", grey))).colorMatrix() else null
-    if (greyFilter != null) drawContext.canvas.saveLayer(rect.inflate(px * 3), Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(greyFilter)) })
+    if (greyFilter != null) drawContext.canvas.saveLayer(rect.inflate(px * 3), layer(ColorFilter.colorMatrix(ColorMatrix(greyFilter))))
     if (ended && big) {
         ChatRendering.comboSplat?.let(pictures)?.let { p ->
             translate(rect.left, rect.top) { with(p) { draw(Size(rect.width, rect.height)) } }

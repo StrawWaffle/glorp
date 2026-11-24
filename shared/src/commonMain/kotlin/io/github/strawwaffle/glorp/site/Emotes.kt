@@ -57,6 +57,16 @@ data class Emote(
     /** Whether the picture is drawn whole, scaled to the emote's size, and still. */
     val isWholePicture: Boolean get() = sprite == null && motions.isEmpty() && overlays.isEmpty() && rest == Pose.Rest && offsetX == 0 && offsetY == 0 && sheetWidth == width && sheetHeight == height
 
+    /** Whether a keyframe can raise it over its neighbours (`z-index`): only then is its pose worked out to find out. */
+    val raisable: Boolean by lazy { motions.any { m -> m.frames.any { it.z != null } } }
+
+    /** What drawing keeps for this emote between frames (its still filter, ready to draw); not part of what it is. */
+    @kotlin.concurrent.Volatile
+    internal var drawCache: Any? = null
+
+    /** Its still filter's colour stages, worked out once (a flair's tint). */
+    internal val restStages: List<FloatArray> by lazy { rest.filter.colorStages() }
+
     /** When the last finite movement or sprite run ends, after the message; [Long.MAX_VALUE] if one never does. */
     val settlesAfterMs: Long
         get() = maxOf(sprite?.totalMs ?: 0, motions.maxOfOrNull { it.endMs } ?: 0, overlays.maxOfOrNull { o -> o.motions.maxOfOrNull { it.endMs } ?: 0 } ?: 0)

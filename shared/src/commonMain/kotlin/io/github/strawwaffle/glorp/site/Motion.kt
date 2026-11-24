@@ -173,29 +173,44 @@ data class Motion(
         return x
     }
 
+    // Which properties its keyframes touch, worked out once: a frame then only
+    // looks at those, rather than scanning every keyframe for every property.
+    private val hasTransform by lazy { frames.any { it.transform != null } }
+    private val hasZ by lazy { frames.any { it.z != null } }
+    private val hasShadows by lazy { frames.any { it.boxShadows != null } }
+    private val hasOpacity by lazy { frames.any { it.opacity != null } }
+    private val hasFilter by lazy { frames.any { it.filter != null } }
+    private val hasBackground by lazy { frames.any { it.background != null } }
+    private val hasOrigin by lazy { frames.any { it.origin != null } }
+    private val hasClip by lazy { frames.any { it.clip != null } }
+    private val hasBox by lazy { frames.any { it.width != null || it.marginLeft != null || it.top != null || it.left != null || it.right != null } }
+    private val hasText by lazy { frames.any { it.content != null || it.fontSize != null || it.lineHeight != null || it.widthFraction != null || it.letterSpacing != null } }
+
     private fun sample(p: Float, base: Pose): Pose {
         var pose = base
         // Where a keyframe leaves the transform out, the emote's still one stands in.
-        interpolate(p, { it.transform }, base.copy(opacity = 1f, filter = Filter.None)) { a, b, f ->
+        if (hasTransform) interpolate(p, { it.transform }, base.copy(opacity = 1f, filter = Filter.None)) { a, b, f ->
             Pose(lerp(a.tx, b.tx, f), lerp(a.ty, b.ty, f), lerp(a.rotate, b.rotate, f), lerp(a.sx, b.sx, f), lerp(a.sy, b.sy, f), skewX = lerp(a.skewX, b.skewX, f), skewY = lerp(a.skewY, b.skewY, f))
         }?.let { pose = pose.copy(tx = it.tx, ty = it.ty, rotate = it.rotate, sx = it.sx, sy = it.sy, skewX = it.skewX, skewY = it.skewY) }
-        stepAt(p) { it.z }?.let { pose = pose.copy(z = it) }
-        stepAt(p) { it.boxShadows }?.let { pose = pose.copy(boxShadows = it) }
-        interpolate(p, { it.opacity }, 1f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(opacity = it) }
-        interpolate(p, { it.filter }, base.filter) { a, b, f -> a.mix(b, f) }?.let { pose = pose.copy(filter = it) }
-        interpolate(p, { it.background }, 0f to 0f) { a, b, f -> lerp(a.first, b.first, f) to lerp(a.second, b.second, f) }
+        if (hasZ) stepAt(p) { it.z }?.let { pose = pose.copy(z = it) }
+        if (hasShadows) stepAt(p) { it.boxShadows }?.let { pose = pose.copy(boxShadows = it) }
+        if (hasOpacity) interpolate(p, { it.opacity }, 1f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(opacity = it) }
+        if (hasFilter) interpolate(p, { it.filter }, base.filter) { a, b, f -> a.mix(b, f) }?.let { pose = pose.copy(filter = it) }
+        if (hasBackground) interpolate(p, { it.background }, 0f to 0f) { a, b, f -> lerp(a.first, b.first, f) to lerp(a.second, b.second, f) }
             ?.let { pose = pose.copy(bx = it.first, by = it.second) }
-        interpolate(p, { it.origin }, restOrigin) { a, b, f -> lerp(a.first, b.first, f) to lerp(a.second, b.second, f) }
+        if (hasOrigin) interpolate(p, { it.origin }, restOrigin) { a, b, f -> lerp(a.first, b.first, f) to lerp(a.second, b.second, f) }
             ?.let { pose = pose.copy(ox = it.first, oy = it.second) }
-        if (frames.any { it.clip != null }) pose = pose.copy(clip = clipAt(p))
-        interpolate(p, { it.width }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dw = it) }
-        interpolate(p, { it.marginLeft }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dml = it) }
-        interpolate(p, { it.top }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dtop = it) }
-        interpolate(p, { it.left }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dleft = it) }
-        frames.firstOrNull { it.right != null }?.right?.let { first ->
-            interpolate(p, { it.right }, if (restRight.isNaN()) first else restRight) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(rightPx = it) }
+        if (hasClip) pose = pose.copy(clip = clipAt(p))
+        if (hasBox) {
+            interpolate(p, { it.width }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dw = it) }
+            interpolate(p, { it.marginLeft }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dml = it) }
+            interpolate(p, { it.top }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dtop = it) }
+            interpolate(p, { it.left }, 0f) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(dleft = it) }
+            frames.firstOrNull { it.right != null }?.right?.let { first ->
+                interpolate(p, { it.right }, if (restRight.isNaN()) first else restRight) { a, b, f -> lerp(a, b, f) }?.let { pose = pose.copy(rightPx = it) }
+            }
         }
-        if (frames.any { it.content != null || it.fontSize != null || it.lineHeight != null || it.widthFraction != null || it.letterSpacing != null }) {
+        if (hasText) {
             stepAt(p) { it.content }?.let { pose = pose.copy(text = it) }
             stepAt(p) { it.fontSize }?.let { pose = pose.copy(fontPx = it) }
             stepAt(p) { it.lineHeight }?.let { pose = pose.copy(lineHeightPx = it) }
