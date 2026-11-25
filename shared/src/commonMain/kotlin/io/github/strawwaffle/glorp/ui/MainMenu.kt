@@ -1,6 +1,7 @@
 package io.github.strawwaffle.glorp.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -143,19 +144,19 @@ fun MainMenu(
         item { Heading("App") }
         item { Item("Settings", "Timestamps, highlights and tags, the player", onSettings) { Vector(GlorpIcons.Settings) } }
         if (onReport != null) item { Item("Report a problem", "Opens a GitHub issue with the details filled in, for you to check and send", onReport) { Vector(GlorpIcons.Bug) } }
+        item { Heading("About") }
         item {
             Text(
-                "Glorp is an unofficial community app. It is not made by or affiliated with destiny.gg or Destiny. " +
-                    "Free for non-commercial use (PolyForm Noncommercial 1.0.0). YouTube playback uses FUTO's Grayjay plugin, " +
-                    "run by code adapted from Grayjay under FUTO's Source First License 1.1. The site's font, Roboto, is Google's (Apache 2.0). " +
-                    "Community screens use polecat.me, rustlesearch.dev, Pizza's linkers.ooo, and Mitch's mitchdev.net and dinkdonk.mov. " +
-                    "The nuke, mutelinks and banned phrase warnings use vyneer's lists from vyneer.me. Thanks to all of them.",
+                "Glorp is an unofficial community app, not made by or affiliated with destiny.gg or Destiny. " +
+                    "Free for non-commercial use (PolyForm Noncommercial 1.0.0).",
                 color = Palette.TextDim,
                 fontSize = 12.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
-            Spacer(Modifier.height(24.dp))
         }
+        item { Heading("Thanks") }
+        items(credits) { Credit(it) }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
@@ -222,6 +223,33 @@ private fun EmoteIcon(emotes: Emotes?, name: String, fallback: ImageVector) {
     val emote = emotes?.get(name) ?: return Vector(fallback)
     val scale = minOf(24f / emote.width.coerceAtLeast(1), 24f / emote.height.coerceAtLeast(1))
     EmoteImage(emote, sentAt = 0, modifier = Modifier.size((emote.width * scale).dp, (emote.height * scale).dp))
+}
+
+/** Who Glorp builds on, what for, and where they are. */
+private class Thanks(val who: String, val what: String, val link: String?)
+
+private val credits = listOf(
+    Thanks("polecat.me", "Mentions", "https://polecat.me/mentions"),
+    Thanks("rustlesearch.dev", "Chat log search", "https://rustlesearch.dev/"),
+    Thanks("linkers.ooo, by Pizza", "Links", "https://linkers.ooo/"),
+    Thanks("mitchdev.net, by Mitch", "Poll archive", "https://mitchdev.net/dgg/"),
+    Thanks("dinkdonk.mov, by Mitch", "Movie nights", "https://dinkdonk.mov/"),
+    Thanks("vyneer.me, by vyneer", "Nuke, mutelinks and banned phrase warnings", "https://vyneer.me/"),
+    Thanks("Grayjay, by FUTO", "YouTube playback, through its plugin and code adapted from it (Source First License 1.1)", "https://grayjay.app/"),
+    Thanks("Roboto, by Google", "The site's font (Apache 2.0)", null),
+)
+
+@Composable
+private fun Credit(thanks: Thanks) {
+    val uri = LocalUriHandler.current
+    Column(
+        Modifier.fillMaxWidth()
+            .then(if (thanks.link != null) Modifier.clickable { runCatching { uri.openUri(thanks.link) } } else Modifier)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+    ) {
+        Text(thanks.who, color = if (thanks.link != null) Palette.Blue else Palette.White, fontSize = 13.sp)
+        Text(thanks.what, color = Palette.TextDim, fontSize = 12.sp)
+    }
 }
 
 /** The system back button or gesture, where the platform has one. */
