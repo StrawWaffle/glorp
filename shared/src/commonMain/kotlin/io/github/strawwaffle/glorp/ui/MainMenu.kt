@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.strawwaffle.glorp.resources.Res
 import io.github.strawwaffle.glorp.resources.menu_dinkdonk
 import io.github.strawwaffle.glorp.resources.menu_linkers
+import io.github.strawwaffle.glorp.resources.menu_rustle
 import io.github.strawwaffle.glorp.site.Emotes
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
@@ -136,7 +137,7 @@ fun MainMenu(
 
         item { Heading("Community") }
         item { Item("Mentions", if (account != null) "Messages naming you, from polecat.me" else "Messages naming someone, from polecat.me", { onCommunity("mentions") }) { EmoteIcon(emotes, "FerretLOL", GlorpIcons.At) } }
-        item { Item("Chat log search", "rustlesearch.dev", { onCommunity("rustle") }) { Vector(GlorpIcons.Search) } }
+        item { Item("Chat log search", "rustlesearch.dev", { onCommunity("rustle") }) { Picture(Res.drawable.menu_rustle) } }
         item { Item("Links", "Posted in chat, from linkers.ooo", { onCommunity("links") }) { Picture(Res.drawable.menu_linkers) } }
         item { Item("Poll archive", "mitchdev.net", { onCommunity("polls") }) { Vector(GlorpIcons.Poll) } }
         item { Item("Movie nights", "dinkdonk.mov", { onCommunity("dinkdonk") }) { Picture(Res.drawable.menu_dinkdonk) } }
