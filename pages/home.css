@@ -100,3 +100,24 @@ ul.checks li::before {
   :root:not([data-theme="dark"]) .intro h1 { color: var(--primary-shadow); }
 }
 :root[data-theme="light"] .intro h1 { color: var(--primary-shadow); }
+
+/* Two panels side by side where there's room. */
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 0 20px;
+  align-items: start;
+}
+
+/* The battery test's results. */
+.results { width: 100%; border-collapse: collapse; margin: 14px 0 6px; font-size: 15px; }
+.results th, .results td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--panel-border); }
+.results th { color: var(--muted); font-weight: 700; }
+.results td.num, .results th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.results tr.glorp td { font-weight: 700; }
+
+footer .thanks-title { margin-bottom: 4px; }
+footer ul.thanks { list-style: none; padding: 0; margin: 0 0 12px; }
+footer ul.thanks li { margin: 2px 0; }
+
+.panel h3 { font: 800 17px/1.3 "Nunito", ui-rounded, system-ui, sans-serif; margin: 22px 0 6px; }

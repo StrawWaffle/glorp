@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'none'">
 <title>Glorp, destiny.gg chat and bigscreen for Android</title>
-<meta name="description" content="An unofficial destiny.gg app for Android: the site's chat, bigscreen's streams in a native player, and a few things of its own.">
+<meta name="description" content="An unofficial destiny.gg app for Android: the site's chat, bigscreen's streams in Android's own video player, with about half the processor time of the site in a browser.">
 <link rel="icon" href="glorp.png">
 <link rel="stylesheet" href="signin/style.css">
 <link rel="stylesheet" href="home.css">
@@ -17,7 +17,7 @@
     <img src="glorp.png" alt="Glorp, a green furry alien with antennae" class="mascot">
     <div>
       <h1>Glorp</h1>
-      <p class="lede">destiny.gg chat and bigscreen on your Android phone. Chat works the way it does on the site, streams play in Android's own video player, and there are a few extras the site doesn't have.</p>
+      <p class="lede">destiny.gg chat and bigscreen on your Android phone. Chat works the way it does on the site. Streams play in Android's own video player instead of a web page, and Glorp does it all with about half the processor time a browser needs.</p>
       <div class="actions">
         <a class="button primary" href="https://github.com/StrawWaffle/glorp/releases/latest">Download for Android</a>
         <a class="button" href="https://github.com/StrawWaffle/glorp">Code on GitHub</a>
@@ -36,68 +36,105 @@
     <figure><img src="img/settings.webp" alt="Settings in categories" loading="lazy"><figcaption>Settings</figcaption></figure>
   </section>
 
+  <div class="pair">
+    <section class="panel">
+      <h2>A real video player</h2>
+      <p>On the site, bigscreen plays each stream in that platform's web player: a whole web page inside the page, with its own scripts, overlays and limits. Glorp asks the platform for the stream itself and plays it in Android's media player, Media3. Kick, Twitch, YouTube, Rumble and AngelThump all play this way.</p>
+      <ul class="checks">
+        <li><b>Nothing runs around the video.</b> The stream goes from the phone's video decoder to the screen, with no web player, scripts or overlays kept busy beside it.</li>
+        <li><b>Sharper where the site holds back.</b> Kick's web embed is stuck at 360p. Glorp plays the same stream at up to 1080p60, about 4 seconds behind live.</li>
+        <li><b>No wasted pixels.</b> Quality stops at your screen's size, so a phone never downloads and decodes a picture bigger than it can show. A quality menu lets you pick lower.</li>
+        <li><b>Picture in picture</b> when you leave the app, with chat still connected, and <b>sound with the screen off</b>, which switches to the smallest stream because nothing is being shown.</li>
+        <li><b>The web player stays as a fallback</b> for anything Glorp can't play itself.</li>
+      </ul>
+    </section>
+
+    <section class="panel" id="battery">
+      <h2>Light on the phone</h2>
+      <p>A phone app that sits open for a whole stream has to be careful. Glorp is built to do nothing it doesn't have to.</p>
+      <ul class="checks">
+        <li><b>Chat only stays connected while Glorp is on screen.</b> Leave the app and the connection closes; notifications use a light check instead.</li>
+        <li><b>Only the rows you can see get drawn</b>, and new messages are prepared and measured away from the screen, so busy chat doesn't stutter.</li>
+        <li><b>No video decoding when only the sound plays.</b> A paused player left off screen is released.</li>
+        <li><b>The screen stays awake only while video plays.</b></li>
+        <li><b>The nuke and mutelinks lists are only checked while you're signed in and looking at chat.</b></li>
+      </ul>
+      <h3>Measured against the site in Chrome</h3>
+      <p>One phone, an XREAL Beam Pro on Android 14, running on battery. Chrome and Glorp took turns every 12 to 35 minutes for an afternoon, so changes in how busy chat was hit both alike. Same brightness, sound at zero, screen always on, the same YouTube live stream for video. Chat ran at 10 to 70 messages a minute.</p>
+      <table class="results">
+        <thead><tr><th>Processor time</th><th class="num">Chrome</th><th class="num">Glorp</th></tr></thead>
+        <tbody>
+          <tr><td>Chat</td><td class="num">1.25 cores</td><td class="num">0.62 cores</td></tr>
+          <tr><td>Chat and a stream</td><td class="num">1.49 cores</td><td class="num">0.92 cores</td></tr>
+          <tr><td>Chat, animations off in both</td><td class="num">1.06 cores</td><td class="num">0.60 cores</td></tr>
+        </tbody>
+      </table>
+      <p>Glorp does the same work with about half the processor time. The battery barely noticed on this phone: with chat alone Glorp lasted 10 to 20% longer per percent of battery, and with a stream both drained the same. Its screen, on with nothing running at all, drained almost as fast as either app, so the processor is a small part of the total there. Phones whose processors take a bigger share, and busier chat, are where the difference shows.</p>
+    </section>
+  </div>
+
   <section class="panel">
     <h2>Everything chat does on the site</h2>
     <p>Glorp follows chat-gui, destiny.gg's own chat code, so chat looks and behaves the way it does in a browser.</p>
     <ul class="checks">
-      <li>Emotes move the way they do on the site, with their colour changes, glows and the extras drawn over them, like BibleThump's tears. Glorp reads the site's own emote stylesheet and is tested frame by frame against it. Combos count up and end with C-C-C-COMBO. Flairs colour names, and Tier 5 names get the moving rainbow.</li>
-      <li>Mentions, highlight words, tags with notes, the ignore list and timestamps all work.</li>
-      <li>Whispers have their own conversations, with history.</li>
-      <li>You can vote in polls. The pinned message and spotlighted messages show.</li>
-      <li>Subscriptions, gifted subs, donations, deaths, posts from X and the Vestaboard show up in chat.</li>
-      <li>Messages from muted and banned users get censored, and NSFW and NSFL messages can be hidden.</li>
-      <li>The site's commands work, <code>/stalk</code>, <code>/mentions</code> and <code>/tag</code> included. The input suggests emotes, names and commands as you type.</li>
-      <li>Tapping a name, the sender's or one in a message, focuses chat on that person, as on the site. Holding it opens their menu: mention, whisper, tags and, at the bottom, their membership card with photo, team, tier, standing, biography and, on the back, their signature.</li>
-      <li>Tapping a link shows its preview. Tapping an emote shows who made it and lets you favourite it. Hold it there to see what it does when pointed at on the site.</li>
+      <li><b>Emotes move the way they do on the site</b>, with their colour changes, glows and extras like BibleThump's tears. Glorp reads the site's own emote stylesheet and is checked frame by frame against it. Combos count up to C-C-C-COMBO, flairs colour names, and Tier 5 names get the moving rainbow.</li>
+      <li><b>Mentions, highlight words, tags with notes, the ignore list and timestamps.</b></li>
+      <li><b>Whispers</b> in their own conversations, with history.</li>
+      <li><b>Polls</b> you can vote in, the pinned message, and spotlighted messages.</li>
+      <li><b>Subscriptions, gifted subs, donations, deaths, posts from X and the Vestaboard</b> show up in chat.</li>
+      <li><b>Censoring</b> of muted and banned users' messages, and NSFW and NSFL messages hidden if you like.</li>
+      <li><b>The site's commands</b>, <code>/stalk</code>, <code>/mentions</code> and <code>/tag</code> included. The input suggests emotes, names and commands as you type.</li>
+      <li><b>Tap a name to focus chat on that person</b>, as on the site. Hold it for their menu: mention, whisper, tags and their membership card, with photo, team, tier, standing, biography and, on the back, their signature.</li>
+      <li><b>Tap a link for its preview</b>, or an emote to see who made it and favourite it.</li>
       <li>Signed in from a computer, your chat settings follow your account and the site sees what you're watching.</li>
     </ul>
   </section>
 
   <section class="panel">
-    <h2>Better on a phone</h2>
+    <h2>Made for a phone</h2>
     <ul class="checks">
-      <li>Kick, Twitch, YouTube, Rumble and AngelThump play in Android's own player, with a quality menu, picture in picture and sound with the screen off. On Kick it sits about 4 seconds behind live.</li>
-      <li>Notifications tell you when Destiny goes live, when someone mentions you, and when you get a whisper, without chat open. Mentions come from polecat.me's chat logs, so any sign-in works.</li>
-      <li>Before you send, Glorp warns you if the message would hit a nuke, mutelinks or a banned phrase. While one is on, a warning triangle sits at the top left of chat.</li>
-      <li>Chat log search from rustlesearch.dev, every message that ever mentioned you from polecat.me, the poll archive and movie nights are built in. So are the links and pictures posted in chat, from linkers.ooo, newest or most reacted to.</li>
-      <li>YouTube and Rumble links in chat show their titles.</li>
-      <li>Busy chat stays smooth. Chat only stays connected while Glorp is on screen, and only the rows you can see get drawn.</li>
-      <li>Glorp updates itself. Menu → Report a problem opens a GitHub issue with the details filled in.</li>
+      <li><b>Notifications</b> when Destiny goes live, when someone mentions you, and when you get a whisper, without chat open. Mentions come from polecat.me's chat logs, so any sign-in works.</li>
+      <li><b>Warnings before you send</b>: Glorp tells you if a message would hit a nuke, mutelinks or a banned phrase. While one is on, a warning triangle sits at the top left of chat.</li>
+      <li><b>The community's tools, built in</b>: chat log search (rustlesearch.dev), every message that mentioned you (polecat.me), the links and pictures posted in chat with their reactions (linkers.ooo), the poll archive and movie nights. Their links in chat open in the app.</li>
+      <li><b>YouTube and Rumble links show their titles</b>, and play in Glorp's player.</li>
+      <li><b>It updates itself</b>, and Menu → Report a problem opens a GitHub issue with the details filled in.</li>
     </ul>
   </section>
 
   <section class="panel">
     <h2>Glorp's own</h2>
     <ul class="checks">
-      <li>Five themes: Glorp's green in dark and light, destiny.gg's own, and Aerith's light and dark with her round buttons and glowing input.</li>
-      <li>Emoji name icons, a private tag only you see.</li>
-      <li>Chat from people watching other streams, dimmed like the site's eye button or hidden.</li>
-      <li>Your choice of text size, and of your phone's font or the site's.</li>
-      <li>Your latest mention stays at the top until you close it, and your own alert words warn you before sending.</li>
-      <li>You pick which platform plays Destiny when he's live on several.</li>
-      <li>Settings → Sync keeps all of this the same on your other phones, stored encrypted.</li>
-      <li>Test versions, which install as <i>Glorp Probe</i>, for anyone who wants to try what's next.</li>
+      <li><b>Five themes</b>: Glorp's green in dark and light, destiny.gg's own, and Aerith's light and dark with her round buttons and glowing input.</li>
+      <li><b>Emoji name icons</b>, a private tag only you see.</li>
+      <li><b>Chat from people watching other streams</b>, dimmed like the site's eye button, or hidden.</li>
+      <li><b>Text size</b>, and your phone's font or the site's.</li>
+      <li><b>Your latest mention stays at the top</b> until you close it, and your own alert words warn you before sending.</li>
+      <li><b>Your pick of platform</b> when Destiny is live on several.</li>
+      <li><b>Settings → Sync</b> keeps all of this the same on your other phones, stored encrypted.</li>
+      <li><b>Test versions</b>, which install as <i>Glorp Probe</i>, for anyone who wants to try what's next.</li>
     </ul>
   </section>
 
-  <section class="panel">
-    <h2>Install</h2>
-    <ol class="steps">
-      <li><p>On your phone, download the APK from the <a href="https://github.com/StrawWaffle/glorp/releases/latest">latest release</a> and open it. Android asks once to let your browser install apps.</p></li>
-      <li><p>Or add <code>https://github.com/StrawWaffle/glorp</code> to <a href="https://obtainium.imranr.dev/">Obtainium</a>.</p></li>
-      <li><p>After that, Glorp offers new versions at the top of its menu.</p></li>
-    </ol>
-  </section>
+  <div class="pair">
+    <section class="panel">
+      <h2>Install</h2>
+      <ol class="steps">
+        <li><p>On your phone, download the APK from the <a href="https://github.com/StrawWaffle/glorp/releases/latest">latest release</a> and open it. Android asks once to let your browser install apps.</p></li>
+        <li><p>Or add <code>https://github.com/StrawWaffle/glorp</code> to <a href="https://obtainium.imranr.dev/">Obtainium</a>.</p></li>
+        <li><p>After that, Glorp offers new versions at the top of its menu.</p></li>
+      </ol>
+    </section>
 
-  <section class="panel">
-    <h2>Signing in</h2>
-    <p>destiny.gg's login page can't run inside an app, because Twitch, Kick and Google block sign-in there. Glorp signs in two other ways.</p>
-    <ul class="checks">
-      <li><a href="signin/">Sign in from a computer</a> to get everything. Copy two values from your browser into Glorp's sign-in page and scan the code it shows. The page sends nothing anywhere.</li>
-      <li>Paste a login key from your account's developer page to chat and whisper.</li>
-    </ul>
-    <p class="quiet">Glorp keeps your login on your phone, encrypted.</p>
-  </section>
+    <section class="panel">
+      <h2>Signing in</h2>
+      <p>destiny.gg's login page can't run inside an app, because Twitch, Kick and Google block sign-in there. Glorp signs in two other ways.</p>
+      <ul class="checks">
+        <li><a href="signin/">Sign in from a computer</a> to get everything. Copy two values from your browser into Glorp's sign-in page and scan the code it shows. The page sends nothing anywhere.</li>
+        <li>Paste a login key from your account's developer page to chat and whisper.</li>
+      </ul>
+      <p class="quiet">Glorp keeps your login on your phone, encrypted.</p>
+    </section>
+  </div>
 
   <section class="panel">
     <h2>On a computer, if you want it</h2>
@@ -111,8 +148,17 @@
   </section>
 
   <footer>
-    Glorp is free for non-commercial use. YouTube plays through FUTO's Grayjay plugin. The community screens use rustlesearch.dev, and Mitch's mitchdev.net and dinkdonk.mov. The warnings use vyneer.me's lists, the mentions polecat.me's chat logs, and the Links screen Pizza's linkers.ooo. Thanks to all of them.
-    <br>Set in Nunito and Gaegu, under the SIL Open Font License.
+    <p>Glorp is free for non-commercial use (PolyForm Noncommercial 1.0.0).</p>
+    <p class="thanks-title">Thanks to</p>
+    <ul class="thanks">
+      <li><a href="https://polecat.me/mentions">polecat.me</a>, for mentions</li>
+      <li><a href="https://rustlesearch.dev/">rustlesearch.dev</a>, for chat log search</li>
+      <li>Pizza's <a href="https://linkers.ooo/">linkers.ooo</a>, for links</li>
+      <li>Mitch's <a href="https://mitchdev.net/dgg/">mitchdev.net</a> and <a href="https://dinkdonk.mov/">dinkdonk.mov</a>, for polls and movie nights</li>
+      <li>vyneer's <a href="https://vyneer.me/">vyneer.me</a>, for the warning lists</li>
+      <li>FUTO's <a href="https://grayjay.app/">Grayjay</a>, for YouTube playback</li>
+    </ul>
+    <p>Set in Nunito and Gaegu, under the SIL Open Font License.</p>
   </footer>
 </main>
 </body>
