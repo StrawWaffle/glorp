@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Glorp
 // @namespace    https://strawwaffle.github.io/glorp/
-// @version      2.7
+// @version      2.8
 // @description  Glorp's own chat features in destiny.gg's chat on a computer: themes, name icons, hiding other streams' chat, sticky mentions, settings synced with the Glorp app, and signing Glorp in without the developer tools.
 // @match        https://www.destiny.gg/*
 // @match        https://www.omniliberal.dev/*
@@ -15,6 +15,7 @@
 // @connect      netlify.app
 // @connect      strawwaffle.dev
 // @connect      polecat.me
+// @connect      rustlesearch.dev
 // @connect      cdn.destiny.gg
 // @connect      cdn.omniliberal.dev
 // @require      https://raw.githubusercontent.com/StrawWaffle/glorp/7188e9b8b52cfc8829608c7cc163713e455f6291/pages/signin/qrcode.js#sha256=18ae399f81182bc9de916e9c77b195df20cc58d6f2d55a62b085a299f1bf1780
@@ -220,7 +221,7 @@
         return selector + "{" + r[1] + ":" + colour(t, role) + " !important}";
       }).join("\n");
       // Glorp's own menus scroll as chat does: a thin see-through handle, no track.
-      css += "\n#glorp-settings .scrollable,#glorp-mentions .scrollable{scrollbar-width:thin;scrollbar-color:" + (t.light ? "rgba(0,0,0,.3)" : "rgba(255,255,255,.4)") + " transparent}";
+      css += "\n#glorp-settings .scrollable,#glorp-mentions .scrollable,#glorp-search .scrollable{scrollbar-width:thin;scrollbar-color:" + (t.light ? "rgba(0,0,0,.3)" : "rgba(255,255,255,.4)") + " transparent}";
       // Bigscreen's page around chat: its header on the theme's bar, chat's own top bar on chat's colour.
       css += "\nheader.header,.navbar{background-color:" + colour(t, "bar") + " !important;color:" + colour(t, "onBar") + " !important;border-radius:0 0 12px 12px}" +
         "\n#chat-controls,#chat-panel-embeds{background-color:" + t.bg + " !important}";
@@ -602,18 +603,106 @@
   function closeMentions() {
     if (mentionsPanel) mentionsPanel.classList.remove("active");
     if (mentionsButton) mentionsButton.classList.remove("active");
+    if (searchPanel) searchPanel.classList.remove("active");
+    if (searchButton) searchButton.classList.remove("active");
   }
   function toggleMentions() {
     var open = !mentionsPanel.classList.contains("active");
     document.querySelectorAll("#chat .chat-menu.active").forEach(function (m) { if (m !== mentionsPanel) m.classList.remove("active"); });
     if (panel) { panel.classList.remove("active"); }
     var g = document.getElementById("chat-glorp-btn"); if (g) g.classList.remove("active");
+    if (searchButton) searchButton.classList.remove("active");
     mentionsPanel.classList.toggle("active", open);
     mentionsButton.classList.toggle("active", open);
     if (!open) return;
     var me = myNick();
     if (!mentions.nick && me) { mentionsPanel._name.value = me; showMentionsOf(me); }
     else if (!mentions.nick) renderMentions();
+  }
+
+  // ---- Log search ----------------------------------------------------------------------
+  // rustlesearch.dev's chat logs, as the app's log search: by name, words or
+  // both, newest first, a page at a time. Its anonymous use is limited per
+  // address (it says so in a 429), so a page is only asked for when you
+  // search or scroll to the end.
+  var RUSTLE = "https://api-v2.rustlesearch.dev";
+  var search = { name: "", words: "", lines: [], loading: false, ended: false, failed: null };
+  var searchPanel = null, searchButton = null;
+  function moreSearch() {
+    var q = search;
+    if ((!q.name && !q.words) || q.loading || q.ended) return;
+    q.loading = true; q.failed = null; renderSearch();
+    var url = RUSTLE + "/anon/search?channel=Destinygg" + (q.name ? "&username=" + encodeURIComponent(q.name) : "") +
+      (q.words ? "&text=" + encodeURIComponent(q.words) : "") +
+      (q.lines.length ? "&search_after=" + q.lines[q.lines.length - 1].searchAfter : "");
+    Promise.all([request("GET", url), loadEmoteNames()]).then(function (got) {
+      if (q !== search) return;
+      var r = got[0];
+      if (r.status === 429) { q.failed = "rustlesearch.dev's daily limit for this address is used up. Try again tomorrow."; return; }
+      var body = JSON.parse(r.text);
+      if (r.status !== 200 || body.error) { q.failed = body.error || "rustlesearch.dev answered " + r.status + "."; return; }
+      var page = ((body.data || {}).messages || []).map(function (m) {
+        return { id: m.searchAfter, searchAfter: m.searchAfter, date: Date.parse(m.ts), ts: m.ts, nick: m.username, text: m.text };
+      });
+      page.forEach(function (l) { q.lines.push(l); });
+      if (page.length < 100) q.ended = true;
+    }).catch(function () { if (q === search) q.failed = "Couldn't reach rustlesearch.dev."; }).then(function () {
+      if (q !== search) return;
+      q.loading = false; renderSearch();
+    });
+  }
+  function runSearch(name, words) {
+    search = { name: name, words: words, lines: [], loading: false, ended: false, failed: null };
+    var box = searchPanel && searchPanel.querySelector(".scrollable"); if (box) box.scrollTop = 0;
+    renderSearch();
+    moreSearch();
+  }
+  function renderSearch() {
+    var box = searchPanel && searchPanel.querySelector("#glorp-search-list");
+    if (!box) return;
+    var q = search;
+    box.textContent = "";
+    if (!q.name && !q.words) {
+      box.appendChild(el("p", { "class": "glorp-note", text: "Search chat's logs by name, words or both, newest first. In words: a | b for either, \"a phrase\" for exact words, -word to leave one out. Click a line to see the chat around it." }));
+      return;
+    }
+    var day = null;
+    q.lines.forEach(function (l) {
+      var d = new Date(l.date).toDateString();
+      if (d !== day) { day = d; box.appendChild(el("div", { "class": "glorp-day", text: d })); }
+      box.appendChild(mentionLine(l));
+    });
+    var end = q.loading ? "Loading…" : q.failed ? q.failed
+      : q.ended ? (q.lines.length ? "No older messages." : "No messages found.") : "";
+    if (end) box.appendChild(el("p", { "class": "glorp-note", text: end }));
+  }
+  function buildSearch() {
+    var nameIn = el("input", { "class": "form-control", placeholder: "Name", spellcheck: "false" });
+    var wordsIn = el("input", { "class": "form-control", placeholder: "Words", spellcheck: "false" });
+    searchPanel = el("div", { id: "glorp-search", "class": "chat-menu left glorp-menu glorp-logs" }, [
+      el("div", { "class": "chat-menu-inner" }, [
+        el("div", { "class": "toolbar" }, [el("h5", {}, [el("span", { text: "Log search" }), el("i", { "class": "chat-menu-close", onclick: function () { closeMentions(); } })])]),
+        el("form", { "class": "glorp-mentions-name", onsubmit: function (e) { e.preventDefault(); runSearch(nameIn.value.trim(), wordsIn.value.trim()); } }, [
+          nameIn, wordsIn, el("button", { "class": "btn btn-dark", type: "submit", text: "Search" }),
+        ]),
+        el("div", { "class": "scrollable", style: "overflow-y:auto;flex:1" }, [el("div", { id: "glorp-search-list", "class": "chat-lines" })]),
+        el("p", { "class": "glorp-note glorp-credit" }, ["Search by ", el("a", { href: "https://rustlesearch.dev/", target: "_blank", rel: "noopener", text: "rustlesearch.dev" })]),
+      ]),
+    ]);
+    var scroller = searchPanel.querySelector(".scrollable");
+    scroller.addEventListener("scroll", function () {
+      if (!search.failed && scroller.scrollTop + scroller.clientHeight > scroller.scrollHeight - 200) moreSearch();
+    }, { passive: true });
+    document.getElementById("chat").appendChild(searchPanel);
+    renderSearch();
+  }
+  function toggleSearch() {
+    var open = !searchPanel.classList.contains("active");
+    document.querySelectorAll("#chat .chat-menu.active").forEach(function (m) { if (m !== searchPanel) m.classList.remove("active"); });
+    [mentionsButton, document.getElementById("chat-glorp-btn")].forEach(function (b) { if (b) b.classList.remove("active"); });
+    searchPanel.classList.toggle("active", open);
+    searchButton.classList.toggle("active", open);
+    if (open) { var f = searchPanel.querySelector("input"); if (f) f.focus(); }
   }
 
   // ---- The panel ----------------------------------------------------------------------
@@ -826,6 +915,14 @@
       "#chat-glorp-btn .btn-icon{background:url(" + ICON + ") center/contain no-repeat}" +
       // An @ in a circle, drawn as the site's own icons are (white strokes, faded until hovered).
       "#chat-glorp-mentions-btn .btn-icon{background:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8'/%3E%3C/svg%3E\") center/contain no-repeat}" +
+      // A magnifying glass, as the site's icons are drawn.
+      "#chat-glorp-search-btn .btn-icon{background:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E\") center/contain no-repeat}" +
+      "#glorp-search .chat-menu-inner{display:flex;flex-direction:column}" +
+      "#glorp-search .glorp-mentions-name{display:flex;gap:.4em;margin:.6em}#glorp-search .glorp-mentions-name input{flex:1;min-width:0;border-radius:.25em;padding:.3em}" +
+      "#glorp-search .chat-lines{overflow:visible;height:auto}" +
+      "#glorp-search .glorp-mention-line{cursor:pointer;padding:.15em .6em}#glorp-search .glorp-mention-line:hover{background:rgba(127,127,127,.12)}" +
+      "#glorp-search .glorp-day{text-align:center;font-size:.85em;opacity:.6;margin:.6em 0 .2em}" +
+      "#glorp-search .glorp-note{opacity:.7;font-size:.9em;margin:.6em}#glorp-search .glorp-credit{margin:.4em .6em}" +
       "#glorp-mentions .chat-menu-inner{display:flex;flex-direction:column}" +
       "#glorp-mentions .glorp-mentions-name{display:flex;gap:.4em;margin:.6em}#glorp-mentions .glorp-mentions-name input{flex:1;min-width:0;border-radius:.25em;padding:.3em}" +
       "#glorp-mentions .chat-lines{overflow:visible;height:auto}" +
@@ -858,7 +955,7 @@
       "#glorp-settings .btn{margin:.2em .4em .2em 0}" +
       "#glorp-settings .glorp-qr{background:#fff;padding:6px;border-radius:6px;max-width:220px}#glorp-settings .glorp-qr svg{display:block;width:100%;height:auto}" +
       "#glorp-settings .glorp-qr code{display:block;color:#111;font-size:10px;word-break:break-all;margin-top:4px}" +
-      "#glorp-stuck{position:absolute;top:0;left:0;right:0;z-index:5;background:inherit;border-bottom:1px solid #333;display:flex;align-items:flex-start}" +
+      "#glorp-stuck{position:absolute;top:0;left:0;right:0;z-index:5;background:inherit;border-bottom:1px solid #333;display:flex;align-items:flex-start}#glorp-stuck[hidden]{display:none}" +
       "#glorp-stuck .glorp-stuck-line{flex:1;min-width:0}#glorp-stuck .glorp-stuck-close{cursor:pointer;padding:.3em .6em;opacity:.6}";
     document.head.appendChild(style);
 
@@ -871,6 +968,10 @@
     else groups[0].appendChild(mentionsButton);
     buildMentions();
     mentionsButton.addEventListener("click", function (e) { e.stopPropagation(); toggleMentions(); });
+    searchButton = el("a", { id: "chat-glorp-search-btn", "class": "chat-tool-btn", title: "Log search", "aria-label": "Log search" }, [el("i", { "class": "btn-icon" })]);
+    groups[0].insertBefore(searchButton, mentionsButton.nextSibling);
+    buildSearch();
+    searchButton.addEventListener("click", function (e) { e.stopPropagation(); toggleSearch(); });
     button.addEventListener("click", function (e) {
       e.stopPropagation();
       // As the site's own menus: one open at a time.
