@@ -59,14 +59,15 @@ fun Bigscreen(
     val pip = LocalPictureInPicture.current
     val fullscreen = LocalFullscreen.current
     val videoOnly = pip.active || fullscreen.active
-    // Video sits on black in every theme.
-    Column(Modifier.fillMaxWidth().background(Color.Black)) {
+    // Video sits on black in every theme; with nothing playing (offline, a
+    // note) the area takes the theme's own background.
+    val fullBlack = videoOnly
+    Column(Modifier.fillMaxWidth().then(if (fullBlack) Modifier.background(Color.Black) else Modifier)) {
         Box(
             Modifier.fillMaxWidth()
                 // 16:9 in what's left after the bar below: the full width
                 // upright, or as wide as fits beside chat when sideways.
                 .then(if (videoOnly) Modifier.fillMaxSize() else Modifier.weight(1f, fill = false).aspectRatio(16f / 9f))
-                .background(Color.Black)
                 .onGloballyPositioned { if (!pip.active) pip.setVideoBounds(it.boundsInWindow()) },
             contentAlignment = Alignment.Center,
         ) {
@@ -131,14 +132,14 @@ private fun Player(embed: Embed, playerUrl: String, origin: String, resolve: sus
     }
     when (val found = looked?.takeIf { it.first == embed }?.second) {
         null -> CircularProgressIndicator(color = Palette.Glorp)
-        is Resolution.Native -> NativePlayer(found.playable, Modifier.fillMaxSize(), reload = { lookups++ })
+        is Resolution.Native -> NativePlayer(found.playable, Modifier.fillMaxSize().background(Color.Black), reload = { lookups++ })
         is Resolution.Offline -> Note("${found.name} is offline.")
-        Resolution.Web -> EmbedPlayer(playerUrl, origin, Modifier.fillMaxSize())
+        Resolution.Web -> EmbedPlayer(playerUrl, origin, Modifier.fillMaxSize().background(Color.Black))
     }
 }
 
-/** Text over the video area, which is black in every theme. */
-private val VideoText = Color(0xFFB4B8C0)
+/** Text in the video area when nothing plays, on the theme's background (black in full screen). */
+private val VideoText: Color @Composable get() = if (LocalFullscreen.current.active || LocalPictureInPicture.current.active) Color(0xFFB4B8C0) else Palette.TextDim
 
 @Composable
 private fun Note(text: String) = Text(text, color = VideoText, fontSize = 13.sp, modifier = Modifier.padding(16.dp))

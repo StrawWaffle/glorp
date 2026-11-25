@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -188,13 +189,14 @@ fun ChatScreen(
                 LaunchedEffect(Unit) { focus.clearFocus() }
                 Box(Modifier.size(0.dp).clipToBounds()) { bodySlot() }
             }
-            // Sideways: the video beside chat.
+            // Sideways: the video with its bar under it, as upright, and chat
+            // the whole height beside them.
             wide -> Row(Modifier.fillMaxSize().safeDrawingPadding()) {
-                Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) { playerSlot() }
-                Column(Modifier.width(chatWidth).fillMaxHeight().imePadding()) {
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
+                    Box(Modifier.fillMaxWidth().weight(1f, fill = false), contentAlignment = Alignment.Center) { playerSlot() }
                     bar()
-                    Box(Modifier.fillMaxWidth().weight(1f)) { bodySlot() }
                 }
+                Box(Modifier.width(chatWidth).fillMaxHeight().imePadding()) { bodySlot() }
             }
             else -> Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
                 playerSlot()
