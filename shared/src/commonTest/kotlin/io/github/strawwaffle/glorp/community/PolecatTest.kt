@@ -25,4 +25,14 @@ class PolecatTest {
         assertNull(parsePolecat("""{"error":"nope"}"""))
         assertNull(parsePolecat("not json"))
     }
+
+    @Test
+    fun readsMentionsLinks() {
+        assertEquals(PolecatLink("Glorpy", null), polecatLinkOf("https://polecat.me/mentions?usernames=Glorpy"))
+        assertEquals(PolecatLink("Glorpy", 123L), polecatLinkOf("https://www.polecat.me/mentions/?usernames=Glorpy,Other&message=123"))
+        assertEquals(PolecatLink("Glorpy", null), polecatLinkOf("https://polecat.me/mentions?username=Glorpy"))
+        assertNull(polecatLinkOf("https://polecat.me/mentions"))
+        assertNull(polecatLinkOf("https://polecat.me/logs?usernames=Glorpy"))
+        assertNull(polecatLinkOf("https://example.com/mentions?usernames=Glorpy"))
+    }
 }

@@ -216,6 +216,7 @@ fun GlorpApp(
                 target == AlertCheck.OPEN_CHAT -> { fullscreenWanted = false; screen = "chat" }
                 target.startsWith(AlertCheck.OPEN_WHISPER) -> { communityArg = target.removePrefix(AlertCheck.OPEN_WHISPER); screen = "whispers" }
                 rustleLinkOf(target) != null -> { communityArg = target; screen = "rustle" }
+                io.github.strawwaffle.glorp.community.polecatLinkOf(target) != null -> { communityArg = target; screen = "mentions" }
             }
         }
         // A tapped link with a preview: its card, over whatever is open.
@@ -283,13 +284,13 @@ fun GlorpApp(
                 val kind = previewKind(url, settings.previewAllImages)
                 if (kind == null) false else { linkCard = LinkCardRequest(url, kind, linkFlag(text)); true }
             },
-            // rustlesearch.dev links open the app's own log search on that query.
+            // rustlesearch.dev links open the app's own log search on that query,
+            // polecat.me mentions links its Mentions screen.
             LocalOpenLink provides { url ->
-                if (rustleLinkOf(url) == null) false
-                else {
-                    communityArg = url
-                    screen = "rustle"
-                    true
+                when {
+                    rustleLinkOf(url) != null -> { communityArg = url; screen = "rustle"; true }
+                    io.github.strawwaffle.glorp.community.polecatLinkOf(url) != null -> { communityArg = url; screen = "mentions"; true }
+                    else -> false
                 }
             },
             LocalChatLook provides ChatLook(

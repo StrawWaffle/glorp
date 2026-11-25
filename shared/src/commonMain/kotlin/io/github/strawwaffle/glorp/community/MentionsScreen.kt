@@ -42,7 +42,13 @@ import kotlinx.coroutines.launch
 import kotlin.time.Instant
 
 /** What the mentions screen has loaded for one name, page by page from polecat.me. */
-private class MentionsState(private val polecat: Polecat, private val scope: CoroutineScope, val nick: String) {
+private class MentionsState(
+    private val polecat: Polecat,
+    private val scope: CoroutineScope,
+    val nick: String,
+    /** A message a link pointed at: pages load until it's found, up to [SEEK_PAGES]. */
+    val seek: Long? = null,
+) {
     var lines by mutableStateOf<List<PolecatLine>>(emptyList())
     var loading by mutableStateOf(false)
     var failed by mutableStateOf(false)
@@ -63,9 +69,14 @@ private class MentionsState(private val polecat: Polecat, private val scope: Cor
                     val known = lines.mapTo(HashSet()) { it.id }
                     lines = lines + page.filter { it.id !in known }
                     if (page.size < Polecat.PAGE) ended = true
+                    if (seek != null && lines.none { it.id == seek } && !ended && lines.size < SEEK_PAGES * Polecat.PAGE) more()
                 }
             }
         }
+    }
+
+    companion object {
+        const val SEEK_PAGES = 10
     }
 }
 
@@ -78,9 +89,11 @@ private class MentionsState(private val polecat: Polecat, private val scope: Cor
 fun MentionsScreen(env: CommunityEnv) {
     val scope = rememberCoroutineScope()
     val polecat = remember(env.http) { Polecat(env.http) }
-    var typed by remember { mutableStateOf(env.argument ?: env.account?.nick.orEmpty()) }
+    // Opened from a polecat.me link: its name, and the message it points at.
+    val link = remember(env.argument) { env.argument?.let(::polecatLinkOf) }
+    var typed by remember { mutableStateOf(link?.nick ?: env.argument ?: env.account?.nick.orEmpty()) }
     var shown by remember { mutableStateOf(typed.trim()) }
-    val state = remember(shown) { MentionsState(polecat, scope, shown) }
+    val state = remember(shown) { MentionsState(polecat, scope, shown, link?.message?.takeIf { shown.equals(link.nick, ignoreCase = true) }) }
     val list = rememberLazyListState()
     val uri = LocalUriHandler.current
     val me = env.account?.nick
@@ -118,6 +131,8 @@ fun MentionsScreen(env: CommunityEnv) {
             )
             TextButton(onClick = { shown = typed.trim() }) { Text("Show", color = Palette.Blue) }
         }
+        // The linked message, once loaded: scrolled to and marked.
+        val sought = state.seek
         val items = remember(state.lines) {
             buildList {
                 var day: String? = null
@@ -138,13 +153,18 @@ fun MentionsScreen(env: CommunityEnv) {
             state.lines.isEmpty() && state.ended -> Hint("No mentions of $shown.")
         }
         if (state.lines.isEmpty()) return@Column
+        val soughtIndex = if (sought == null) -1 else items.indexOfFirst { it is PolecatLine && it.id == sought }
+        LaunchedEffect(soughtIndex) { if (soughtIndex >= 0) list.scrollToItem(maxOf(0, soughtIndex - 2)) }
+        if (sought != null && soughtIndex < 0 && !state.loading && (state.ended || state.lines.size >= MentionsState.SEEK_PAGES * Polecat.PAGE)) {
+            Hint("The linked message wasn't found in the newest ${state.lines.size}; it may be older.")
+        }
         LazyColumn(Modifier.fillMaxSize(), state = list) {
             items.forEachIndexed { i, item ->
                 when (item) {
                     is String -> item(key = "day$i", contentType = "day") { DayDivider(dayLabel(item)) }
                     is PolecatLine -> item(key = item.id, contentType = "line") {
                         val line = remember(item) { ChatLine.user(item.nick, item.flairs, item.text, item.at, subTier = Int.MAX_VALUE) }
-                        LogRow(env, line, false, stamp(item.at, local = true).substring(11, 16), false, me, mention, onNick = { env.onOpen("mentions", it) }) {
+                        LogRow(env, line, false, stamp(item.at, local = true).substring(11, 16), item.id == sought, me, mention, onNick = { env.onOpen("mentions", it) }) {
                             env.onOpen("rustle", LogMessage("Destinygg", item.text, Instant.fromEpochMilliseconds(item.at).toString(), item.nick, item.at).siteLink())
                         }
                     }

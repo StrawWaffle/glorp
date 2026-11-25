@@ -75,6 +75,18 @@ class Polecat(private val client: HttpClient) {
     }
 }
 
+/** A polecat.me mentions page: whose (the first of `usernames`, or `username`) and the message it points at, if any. */
+data class PolecatLink(val nick: String, val message: Long?)
+
+/** `https://polecat.me/mentions?usernames=a,b&message=123`, or null for any other address. */
+fun polecatLinkOf(link: String): PolecatLink? {
+    val url = runCatching { io.ktor.http.Url(link.trim()) }.getOrNull() ?: return null
+    if (url.host.lowercase().removePrefix("www.") != "polecat.me" || url.encodedPath.trimEnd('/') != "/mentions") return null
+    val p = url.parameters
+    val nick = (p["usernames"] ?: p["username"])?.split(',')?.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return PolecatLink(nick, p["message"]?.toLongOrNull())
+}
+
 /** `[{id, date (ms), nick, flairs ("a,b"), text}]`. */
 internal fun parsePolecat(body: String): List<PolecatLine>? = runCatching {
     (chatJson.parseToJsonElement(body) as JsonArray).mapNotNull { item ->
