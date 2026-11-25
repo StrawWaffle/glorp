@@ -5,6 +5,7 @@ import io.github.strawwaffle.glorp.chat.ChatSocket
 import io.github.strawwaffle.glorp.chat.chatJson
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
+import io.ktor.client.request.head
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
@@ -135,11 +136,35 @@ class Updates(
         newest?.let { found ->
             if (found.sha256 != null) found
             else found.copy(sha256 = checksumFile(found))
-        }
+        } ?: if (body == null) latestFromSite() else null
     } catch (e: kotlinx.coroutines.CancellationException) {
         throw e
     } catch (_: Exception) {
-        null
+        runCatching { latestFromSite() }.getOrNull()
+    }
+
+    /**
+     * The latest release without GitHub's API, which allows each address only
+     * 60 unsigned requests an hour (a shared connection can use them up):
+     * github.com's "latest release" address redirects to the release's own
+     * page, which names its tag. The APK and its `.sha256` file are at fixed
+     * addresses under it (scripts/release.sh). Never a test version.
+     */
+    private suspend fun latestFromSite(): Release? {
+        val response = client.head("https://github.com/$REPO/releases/latest") {
+            header(HttpHeaders.UserAgent, ChatSocket.USER_AGENT)
+        }
+        val tag = response.call.request.url.encodedPath.substringAfter("/releases/tag/", "").trim('/')
+        if (!tag.startsWith("v")) return null
+        val version = tag.removePrefix("v")
+        val release = Release(
+            version,
+            "https://github.com/$REPO/releases/download/$tag/glorp-$version.apk",
+            null,
+            "https://github.com/$REPO/releases/tag/$tag",
+        )
+        // Without a checksum there's nothing to check the download against: no update offered.
+        return release.copy(sha256 = checksumFile(release) ?: return null)
     }
 
     private suspend fun checksumFile(release: Release): String? = runCatching {
