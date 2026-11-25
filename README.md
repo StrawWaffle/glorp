@@ -45,10 +45,12 @@ the way it does in a browser.
   can be hidden, and mod notices show.
 - The site's commands work, `/stalk`, `/mentions`, `/tag` and `/maxlines`
   included. The input suggests emotes, names and commands as you type.
-- Tapping a name, the sender's or one in a message, opens that person's menu:
-  mention, whisper, their recent messages, highlight, tags, and at the bottom
-  their membership card from their profile page (photo, team, tier, standing
-  and biography, and on the back their signature).
+- Tapping a name, the sender's or one in a message, focuses chat on that
+  person, as on the site: everything not from them or naming them fades until
+  you tap it again. Holding a name opens their menu: mention, whisper, their
+  recent messages, highlight, tags, and at the bottom their membership card
+  from their profile page (photo, team, tier, standing and biography, and on
+  the back their signature).
 - Tapping a link shows its preview. Tapping an emote shows who made it and
   lets you favourite it. Hold the emote there to see what it does when
   pointed at on the site. The eye button's same-stream dimming is there too.
@@ -95,7 +97,8 @@ destiny.gg's chat in a browser, the
 [Glorp userscript](https://strawwaffle.dev/glorp/userscript/glorp.user.js)
 brings a few of Glorp's own things there: the themes, name icons, hiding
 other streams' chat, your latest mention kept in view, polecat.me's mentions,
-and your icon and chat's tag in each name's menu. It does much less than the
+rustlesearch.dev's log search, and your icon and chat's tag in each name's
+menu. It does much less than the
 app and needs Violentmonkey. Hidden phrases, hidden flairs and alert words
 came to Glorp from the d.gg utilities userscript, so on a computer that
 script does them.
