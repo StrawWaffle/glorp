@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Glorp
 // @namespace    https://strawwaffle.github.io/glorp/
-// @version      3.0
+// @version      3.1
 // @description  Glorp's own chat features in destiny.gg's chat on a computer: themes, name icons, hiding other streams' chat, sticky mentions, settings synced with the Glorp app, and signing Glorp in without the developer tools.
 // @match        https://www.destiny.gg/*
 // @match        https://www.omniliberal.dev/*
@@ -248,6 +248,7 @@
       // A bar down the left of lines that mention you, where the theme has one.
       if (t.mentionBar) css += "\n.msg-chat.msg-highlight{box-shadow:inset .3em 0 0 " + t.mentionBar + "}";
       if (t.tile) css += aerithShapes(t);
+      else css += "\n#chat-input-control,.glorp-menu input.form-control,.glorp-menu select{border:1px solid " + t.faint + " !important}";
       themeStyle.textContent = css;
     });
   }
@@ -560,18 +561,27 @@
     moreMentions();
   }
   /** One logged message in the chat's own markup, emotes as the site's emote classes draw them. */
-  function mentionLine(l) {
+  /** A word that is [nick], as chat writes it: maybe an @ before, punctuation after. */
+  function namePattern(nick) {
+    return new RegExp("^@?" + nick.replace(/[^\w]/g, "") + "[^\\w]*$", "i");
+  }
+  function mentionLine(l, hit) {
     var text = el("span", { "class": "text" });
     (l.text || "").split(/(\s+)/).forEach(function (word) {
       if (emoteNames && emoteNames.has(word)) text.appendChild(el("div", { "class": "emote " + word, title: word, text: word }));
+      else if (/^https?:\/\/\S+$/i.test(word)) text.appendChild(el("a", { "class": "externallink", href: word, target: "_blank", rel: "nofollow noopener", text: word }));
+      else if (hit && hit.test(word)) text.appendChild(el("span", { "class": "glorp-hit", text: word }));
       else text.appendChild(document.createTextNode(word));
     });
+    // polecat keeps each line's flairs (flair13, subscriber…): as classes, the site's flairs.css colours the name.
+    var flairs = String(l.flairs || "").split(",").filter(function (f) { return /^[\w-]+$/.test(f); });
     var when = new Date(l.date);
     var line = el("div", { "class": "msg-chat msg-user glorp-mention-line", title: "Open the chat around this on rustlesearch.dev" }, [
       el("time", { "class": "time", text: ("0" + when.getHours()).slice(-2) + ":" + ("0" + when.getMinutes()).slice(-2) + " " }),
-      el("a", { "class": "user", text: l.nick }), el("span", { "class": "ctrl", text: ": " }), text,
+      el("a", { "class": ["user"].concat(flairs).join(" "), text: l.nick }), el("span", { "class": "ctrl", text: ": " }), text,
     ]);
-    line.addEventListener("click", function () {
+    line.addEventListener("click", function (e) {
+      if (e.target.closest("a[href]")) return; // a link in the message opens itself
       var u = "https://rustlesearch.dev/surrounds?channel=Destinygg&date=" + encodeURIComponent(new Date(l.date).toISOString()) + "&username=" + encodeURIComponent(l.nick);
       window.open(u, "_blank", "noopener");
     });
@@ -584,10 +594,11 @@
     box.textContent = "";
     if (!m.nick) { box.appendChild(el("p", { "class": "glorp-note", text: "Type a name above to see the messages naming it." })); return; }
     var day = null;
+    var hit = namePattern(m.nick);
     m.lines.forEach(function (l) {
       var d = new Date(l.date).toDateString();
       if (d !== day) { day = d; box.appendChild(el("div", { "class": "glorp-day", text: d })); }
-      box.appendChild(mentionLine(l));
+      box.appendChild(mentionLine(l, hit));
     });
     var end = m.loading ? "Loading…" : m.failed ? "polecat.me isn't answering, or asked to wait a minute. Scroll again to retry."
       : m.ended ? (m.lines.length ? "No older mentions." : "No mentions of " + m.nick + ".") : "";
@@ -821,11 +832,15 @@
     });
     var nickIn = el("input", { "class": "form-control", placeholder: "Name", spellcheck: "false" });
     var iconIn = el("input", { "class": "form-control", placeholder: "Emoji", maxlength: "12" });
+    var addProblem = el("p", { "class": "glorp-note", hidden: "" });
     form.appendChild(el("div", { "class": "form-group glorp-add" }, [nickIn, iconIn, el("button", { "class": "btn btn-dark", text: "Add", onclick: function () {
       var nick = nickIn.value.trim().toLowerCase(); var icon = iconIn.value.trim();
-      if (!/^\w{3,20}$/.test(nick) || !icon) return;
+      var problem = !/^\w{3,20}$/.test(nick) ? "A name is 3 to 20 letters, numbers or _." : !icon ? "Type or paste an emoji too." : "";
+      addProblem.textContent = problem; addProblem.hidden = !problem;
+      if (problem) return;
       var next = Object.assign({}, icons()); next[nick] = icon; set("nameIcons", next);
     } })]));
+    form.appendChild(addProblem);
 
     form.appendChild(el("h4", { text: "Sync with Glorp" }));
     form.appendChild(el("div", { id: "glorp-sync" }));
@@ -986,6 +1001,7 @@
       "#glorp-mentions .glorp-mentions-name{display:flex;gap:.4em;margin:.6em}#glorp-mentions .glorp-mentions-name input{flex:1;min-width:0;border-radius:.25em;padding:.3em}" +
       "#glorp-mentions .chat-lines{overflow:visible;height:auto}" +
       "#glorp-mentions .glorp-mention-line{cursor:pointer;padding:.15em .6em}#glorp-mentions .glorp-mention-line:hover{background:rgba(127,127,127,.12)}" +
+      "#glorp-mentions .glorp-hit{font-weight:600;text-decoration:underline;text-underline-offset:2px}" +
       "#glorp-mentions .glorp-day{text-align:center;font-size:.85em;opacity:.6;margin:.6em 0 .2em}" +
       "#glorp-mentions .glorp-note{opacity:.7;font-size:.9em;margin:.6em}#glorp-mentions .glorp-credit{margin:.4em .6em}" +
       // As the site lays out its own settings menu (menus/_settings.scss).
@@ -1001,10 +1017,10 @@
       ".glorp-menu .scrollable{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.4) transparent}" +
       // In the site's user menu: your icon for them, and chat's tag.
       "#glorp-userinfo h5{border-bottom:none !important}" +
-      "#glorp-userinfo .glorp-choices{display:flex;flex-wrap:wrap;gap:.3em;padding:0 .6em .5em}" +
-      "#glorp-userinfo .glorp-choice{width:2em;height:2em;display:inline-flex;align-items:center;justify-content:center;border-radius:.5em;background:rgba(127,127,127,.18);cursor:pointer;border:2px solid transparent;font-size:1em;padding:0}" +
+      "#glorp-userinfo .glorp-choices{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:.25em;padding:0 .6em .5em}" +
+      "#glorp-userinfo .glorp-choice{width:100%;height:auto;aspect-ratio:1;display:inline-flex;align-items:center;justify-content:center;border-radius:.5em;background:rgba(127,127,127,.18);cursor:pointer;border:2px solid transparent;font-size:1em;padding:0}" +
       "#glorp-userinfo .glorp-choice.picked{border-color:currentColor}" +
-      "#glorp-userinfo .glorp-swatch{width:1.7em;height:1.7em;border-radius:.45em}" +
+      "#glorp-userinfo .glorp-swatch{border-radius:.45em;box-shadow:inset 0 0 0 1px rgba(127,127,127,.5)}" +
       "#glorp-userinfo .glorp-tagrow{display:flex;gap:.4em;padding:0 .6em .6em;align-items:center}" +
       "#glorp-userinfo .glorp-tagrow input{flex:1;min-width:0;border-radius:9999px;padding:.3em .7em}" +
       "#glorp-userinfo .btn{border-radius:9999px;padding:.3em .9em}" +
