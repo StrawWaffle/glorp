@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Glorp
 // @namespace    https://strawwaffle.github.io/glorp/
-// @version      2.9
+// @version      3.0
 // @description  Glorp's own chat features in destiny.gg's chat on a computer: themes, name icons, hiding other streams' chat, sticky mentions, settings synced with the Glorp app, and signing Glorp in without the developer tools.
 // @match        https://www.destiny.gg/*
 // @match        https://www.omniliberal.dev/*
@@ -154,13 +154,13 @@
   var THEMES = {
     // Glorp's own, from its homepage: near-black green and lime, or pale green.
     Glorp: { bg: "#0a0f08", surface: "#131b10", raised: "#1b2716", action: "#b7fa44", text: "#eef6e4", dim: "#9eb38c", green: "#8bd450", mention: "#1f2b0f", tagged: "#1b2716", faint: "#5d7249", mentionBar: "#b7fa44", page: "#0a0f08", card: "#131b10", bar: "#131b10", onBar: "#eef6e4", actionBg: "#263a10", actionFill: "#3d6b14" },
-    GlorpLight: { light: true, bg: "#fbfef5", surface: "#eef6e2", raised: "#d3e5bb", action: "#3f7d12", text: "#1c2a12", dim: "#5d7249", green: "#4e8f1a", mention: "#eaf7d0", tagged: "#eef6e2", faint: "#9eb38c", mentionBar: "#78b52a", page: "#eef6e2", card: "#fbfef5", bar: "#b7fa44", onBar: "#13240a", actionBg: "#e3f5c4", actionFill: "#3f7d12" },
+    GlorpLight: { light: true, bg: "#fbfef5", surface: "#eef6e2", raised: "#d3e5bb", action: "#3f7d12", text: "#1c2a12", dim: "#5d7249", green: "#4e8f1a", mention: "#eaf7d0", tagged: "#eef6e2", faint: "#9eb38c", mentionBar: "#78b52a", page: "#eef6e2", card: "#fbfef5", bar: "#4e8f1a", onBar: "#ffffff", actionBg: "#e3f5c4", actionFill: "#3f7d12" },
     // Aerith's: cream and brown or slate, a sky-blue bar, teal for mentions, buttons on round tiles.
     AerithLight: { light: true, bg: "#faf8e8", surface: "#efecd8", raised: "#dcd6b8", action: "#308fd6", text: "#5a4a38", dim: "#918168", green: "#55a637", mention: "#e4f6f0", tagged: "#efe9d2", faint: "#b3a68a", mentionBar: "#6de1c1", tile: "#efecd8", field: "#ffffff", fieldBorder: "#b3a68a", dash: "#dcd6b8", page: "#efe9d2", card: "#faf8e8", bar: "#6fb4ec", onBar: "#ffffff", actionBg: "#e2f0fb", actionFill: "#308fd6" },
     AerithDark: { bg: "#2b3444", surface: "#1f2a3c", raised: "#3b444e", action: "#7bc3e9", text: "#f1ecda", dim: "#b6ae98", green: "#85d28b", mention: "#27463f", tagged: "#243040", faint: "#717888", mentionBar: "#6de1c1", tile: "#243040", field: "#1a2332", fieldBorder: "#6fb4ec", dash: "#3b4658", page: "#1f2a3c", card: "#2b3444", bar: "#3f6f9e", onBar: "#f3eedc", actionBg: "#2c4a66", actionFill: "#3f6f9e" },
   };
   // "Destiny" (destiny.gg) is the site as it is: picking it here syncs it to the app.
-  var THEME_LABELS = [["", "The site's own (this browser only)"], ["Glorp", "Glorp dark"], ["GlorpLight", "Glorp light"], ["Destiny", "destiny.gg"], ["AerithLight", "Aerith light"], ["AerithDark", "Aerith dark"]];
+  var THEME_LABELS = [["", "Leave the site as it is"], ["Glorp", "Glorp dark"], ["GlorpLight", "Glorp light"], ["Destiny", "destiny.gg"], ["AerithLight", "Aerith light"], ["AerithDark", "Aerith dark"]];
   // chat-gui's colours (abstracts/_vars.scss) and the role each plays.
   var ROLES = {
     "rgb(8, 8, 8)": "bg", "rgb(3, 3, 3)": "bg", "rgb(17, 17, 17)": "bg", "rgb(0, 0, 0)": "bg",
@@ -223,12 +223,28 @@
       // Glorp's own menus scroll as chat does: a thin see-through handle, no track.
       css += "\n#glorp-settings .scrollable,#glorp-mentions .scrollable,#glorp-search .scrollable{scrollbar-width:thin;scrollbar-color:" + (t.light ? "rgba(0,0,0,.3)" : "rgba(255,255,255,.4)") + " transparent}";
       // Bigscreen's page around chat: its header on the theme's bar, chat's own top bar on chat's colour.
-      css += "\nheader.header,.navbar{background-color:" + colour(t, "bar") + " !important;color:" + colour(t, "onBar") + " !important;border-radius:0 0 12px 12px}" +
+      css += "\nheader.header,.navbar{background-color:" + colour(t, "bar") + " !important;color:" + colour(t, "onBar") + " !important" + (t.tile ? ";border-radius:0 0 12px 12px" : "") + "}" +
         "\n#chat-controls,#chat-panel-embeds{background-color:" + t.bg + " !important}";
       css += "\n" + (/^\/embed\/chat/.test(location.pathname) ? "body," : "") + "#chat,.chat-lines{background-color:" + t.bg + " !important}" +
         "\n.msg-chat a.externallink{color:" + t.action + " !important}";
       // The site's icons are light shapes for a dark page: on a light theme, darkened.
-      if (t.light) css += "\n.btn-icon,.chat-menu-close{filter:invert(1) brightness(.45)}";
+      if (t.light) {
+        css += "\n.btn-icon,.chat-menu-close{filter:invert(1) brightness(.45)}" +
+          // Flair colours are made for a black page: darker here, so yellow and pale names still read.
+          "\n.user:not([class=\"user\"]){filter:brightness(.72) saturate(1.2)}" +
+          // Combos' black outline turns to a smudge on a light page.
+          "\n.chat-combo .hit,.chat-combo .combo,.chat-combo .count,.chat-combo .x{text-shadow:none !important}" +
+          // The site's sign-in (or account) button: a dark glass meant for a dark bar.
+          "\n.navbar__user{background-color:" + colour(t, "card") + " !important;color:" + t.text + " !important}" +
+          "\n.navbar__user:hover{background-color:" + t.surface + " !important}";
+      }
+      // What the site leaves grey whatever the theme: the pinned message's frame, Glorp's own headings and notes.
+      css += "\n.msg-pinned{border-color:" + t.faint + " !important}.msg-pinned:hover{border-color:" + t.dim + " !important}" +
+        "\n#glorp-settings h4{color:" + t.dim + " !important}.glorp-menu .glorp-note{color:" + t.dim + " !important}" +
+        "\n.glorp-menu input[type=checkbox]{accent-color:" + colour(t, "actionFill") + "}" +
+        "\n#glorp-stuck{border-bottom-color:" + t.faint + " !important}" +
+        // Lists in Glorp's menus sit on the menu, not on chat's own colour.
+        "\n#glorp-mentions .chat-lines,#glorp-search .chat-lines{background-color:transparent !important}";
       // A bar down the left of lines that mention you, where the theme has one.
       if (t.mentionBar) css += "\n.msg-chat.msg-highlight{box-shadow:inset .3em 0 0 " + t.mentionBar + "}";
       if (t.tile) css += aerithShapes(t);
@@ -266,7 +282,7 @@
       "\n#chat-user-info .floating-window{border-radius:12px}" +
       "\n#chat-user-info .user-identity,#chat-user-info .user-info h5,.chat-menu .toolbar{border-bottom:1px dashed " + t.dash + " !important}" +
       "\n#chat-user-info .chat-tool-btn{background:" + t.tile + ";border-radius:10px;margin:.15em}" +
-      "\n#chat-user-info button:not(.glorp-choice),.chat-menu .btn,#glorp-settings .btn{border-radius:9999px !important;background:" + t.tile + " !important;border-color:" + t.tile + " !important;color:" + t.text + " !important}" +
+      "\n#chat-user-info button:not(.glorp-choice),.chat-menu .btn,#glorp-settings .btn{border-radius:9999px !important;background:" + t.raised + " !important;border-color:" + t.raised + " !important;color:" + t.text + " !important}" +
       "\n.chat-menu input.form-control,.chat-menu select{border-radius:9999px !important;background:" + t.field + " !important}";
   }
 
@@ -784,6 +800,7 @@
     var shown = state.local.siteTheme === false ? get("theme", "") : "";
     THEME_LABELS.forEach(function (o) { var opt = el("option", { value: o[0], text: o[1] }); if (o[0] === shown) opt.selected = true; select.appendChild(opt); });
     form.appendChild(el("div", { "class": "form-group" }, [el("label", { "for": "glorp-theme", text: "Theme" }), select]));
+    form.appendChild(el("p", { "class": "glorp-note", text: "A theme picked here is the app's theme too, once you sync. \"Leave the site as it is\" only changes this browser." }));
 
     form.appendChild(el("h4", { text: "Chat" }));
     var hide = el("input", { type: "checkbox", onchange: function () { set("otherStreams", hide.checked ? "Hide" : "Dim"); } });
