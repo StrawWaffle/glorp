@@ -100,6 +100,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import io.github.strawwaffle.glorp.chat.ChatInputState
@@ -285,8 +286,13 @@ private fun ChatBody(
         val embedHandler = rememberUpdatedState(onEmbed)
         val openEmbed: (Embed) -> Unit = remember { { embedHandler.value(it) } }
         // Tapping a name, or holding a message, opens the sheet about that person.
-        val tapNick: (String) -> Unit = remember(input) { { input.openUser(it) } }
-        val holdLine: (ChatLine) -> Unit = remember(input) { { line -> line.nick?.let { input.openUser(it, line) } } }
+        // Tapping a name in chat focuses on that person, as the site does: every
+        // line not from them or naming them fades. Tapping it again ends it.
+        // Holding a name (or a line) opens the sheet about that person.
+        var focus by remember { mutableStateOf<ChatFocus?>(null) }
+        val openNick: (String) -> Unit = remember(input) { { input.openUser(it) } }
+        val tapNick: (String) -> Unit = remember { { nick -> focus = if (focus?.nick.equals(nick, ignoreCase = true)) null else ChatFocus(nick) } }
+        val holdLine: (ChatLine, String?) -> Unit = remember(input) { { line, nick -> (nick ?: line.nick)?.let { input.openUser(it, line) } } }
         input.tappedNick?.let { nick ->
             UserSheet(nick, input.tappedLine, flairs, account, input, userActions, onDismiss = input::closeUser)
         }
@@ -294,7 +300,7 @@ private fun ChatBody(
             emotes[prefix]?.let { EmoteSheet(it, emotes.info(prefix), account, input, onDismiss = input::closeEmote, hover = emotes.hover(prefix)) }
                 ?: LaunchedEffect(prefix) { input.closeEmote() }
         }
-        if (pinned != null && !pinned.dismissed) PinnedBar(pinned, flairs, emotes, me, openEmbed, tapNick, onShowPin)
+        if (pinned != null && !pinned.dismissed) PinnedBar(pinned, flairs, emotes, me, openEmbed, openNick, onShowPin)
         if (poll != null && !poll.dismissed) PollCard(poll, onVote, onClosePoll)
         val list = rememberLazyListState()
         // A lazy list keeps the row you're looking at in place when rows are
@@ -349,6 +355,7 @@ private fun ChatBody(
                     )
                 }
             }
+            CompositionLocalProvider(LocalChatFocus provides focus) {
             LazyColumn(Modifier.fillMaxSize().onSizeChanged { listWidth = it.width }, state = list, reverseLayout = true) {
                 items(displayed, key = { it.line.id }, contentType = { it.line.kind }) { shown ->
                     val marked = remember(shown.line, highlighter) {
@@ -359,6 +366,7 @@ private fun ChatBody(
                         onHold = if (shown.line.kind == ChatLine.Kind.User) holdLine else null,
                     )
                 }
+            }
             }
             // The newest mention of you stays in view once it has scrolled past
             // (the d.gg utilities userscript's sticky mentions), until closed.
@@ -389,6 +397,7 @@ private fun ChatBody(
             ModWarning(modNotes(input.watch), Modifier.align(Alignment.TopStart).padding(6.dp))
             Column(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalAlignment = Alignment.End) {
                 if (pinned != null && pinned.dismissed) Tab("Pinned message", Palette.NavyLight) { onShowPin(true) }
+                focus?.let { f -> Tab("Only ${f.nick} · show all", Palette.NavyLight) { focus = null } }
             }
             if (!following) {
                 val scope = rememberCoroutineScope()
@@ -605,6 +614,14 @@ private class HoldGate {
 
 val LocalChatLook = staticCompositionLocalOf { ChatLook() }
 
+/** Chat focused on one person (a name tapped): only their lines and lines naming them stay clear. */
+internal class ChatFocus(val nick: String) {
+    private val named = mentionPattern(nick)
+    fun keeps(line: ChatLine): Boolean = line.nick.equals(nick, ignoreCase = true) || named.containsMatchIn(line.text)
+}
+
+internal val LocalChatFocus = compositionLocalOf<ChatFocus?> { null }
+
 /** Links the app opens itself (rustlesearch.dev searches); true when it took the link, false for the browser. */
 val LocalOpenLink = staticCompositionLocalOf<(String) -> Boolean> { { false } }
 
@@ -661,8 +678,8 @@ internal fun ChatRow(
     highlighted: Boolean,
     onEmbed: (Embed) -> Unit,
     onNick: (String) -> Unit,
-    /** Holding the line: its message's sheet. Null for lines that have none. */
-    onHold: ((ChatLine) -> Unit)? = null,
+    /** Holding the line: its message's sheet, or the held name's. Null for lines that have none. */
+    onHold: ((ChatLine, String?) -> Unit)? = null,
 ) {
     val look = LocalChatLook.current
     // The chat text size setting scales the text, not the emotes and badges,
@@ -728,8 +745,9 @@ internal fun ChatRow(
     // Aerith's rows: a marked line's background rounded off on the right.
     val rowShape = if (Palette.Tile != null && background != Color.Transparent) RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp) else androidx.compose.ui.graphics.RectangleShape
     // From someone watching another stream: faded as the site's eye button does.
-    val faded = look.otherStreams == OtherStreams.Dim && !mentionsMe && !highlighted &&
-        fromOtherStream(line, me, look.playing)
+    val focus = LocalChatFocus.current
+    val faded = (look.otherStreams == OtherStreams.Dim && !mentionsMe && !highlighted &&
+        fromOtherStream(line, me, look.playing)) || (focus != null && !focus.keeps(line))
     // A Tier 5 name: the text is drawn, then the moving rainbow is laid over
     // the name's letters only (SrcAtop, in a layer of its own). The name's
     // outline is worked out once per layout, and the colours move at 30
@@ -754,7 +772,7 @@ internal fun ChatRow(
                     is LineTap.EmoteTap -> emoteTap(tap.prefix)
                 }
             },
-            onHold = onHold?.let { hold -> { hold(line) } },
+            onHold = onHold?.let { hold -> { nick -> hold(line, nick) } },
         )
         return
     }
@@ -802,7 +820,7 @@ internal fun ChatRow(
                 else Modifier.pointerInput(line) {
                     detectTapGestures(
                         onPress = { gate.open = true },
-                        onLongPress = { gate.open = false; onHold(line) },
+                        onLongPress = { gate.open = false; onHold(line, null) },
                     )
                 },
             )

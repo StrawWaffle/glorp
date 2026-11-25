@@ -44,26 +44,30 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import io.github.strawwaffle.glorp.site.ProfileCard
 
-// The site's card colours (web.css `.id-card__…`), so the card reads as the same card.
-private val CardStripe = Color(0xFF0090FF)
-private val CardLabel = Color(0xFF777B84)
-private val CardSince = Color(0xFF70B8FF)
-private val CardBio = Color(0xFFAFB3BA)
-private val CardLine = Color(0xFF43484E)
-private val CardInk = Color(0xFFEDEEF0)
-private val CardPhotoBack = Color(0xFF212225)
+// The card in the theme's colours: the site's card (web.css `.id-card__…`)
+// has the same parts, its stripe and links in the action colour.
+private val CardStripe: Color get() = Palette.Blue
+private val CardLabel: Color get() = Palette.TextDim
+private val CardSince: Color get() = Palette.Blue
+private val CardBio: Color get() = Palette.TextDim
+private val CardLine: Color get() = Palette.NavyLight
+private val CardInk: Color get() = Palette.White
+private val CardPhotoBack: Color get() = Palette.Navy
+/** A tile in Aerith's themes, else the chat's own colour, against the sheet's. */
+private val CardBack: Color get() = Palette.Tile ?: Palette.Black
 
-/** The site's own card colour, whatever the theme: its text is the site's light ink. */
-private val CardBack = Color(0xFF18191B)
-
-private fun standingColor(standing: String?): Color = when (standing) {
-    "decorated" -> Color(0xFFFFC53D)
-    "noteworthy" -> Color(0xFFFAD173)
-    "commendable" -> Color(0xFFF4DDA8)
-    "flagged" -> Color(0xFFEAABAF)
-    "probationary" -> Color(0xFFE77A7E)
-    "condemned" -> Color(0xFFE5484D)
-    else -> CardInk
+/** The site's standing colours are pale, for its dark card: on a light theme, deepened to read. */
+private fun standingColor(standing: String?): Color {
+    val c = when (standing) {
+        "decorated" -> Color(0xFFFFC53D)
+        "noteworthy" -> Color(0xFFFAD173)
+        "commendable" -> Color(0xFFF4DDA8)
+        "flagged" -> Color(0xFFEAABAF)
+        "probationary" -> Color(0xFFE77A7E)
+        "condemned" -> Color(0xFFE5484D)
+        else -> return CardInk
+    }
+    return if (Palette.theme.light) androidx.compose.ui.graphics.lerp(c, Color.Black, 0.45f) else c
 }
 
 /**
@@ -172,7 +176,7 @@ private fun Back(card: ProfileCard) {
         card.finePrint?.let { Text(it, color = CardLabel, fontSize = 11.sp, lineHeight = 16.sp) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             if (card.bars.isNotEmpty() && card.barcodeWidth > 0) {
-                Canvas(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(4.dp)).background(CardInk).semantics {
+                Canvas(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFEDEEF0)).semantics {
                     contentDescription = "Barcode: ${card.memberNo.orEmpty()}"
                 }) {
                     val unit = size.width / card.barcodeWidth

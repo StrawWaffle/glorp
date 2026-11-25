@@ -334,7 +334,8 @@ internal fun ChatText(
     modifier: Modifier,
     animate: Boolean,
     onTap: (LineTap) -> Unit,
-    onHold: (() -> Unit)?,
+    /** Holding the line; with the name held, when the finger is on one. */
+    onHold: ((String?) -> Unit)?,
 ) {
     val context = LocalPlatformContext.current
     // One measurer for the whole chat (LocalChatMeasurer), not one per line.
@@ -375,7 +376,7 @@ internal fun ChatText(
 
     val semantics = Modifier.semantics {
         text = prepared.text
-        if (onHold != null) onLongClick("Message options") { onHold(); true }
+        if (onHold != null) onLongClick("Message options") { onHold(null); true }
         val actions = ArrayList<CustomAccessibilityAction>()
         for (range in prepared.text.getStringAnnotations(0, prepared.text.length)) {
             val label = prepared.text.substring(range.start, range.end)
@@ -390,7 +391,7 @@ internal fun ChatText(
     }
     val taps = Modifier.pointerInput(prepared, onHold) {
         detectTapGestures(
-            onLongPress = { onHold?.invoke() },
+            onLongPress = { at -> onHold?.invoke((holder.hit(prepared, at, this) as? LineTap.Nick)?.nick) },
             onTap = { at -> holder.hit(prepared, at, this)?.let(onTap) },
         )
     }
