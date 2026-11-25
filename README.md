@@ -73,7 +73,9 @@ the way it does in a browser.
   vyneer.me, as they did for the d.gg utilities userscript.
 - Chat log search from rustlesearch.dev, every message that ever mentioned
   you from polecat.me, the poll archive and movie nights are built in.
-  YouTube and Rumble links show their titles.
+  So are the links and pictures posted in chat, from linkers.ooo: newest or
+  most reacted to, with the replies and emotes each got. YouTube and Rumble
+  links show their titles.
 - Busy chat stays smooth. Glorp prepares new messages away from the screen's
   own work and lets a flood in a few rows at a time.
 - Glorp updates itself from its releases. Menu → Report a problem opens a
@@ -150,7 +152,8 @@ No GitHub account? Whisper StrawWaffle in destiny.gg chat.
   [mitchdev.net](https://mitchdev.net/dgg/) and
   [dinkdonk.mov](https://dinkdonk.mov/), whose data the community screens
   show. vyneer.me, whose lists the warnings use. polecat.me, whose chat logs
-  the mentions come from.
+  the mentions come from. Pizza's [linkers.ooo](https://linkers.ooo/), whose
+  log of posted links the Links screen shows.
 - The "AngelThump Edge Picker" userscript. Glorp picks between AngelThump's
   servers the way it does.
 - [FUTO's Grayjay](https://grayjay.app/). YouTube plays through Grayjay's

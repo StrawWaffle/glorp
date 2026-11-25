@@ -439,7 +439,7 @@ internal fun stamp(at: Long, local: Boolean): String = utc(if (local) at + local
 
 /** A small toggle, as the site's range buttons. */
 @Composable
-private fun Chip(label: String, picked: Boolean, onClick: () -> Unit) {
+internal fun Chip(label: String, picked: Boolean, onClick: () -> Unit) {
     Text(
         label,
         color = if (picked) Palette.White else Palette.TextDim,

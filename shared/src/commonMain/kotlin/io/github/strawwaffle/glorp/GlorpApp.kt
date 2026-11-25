@@ -370,6 +370,7 @@ fun GlorpApp(
                             onSignOut = chat::signOut,
                             onSettings = { screen = "settings" },
                             onCommunity = { communityArg = null; screen = it },
+                            emotes = emotes,
                             unreadWhispers = inbox.unread,
                             onWhispers = { communityArg = null; screen = "whispers" },
                             version = updates?.currentVersion,
@@ -468,7 +469,7 @@ fun GlorpApp(
                         )
                     }
                 }
-                "rustle", "polls", "dinkdonk", "mentions" -> {
+                "rustle", "polls", "dinkdonk", "mentions", "links" -> {
                     {
                         // Made again only when what's in it changes: a new one on
                         // every chat message would redraw these screens each time.
@@ -486,6 +487,7 @@ fun GlorpApp(
                             // A new link or name starts the search afresh, even with the screen open.
                             "rustle" -> key(communityArg) { RustleSearchScreen(env) }
                             "polls" -> PollArchiveScreen(env)
+                            "links" -> key(communityArg) { io.github.strawwaffle.glorp.community.LinksScreen(env) }
                             "mentions" -> key(communityArg) { io.github.strawwaffle.glorp.community.MentionsScreen(env) }
                             else -> DinkDonkScreen(env)
                         }

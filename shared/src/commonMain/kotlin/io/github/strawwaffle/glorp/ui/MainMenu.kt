@@ -1,6 +1,18 @@
 package io.github.strawwaffle.glorp.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import io.github.strawwaffle.glorp.resources.Res
+import io.github.strawwaffle.glorp.resources.menu_dinkdonk
+import io.github.strawwaffle.glorp.resources.menu_linkers
+import io.github.strawwaffle.glorp.site.Emotes
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -59,8 +71,10 @@ fun MainMenu(
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
     onSettings: () -> Unit,
-    /** Opens a community screen: "rustle", "polls", "dinkdonk" or "mentions". */
+    /** Opens a community screen: "rustle", "polls", "dinkdonk", "mentions" or "links". */
     onCommunity: (String) -> Unit = {},
+    /** For the emote polecat.me uses as its icon; a plain @ until they've loaded. */
+    emotes: Emotes? = null,
     unreadWhispers: Int = 0,
     onWhispers: () -> Unit = {},
     /** This build's version, when it updates itself from GitHub; null otherwise. */
@@ -112,28 +126,29 @@ fun MainMenu(
         }
         item { Heading("Account") }
         item {
-            if (account == null) Item("Sign in", "To chat, whisper and be mentioned", onSignIn)
-            else Item("Sign out", "Signed in as ${account.nick}", onSignOut)
+            if (account == null) Item("Sign in", "To chat, whisper and be mentioned", onSignIn) { Vector(GlorpIcons.Login) }
+            else Item("Sign out", "Signed in as ${account.nick}", onSignOut) { Vector(GlorpIcons.Logout) }
         }
         if (account != null) item {
-            Item(if (unreadWhispers > 0) "Whispers ($unreadWhispers new)" else "Whispers", null, onWhispers)
+            Item(if (unreadWhispers > 0) "Whispers ($unreadWhispers new)" else "Whispers", null, onWhispers) { Vector(GlorpIcons.Mail) }
         }
 
         item { Heading("Community") }
-        item { Item("Mentions", if (account != null) "Messages naming you, from polecat.me" else "Messages naming someone, from polecat.me", { onCommunity("mentions") }) }
-        item { Item("Chat log search", "rustlesearch.dev", { onCommunity("rustle") }) }
-        item { Item("Poll archive", "mitchdev.net", { onCommunity("polls") }) }
-        item { Item("Movie nights", "dinkdonk.mov", { onCommunity("dinkdonk") }) }
+        item { Item("Mentions", if (account != null) "Messages naming you, from polecat.me" else "Messages naming someone, from polecat.me", { onCommunity("mentions") }) { EmoteIcon(emotes, "FerretLOL", GlorpIcons.At) } }
+        item { Item("Chat log search", "rustlesearch.dev", { onCommunity("rustle") }) { Vector(GlorpIcons.Search) } }
+        item { Item("Links", "Posted in chat, from linkers.ooo", { onCommunity("links") }) { Picture(Res.drawable.menu_linkers) } }
+        item { Item("Poll archive", "mitchdev.net", { onCommunity("polls") }) { Vector(GlorpIcons.Poll) } }
+        item { Item("Movie nights", "dinkdonk.mov", { onCommunity("dinkdonk") }) { Picture(Res.drawable.menu_dinkdonk) } }
 
         item { Heading("App") }
-        item { Item("Settings", "Timestamps, highlights and tags, the player", onSettings) }
-        if (onReport != null) item { Item("Report a problem", "Opens a GitHub issue with the details filled in, for you to check and send", onReport) }
+        item { Item("Settings", "Timestamps, highlights and tags, the player", onSettings) { Vector(GlorpIcons.Settings) } }
+        if (onReport != null) item { Item("Report a problem", "Opens a GitHub issue with the details filled in, for you to check and send", onReport) { Vector(GlorpIcons.Bug) } }
         item {
             Text(
                 "Glorp is an unofficial community app. It is not made by or affiliated with destiny.gg or Destiny. " +
                     "Free for non-commercial use (PolyForm Noncommercial 1.0.0). YouTube playback uses FUTO's Grayjay plugin, " +
                     "run by code adapted from Grayjay under FUTO's Source First License 1.1. The site's font, Roboto, is Google's (Apache 2.0). " +
-                    "Community screens use rustlesearch.dev, and Mitch's mitchdev.net and dinkdonk.mov. " +
+                    "Community screens use polecat.me, rustlesearch.dev, Pizza's linkers.ooo, and Mitch's mitchdev.net and dinkdonk.mov. " +
                     "The nuke, mutelinks and banned phrase warnings use vyneer's lists from vyneer.me. Thanks to all of them.",
                 color = Palette.TextDim,
                 fontSize = 12.sp,
@@ -177,18 +192,36 @@ private fun Heading(text: String) = Text(
     modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 4.dp),
 )
 
+/** Every entry has a 24 dp icon, so their text lines up: the site's own where it has one, else an outline. */
 @Composable
-private fun Item(title: String, detail: String?, onClick: () -> Unit) {
+private fun Item(title: String, detail: String?, onClick: () -> Unit, icon: @Composable () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { icon() }
         Column {
             Text(title, color = Palette.White, fontSize = 15.sp)
             detail?.let { Text(it, color = Palette.TextDim, fontSize = 12.sp) }
         }
     }
+}
+
+@Composable
+private fun Vector(vector: ImageVector) = Icon(vector, contentDescription = null, tint = Palette.TextDim, modifier = Modifier.size(24.dp))
+
+/** A site's own icon, shipped with the app (nothing is fetched to show the menu). */
+@Composable
+private fun Picture(resource: DrawableResource) =
+    Image(painterResource(resource), contentDescription = null, modifier = Modifier.size(24.dp).clip(RoundedCornerShape(5.dp)))
+
+/** A site whose icon is a dgg emote: drawn still, from the emotes chat already has. */
+@Composable
+private fun EmoteIcon(emotes: Emotes?, name: String, fallback: ImageVector) {
+    val emote = emotes?.get(name) ?: return Vector(fallback)
+    val scale = minOf(24f / emote.width.coerceAtLeast(1), 24f / emote.height.coerceAtLeast(1))
+    EmoteImage(emote, sentAt = 0, modifier = Modifier.size((emote.width * scale).dp, (emote.height * scale).dp))
 }
 
 /** The system back button or gesture, where the platform has one. */
