@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Glorp
 // @namespace    https://strawwaffle.github.io/glorp/
-// @version      2.8
+// @version      2.9
 // @description  Glorp's own chat features in destiny.gg's chat on a computer: themes, name icons, hiding other streams' chat, sticky mentions, settings synced with the Glorp app, and signing Glorp in without the developer tools.
 // @match        https://www.destiny.gg/*
 // @match        https://www.omniliberal.dev/*
@@ -626,7 +626,7 @@
   // address (it says so in a 429), so a page is only asked for when you
   // search or scroll to the end.
   var RUSTLE = "https://api-v2.rustlesearch.dev";
-  var search = { name: "", words: "", lines: [], loading: false, ended: false, failed: null };
+  var search = { name: "", words: "", start: null, end: null, lines: [], loading: false, ended: false, failed: null };
   var searchPanel = null, searchButton = null;
   function moreSearch() {
     var q = search;
@@ -634,6 +634,7 @@
     q.loading = true; q.failed = null; renderSearch();
     var url = RUSTLE + "/anon/search?channel=Destinygg" + (q.name ? "&username=" + encodeURIComponent(q.name) : "") +
       (q.words ? "&text=" + encodeURIComponent(q.words) : "") +
+      (q.start ? "&start_date=" + q.start : "") + (q.end ? "&end_date=" + q.end : "") +
       (q.lines.length ? "&search_after=" + q.lines[q.lines.length - 1].searchAfter : "");
     Promise.all([request("GET", url), loadEmoteNames()]).then(function (got) {
       if (q !== search) return;
@@ -651,8 +652,8 @@
       q.loading = false; renderSearch();
     });
   }
-  function runSearch(name, words) {
-    search = { name: name, words: words, lines: [], loading: false, ended: false, failed: null };
+  function runSearch(name, words, start, end) {
+    search = { name: name, words: words, start: start || null, end: end || null, lines: [], loading: false, ended: false, failed: null };
     var box = searchPanel && searchPanel.querySelector(".scrollable"); if (box) box.scrollTop = 0;
     renderSearch();
     moreSearch();
@@ -703,6 +704,47 @@
     searchPanel.classList.toggle("active", open);
     searchButton.classList.toggle("active", open);
     if (open) { var f = searchPanel.querySelector("input"); if (f) f.focus(); }
+  }
+
+  // ---- Links that open here ------------------------------------------------------------
+  // As in the app: a rustlesearch.dev search linked in chat opens the log
+  // search on it, and a polecat.me mentions link the mentions list, instead
+  // of a new tab. Ctrl-, shift- or middle-clicks still open the site.
+  var DATE = /^\d{4}-\d{2}-\d{2}$/;
+  function openHere(href) {
+    var url;
+    try { url = new URL(href); } catch (e) { return false; }
+    var host = url.hostname.replace(/^www\./, "");
+    var p = url.searchParams;
+    if (host === "rustlesearch.dev" && url.pathname.replace(/\/+$/, "") === "" && searchPanel) {
+      if ((p.get("channel") || "Destinygg").toLowerCase() !== "destinygg") return false;
+      var name = (p.get("username") || "").trim(), words = (p.get("text") || "").trim();
+      if (!name && !words) return false;
+      var start = DATE.test(p.get("start_date") || "") ? p.get("start_date") : null;
+      var end = DATE.test(p.get("end_date") || "") ? p.get("end_date") : null;
+      if (!searchPanel.classList.contains("active")) toggleSearch();
+      var fields = searchPanel.querySelectorAll("input");
+      fields[0].value = name; fields[1].value = words;
+      runSearch(name, words, start, end);
+      return true;
+    }
+    if (host === "polecat.me" && url.pathname.replace(/\/+$/, "") === "/mentions" && mentionsPanel) {
+      var who = ((p.get("usernames") || p.get("username") || "").split(",")[0] || "").trim();
+      if (!who) return false;
+      if (!mentionsPanel.classList.contains("active")) toggleMentions();
+      mentionsPanel._name.value = who;
+      showMentionsOf(who);
+      return true;
+    }
+    return false;
+  }
+  function watchLinks() {
+    document.addEventListener("click", function (e) {
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      var a = e.target.closest && e.target.closest("a[href]");
+      if (!a || !a.closest(".msg-chat")) return;
+      if (openHere(a.href)) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
   }
 
   // ---- The panel ----------------------------------------------------------------------
@@ -1015,6 +1057,7 @@
     };
     watchLines();
     watchUserInfo();
+    watchLinks();
     apply();
     syncSoon();
     checkUpdate().then(function (isNewer) { if (isNewer) tellChat(); }).catch(function () {});
