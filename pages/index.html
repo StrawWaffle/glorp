@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'none'">
 <title>Glorp, destiny.gg chat and bigscreen for Android</title>
-<meta name="description" content="An unofficial destiny.gg app for Android: the site's chat, bigscreen's streams in Android's own video player, with about half the processor time of the site in a browser.">
+<meta name="description" content="destiny.gg chat as an Android app: streams in a real video player, mention notifications, warnings before you send, and the community's tools in one place.">
 <link rel="icon" href="glorp.png">
 <link rel="stylesheet" href="signin/style.css">
 <link rel="stylesheet" href="home.css">
@@ -17,7 +17,7 @@
     <img src="glorp.png" alt="Glorp, a green furry alien with antennae" class="mascot">
     <div>
       <h1>Glorp</h1>
-      <p class="lede">destiny.gg chat and bigscreen on your Android phone. Chat works the way it does on the site. Streams play in Android's own video player instead of a web page, and Glorp does it all with about half the processor time a browser needs.</p>
+      <p class="lede">Already in destiny.gg chat on your phone? Glorp is the same chat as an Android app, plus what a browser tab can't do: streams in a proper video player that keeps going when you leave, a notification when someone mentions you, a warning before a message gets you muted, and the community's tools in one place.</p>
       <div class="actions">
         <a class="button primary" href="https://github.com/StrawWaffle/glorp/releases/latest">Download for Android</a>
         <a class="button" href="https://github.com/StrawWaffle/glorp">Code on GitHub</a>
@@ -27,93 +27,102 @@
   </header>
 
   <section class="shots" aria-label="Screenshots">
-    <figure><img src="img/chat.webp" alt="Chat with emotes, a subscription, a donation and a combo" loading="lazy"><figcaption>Chat as the site draws it</figcaption></figure>
-    <figure><img src="img/stream.webp" alt="A video playing above chat" loading="lazy"><figcaption>Streams in a native player</figcaption></figure>
-    <figure><img src="img/link-card.webp" alt="A YouTube link's preview card" loading="lazy"><figcaption>Link previews</figcaption></figure>
+    <figure><img src="img/stream.webp" alt="A video playing above chat" loading="lazy"><figcaption>Streams in a real player</figcaption></figure>
+    <figure><img src="img/chat.webp" alt="Chat with emotes, a subscription, a donation and a combo" loading="lazy"><figcaption>The chat you know</figcaption></figure>
+    <figure><img src="img/link-card.webp" alt="A YouTube link's preview card" loading="lazy"><figcaption>Tap a link for its preview</figcaption></figure>
+    <figure><img src="img/user-card.webp" alt="Someone's menu: your icon for them and their membership card" loading="lazy"><figcaption>Hold a name for their card</figcaption></figure>
+    <figure><img src="img/emote-card.webp" alt="An emote's card with Add to message" loading="lazy"><figcaption>Tap an emote for its card</figcaption></figure>
     <figure><img src="img/aerith-light.webp" alt="Chat in Aerith's light theme" loading="lazy"><figcaption>Themes</figcaption></figure>
-    <figure><img src="img/user-card.webp" alt="Someone's menu: your icon for them and their membership card" loading="lazy"><figcaption>Everyone's card</figcaption></figure>
-    <figure><img src="img/emote-card.webp" alt="An emote's card with Add to message" loading="lazy"><figcaption>Emote cards</figcaption></figure>
     <figure><img src="img/settings.webp" alt="Settings in categories" loading="lazy"><figcaption>Settings</figcaption></figure>
   </section>
 
   <div class="pair">
     <section class="panel">
-      <h2>A real video player</h2>
-      <p>On the site, bigscreen plays each stream in that platform's web player: a whole web page inside the page, with its own scripts, overlays and limits. Glorp asks the platform for the stream itself and plays it in Android's media player, Media3. Kick, Twitch, YouTube, Rumble and AngelThump all play this way.</p>
+      <h2>Streams that keep playing</h2>
+      <p>In a browser, bigscreen plays each stream in that platform's web player, with its limits. Glorp gets the stream itself and plays it in Android's own video player.</p>
       <ul class="checks">
-        <li><b>Nothing runs around the video.</b> The stream goes from the phone's video decoder to the screen, with no web player, scripts or overlays kept busy beside it.</li>
-        <li><b>Sharper where the site holds back.</b> Kick's web embed is stuck at 360p. Glorp plays the same stream at up to 1080p60, about 4 seconds behind live.</li>
-        <li><b>No wasted pixels.</b> Quality stops at your screen's size, so a phone never downloads and decodes a picture bigger than it can show. A quality menu lets you pick lower.</li>
-        <li><b>Picture in picture</b> when you leave the app, with chat still connected, and <b>sound with the screen off</b>, which switches to the smallest stream because nothing is being shown.</li>
-        <li><b>The web player stays as a fallback</b> for anything Glorp can't play itself.</li>
+        <li><b>Sharper Kick.</b> Kick's web player is held to 360p. Glorp plays the same stream at up to 1080p60, about 4 seconds behind live.</li>
+        <li><b>Leave the app and it keeps going</b>, where a browser tab pauses. The video shrinks to a small window with chat still connected, or plays just the sound with the screen off.</li>
+        <li><b>A quality menu</b>, starting at your screen's size so you never download more than you can see.</li>
+        <li><b>Kick, Twitch, YouTube, Rumble and AngelThump</b>, with the web player as a fallback for anything else.</li>
       </ul>
     </section>
 
-    <section class="panel" id="battery">
-      <h2>Light on the phone</h2>
-      <p>A phone app that sits open for a whole stream has to be careful. Glorp is built to do nothing it doesn't have to.</p>
+    <section class="panel">
+      <h2>Made for touch</h2>
+      <p>Some of the site's best bits wait for a mouse to hover over them. A phone has no hover, so in the browser you never see them. In Glorp you tap instead.</p>
       <ul class="checks">
-        <li><b>Chat only stays connected while Glorp is on screen.</b> Leave the app and the connection closes; notifications use a light check instead.</li>
-        <li><b>Only the rows you can see get drawn</b>, and new messages are prepared and measured away from the screen, so busy chat doesn't stutter.</li>
-        <li><b>No video decoding when only the sound plays.</b> A paused player left off screen is released.</li>
-        <li><b>The screen stays awake only while video plays.</b></li>
-        <li><b>The nuke and mutelinks lists are only checked while you're signed in and looking at chat.</b></li>
+        <li><b>Tap a link for its preview</b>: a video's title and thumbnail, an X post's text and picture, or the image itself. Watch YouTube links right there.</li>
+        <li><b>Tap an emote</b> to see who made it, favourite it, or add it to your message.</li>
+        <li><b>Tap a name to focus on that person</b>, as on the site. Hold it for their menu and their membership card.</li>
+        <li><b>Your latest mention stays at the top</b> of chat until you close it, so it doesn't scroll away in a busy chat.</li>
       </ul>
-      <h3>Measured against the site in Chrome</h3>
-      <p>One phone, an XREAL Beam Pro on Android 14, running on battery. Chrome and Glorp took turns every 12 to 35 minutes for an afternoon, so changes in how busy chat was hit both alike. Same brightness, sound at zero, screen always on, the same YouTube live stream for video. Chat ran at 10 to 70 messages a minute.</p>
-      <table class="results">
-        <thead><tr><th>Processor time</th><th class="num">Chrome</th><th class="num">Glorp</th></tr></thead>
-        <tbody>
-          <tr><td>Chat</td><td class="num">1.25 cores</td><td class="num">0.62 cores</td></tr>
-          <tr><td>Chat and a stream</td><td class="num">1.49 cores</td><td class="num">0.92 cores</td></tr>
-          <tr><td>Chat, animations off in both</td><td class="num">1.06 cores</td><td class="num">0.60 cores</td></tr>
-        </tbody>
-      </table>
-      <p>Glorp does the same work with about half the processor time. The battery barely noticed on this phone: with chat alone Glorp lasted 10 to 20% longer per percent of battery, and with a stream both drained the same. Its screen, on with nothing running at all, drained almost as fast as either app, so the processor is a small part of the total there. Phones whose processors take a bigger share, and busier chat, are where the difference shows.</p>
+    </section>
+  </div>
+
+  <div class="pair">
+    <section class="panel">
+      <h2>Know when it matters</h2>
+      <ul class="checks">
+        <li><b>A notification when Destiny goes live</b>, when someone mentions you, and when a whisper comes in, with Glorp closed.</li>
+        <li><b>Mentions work with any sign-in</b>, because they come from polecat.me's chat logs. Check as often as every 5 minutes, or less to save battery.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Don't get caught out</h2>
+      <ul class="checks">
+        <li><b>A warning before you send</b> a message that would hit a nuke, mutelinks or a banned phrase. Send anyway if you mean it.</li>
+        <li><b>A warning triangle</b> at the top of chat while a nuke or mutelinks is on. Tap it to see what.</li>
+        <li><b>Your own alert words</b>, for whatever you'd rather not say by accident.</li>
+      </ul>
     </section>
   </div>
 
   <section class="panel">
-    <h2>Everything chat does on the site</h2>
-    <p>Glorp follows chat-gui, destiny.gg's own chat code, so chat looks and behaves the way it does in a browser.</p>
+    <h2>The community's tools, in one place</h2>
+    <p>No more opening five sites in other tabs. These are screens in Glorp's menu, and their links in chat open there too.</p>
     <ul class="checks">
-      <li><b>Emotes move the way they do on the site</b>, with their colour changes, glows and extras like BibleThump's tears. Glorp reads the site's own emote stylesheet and is checked frame by frame against it. Combos count up to C-C-C-COMBO, flairs colour names, and Tier 5 names get the moving rainbow.</li>
-      <li><b>Mentions, highlight words, tags with notes, the ignore list and timestamps.</b></li>
-      <li><b>Whispers</b> in their own conversations, with history.</li>
-      <li><b>Polls</b> you can vote in, the pinned message, and spotlighted messages.</li>
-      <li><b>Subscriptions, gifted subs, donations, deaths, posts from X and the Vestaboard</b> show up in chat.</li>
-      <li><b>Censoring</b> of muted and banned users' messages, and NSFW and NSFL messages hidden if you like.</li>
-      <li><b>The site's commands</b>, <code>/stalk</code>, <code>/mentions</code> and <code>/tag</code> included. The input suggests emotes, names and commands as you type.</li>
-      <li><b>Tap a name to focus chat on that person</b>, as on the site. Hold it for their menu: mention, whisper, tags and their membership card, with photo, team, tier, standing, biography and, on the back, their signature.</li>
-      <li><b>Tap a link for its preview</b>, or an emote to see who made it and favourite it.</li>
-      <li>Signed in from a computer, your chat settings follow your account and the site sees what you're watching.</li>
+      <li><b>Mentions</b>: every message naming you, or anyone, since December 2025, from polecat.me.</li>
+      <li><b>Chat log search</b>: by name, words or both, and the chat around any line, from rustlesearch.dev.</li>
+      <li><b>Links</b>: the pictures and links posted in chat, newest or most reacted to, from Pizza's linkers.ooo.</li>
+      <li><b>Poll archive and movie nights</b>, from Mitch's mitchdev.net and dinkdonk.mov.</li>
     </ul>
   </section>
 
-  <section class="panel">
-    <h2>Made for a phone</h2>
-    <ul class="checks">
-      <li><b>Notifications</b> when Destiny goes live, when someone mentions you, and when you get a whisper, without chat open. Mentions come from polecat.me's chat logs, so any sign-in works.</li>
-      <li><b>Warnings before you send</b>: Glorp tells you if a message would hit a nuke, mutelinks or a banned phrase. While one is on, a warning triangle sits at the top left of chat.</li>
-      <li><b>The community's tools, built in</b>: chat log search (rustlesearch.dev), every message that mentioned you (polecat.me), the links and pictures posted in chat with their reactions (linkers.ooo), the poll archive and movie nights. Their links in chat open in the app.</li>
-      <li><b>YouTube and Rumble links show their titles</b>, and play in Glorp's player.</li>
-      <li><b>It updates itself</b>, and Menu → Report a problem opens a GitHub issue with the details filled in.</li>
-    </ul>
+  <section class="panel" id="battery">
+    <h2>Lighter than a browser tab</h2>
+    <p>A tab runs the whole website. Glorp only does what chat needs: the connection closes when you leave, only the lines on screen get drawn, new messages are prepared away from the screen so busy chat doesn't stutter, and the screen stays awake only while video plays.</p>
+    <h3>Measured against the site in Chrome</h3>
+    <p>One phone, an XREAL Beam Pro on Android 14, running on battery. Chrome and Glorp took turns every 12 to 35 minutes for an afternoon, so changes in how busy chat was hit both alike. Same brightness, sound at zero, screen always on, the same YouTube live stream for video. Chat ran at 10 to 70 messages a minute.</p>
+    <table class="results">
+      <thead><tr><th>Processor time</th><th class="num">Chrome</th><th class="num">Glorp</th></tr></thead>
+      <tbody>
+        <tr><td>Chat</td><td class="num">1.25 cores</td><td class="num">0.62 cores</td></tr>
+        <tr><td>Chat and a stream</td><td class="num">1.49 cores</td><td class="num">0.92 cores</td></tr>
+        <tr><td>Chat, animations off in both</td><td class="num">1.06 cores</td><td class="num">0.60 cores</td></tr>
+      </tbody>
+    </table>
+    <p>Glorp does the same work with about half the processor time. The battery barely noticed on this phone: with chat alone Glorp lasted 10 to 20% longer, and with a stream both drained the same. Its screen, on with nothing running at all, drained almost as fast as either app, so the processor is a small part of the total there. Phones whose processors take a bigger share, and busier chat, are where the difference shows.</p>
   </section>
 
-  <section class="panel">
-    <h2>Glorp's own</h2>
-    <ul class="checks">
-      <li><b>Five themes</b>: Glorp's green in dark and light, destiny.gg's own, and Aerith's light and dark with her round buttons and glowing input.</li>
-      <li><b>Emoji name icons</b>, a private tag only you see.</li>
-      <li><b>Chat from people watching other streams</b>, dimmed like the site's eye button, or hidden.</li>
-      <li><b>Text size</b>, and your phone's font or the site's.</li>
-      <li><b>Your latest mention stays at the top</b> until you close it, and your own alert words warn you before sending.</li>
-      <li><b>Your pick of platform</b> when Destiny is live on several.</li>
-      <li><b>Settings → Sync</b> keeps all of this the same on your other phones, stored encrypted.</li>
-      <li><b>Test versions</b>, which install as <i>Glorp Probe</i>, for anyone who wants to try what's next.</li>
-    </ul>
-  </section>
+  <div class="pair">
+    <section class="panel">
+      <h2>Your chat, as it is</h2>
+      <p>Glorp is built on destiny.gg's own chat code, so nothing you rely on goes missing: emotes and combos as the site draws them, whispers, polls, the pinned message, tags and highlights, the site's commands, and hiding NSFW and NSFL. Signed in from a computer, your chat settings follow your account, and the site sees what you're watching.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Make it yours</h2>
+      <ul class="checks">
+        <li><b>Five themes</b>, including destiny.gg's own and Aerith's light and dark.</li>
+        <li><b>Emoji name icons</b>, a private tag only you see.</li>
+        <li><b>Dim or hide chat from people watching other streams.</b></li>
+        <li><b>Text size</b>, and your phone's font or the site's.</li>
+        <li><b>Settings → Sync</b> keeps it all the same on your other phones, stored encrypted.</li>
+      </ul>
+    </section>
+  </div>
 
   <div class="pair">
     <section class="panel">
