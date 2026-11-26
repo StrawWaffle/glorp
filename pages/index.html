@@ -26,18 +26,8 @@
     </div>
   </header>
 
-  <section class="shots" aria-label="Screenshots">
-    <figure><img src="img/stream.webp" alt="A video playing above chat" loading="lazy"><figcaption>Streams in a real player</figcaption></figure>
-    <figure><img src="img/chat.webp" alt="Chat with emotes, a subscription, a donation and a combo" loading="lazy"><figcaption>The chat you know</figcaption></figure>
-    <figure><img src="img/link-card.webp" alt="A YouTube link's preview card" loading="lazy"><figcaption>Tap a link for its preview</figcaption></figure>
-    <figure><img src="img/user-card.webp" alt="Someone's menu: your icon for them and their membership card" loading="lazy"><figcaption>Hold a name for their card</figcaption></figure>
-    <figure><img src="img/emote-card.webp" alt="An emote's card with Add to message" loading="lazy"><figcaption>Tap an emote for its card</figcaption></figure>
-    <figure><img src="img/aerith-light.webp" alt="Chat in Aerith's light theme" loading="lazy"><figcaption>Themes</figcaption></figure>
-    <figure><img src="img/settings.webp" alt="Settings in categories" loading="lazy"><figcaption>Settings</figcaption></figure>
-  </section>
-
-  <div class="pair">
-    <section class="panel">
+  <section class="panel feature">
+    <div>
       <h2>Streams that keep playing</h2>
       <p>In a browser, bigscreen plays each stream in that platform's web player, with its limits. Glorp gets the stream itself and plays it in Android's own video player.</p>
       <ul class="checks">
@@ -46,47 +36,61 @@
         <li><b>A quality menu</b>, starting at your screen's size so you never download more than you can see.</li>
         <li><b>Kick, Twitch, YouTube, Rumble and AngelThump</b>, with the web player as a fallback for anything else.</li>
       </ul>
-    </section>
+    </div>
+    <figure class="shot"><img src="img/stream.webp" alt="A stream playing above chat" loading="lazy"></figure>
+    <figure class="shot-wide"><img src="img/landscape.webp" alt="The phone turned sideways: the stream with its bar underneath, chat beside it" loading="lazy"><figcaption>Turn the phone sideways: the stream on the left with its bar underneath, chat the whole height beside it.</figcaption></figure>
+  </section>
 
-    <section class="panel">
-      <h2>Made for touch</h2>
-      <p>Some of the site's best bits wait for a mouse to hover over them. A phone has no hover, so in the browser you never see them. In Glorp you tap instead.</p>
+  <section class="panel feature flip">
+    <div>
+      <h2>Previews, cards and tags</h2>
+      <p>The site shows a lot when a mouse hovers over something, and a phone has no hover. In Glorp you tap instead, and there's more to find.</p>
       <ul class="checks">
-        <li><b>Tap a link for its preview</b>: a video's title and thumbnail, an X post's text and picture, or the image itself. Watch YouTube links right there.</li>
+        <li><b>Tap a link for its preview</b> without leaving chat: a video's title and thumbnail, an X post's text and picture, or the image itself. YouTube links play right there.</li>
+        <li><b>Hold a name for their card</b>: mention or whisper them, their membership card with team, tier and standing, and their recent messages.</li>
+        <li><b>Tag people your way.</b> Chat's own tags, a colour and a note that follow your account, set from the card. And an emoji next to their name that only you see.</li>
         <li><b>Tap an emote</b> to see who made it, favourite it, or add it to your message.</li>
-        <li><b>Tap a name to focus on that person</b>, as on the site. Hold it for their menu and their membership card.</li>
-        <li><b>Your latest mention stays at the top</b> of chat until you close it, so it doesn't scroll away in a busy chat.</li>
+        <li><b>Tap a name to focus on that person</b>, as on the site, and your latest mention stays at the top until you close it.</li>
       </ul>
-    </section>
-  </div>
+    </div>
+    <div class="shot-pair">
+      <figure class="shot"><img src="img/link-card.webp" alt="A YouTube link's preview card with Watch here" loading="lazy"></figure>
+      <figure class="shot"><img src="img/user-card.webp" alt="Someone's card: your icon for them, chat's tag and their membership card" loading="lazy"></figure>
+    </div>
+  </section>
 
-  <div class="pair">
-    <section class="panel">
-      <h2>Know when it matters</h2>
+  <section class="panel feature">
+    <div>
+      <h2>The community's tools, built in</h2>
+      <p>No more opening other sites in other tabs. These are in Glorp's menu, and their links in chat open there too.</p>
       <ul class="checks">
-        <li><b>A notification when Destiny goes live</b>, when someone mentions you, and when a whisper comes in, with Glorp closed.</li>
-        <li><b>Mentions work with any sign-in</b>, because they come from polecat.me's chat logs. Check as often as every 5 minutes, or less to save battery.</li>
+        <li><b>Mentions</b>: every message naming you, or anyone, since December 2025, from polecat.me.</li>
+        <li><b>Chat log search</b>: by name, words or both, and the chat around any line, from rustlesearch.dev.</li>
+        <li><b>Links</b>: the pictures and links posted in chat, newest or most reacted to, from Pizza's linkers.ooo.</li>
+        <li><b>Poll archive and movie nights</b>, from Mitch's mitchdev.net and dinkdonk.mov.</li>
+        <li><b>Nuke and mutelinks warnings</b>, from vyneer's lists: Glorp warns you before you send a message that would get you muted, and a triangle at the top of chat says while one is on. Add your own alert words too.</li>
       </ul>
-    </section>
-
-    <section class="panel">
-      <h2>Don't get caught out</h2>
-      <ul class="checks">
-        <li><b>A warning before you send</b> a message that would hit a nuke, mutelinks or a banned phrase. Send anyway if you mean it.</li>
-        <li><b>A warning triangle</b> at the top of chat while a nuke or mutelinks is on. Tap it to see what.</li>
-        <li><b>Your own alert words</b>, for whatever you'd rather not say by accident.</li>
-      </ul>
-    </section>
-  </div>
+    </div>
+    <figure class="shot"><img src="img/tools.webp" alt="Glorp's menu: Mentions, Chat log search, Links, Poll archive and Movie nights, each with its site's icon" loading="lazy"></figure>
+  </section>
 
   <section class="panel">
-    <h2>The community's tools, in one place</h2>
-    <p>No more opening five sites in other tabs. These are screens in Glorp's menu, and their links in chat open there too.</p>
+    <h2>Five themes</h2>
+    <p>Glorp's green in dark and light, destiny.gg's own colours, and Aerith's light and dark, with her round buttons and glowing input. The <a href="userscript/glorp.user.js">userscript</a> brings the same themes to the site on a computer.</p>
+    <div class="themes">
+      <figure><img src="img/theme-glorp.webp" alt="Chat in Glorp dark" loading="lazy"><figcaption>Glorp dark</figcaption></figure>
+      <figure><img src="img/theme-glorp-light.webp" alt="Chat in Glorp light" loading="lazy"><figcaption>Glorp light</figcaption></figure>
+      <figure><img src="img/theme-destiny.webp" alt="Chat in destiny.gg's colours" loading="lazy"><figcaption>destiny.gg</figcaption></figure>
+      <figure><img src="img/theme-aerith-light.webp" alt="Chat in Aerith light" loading="lazy"><figcaption>Aerith light</figcaption></figure>
+      <figure><img src="img/theme-aerith-dark.webp" alt="Chat in Aerith dark" loading="lazy"><figcaption>Aerith dark</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Know when it matters</h2>
     <ul class="checks">
-      <li><b>Mentions</b>: every message naming you, or anyone, since December 2025, from polecat.me.</li>
-      <li><b>Chat log search</b>: by name, words or both, and the chat around any line, from rustlesearch.dev.</li>
-      <li><b>Links</b>: the pictures and links posted in chat, newest or most reacted to, from Pizza's linkers.ooo.</li>
-      <li><b>Poll archive and movie nights</b>, from Mitch's mitchdev.net and dinkdonk.mov.</li>
+      <li><b>A notification when Destiny goes live</b>, when someone mentions you, and when a whisper comes in, with Glorp closed.</li>
+      <li><b>Mentions work with any sign-in</b>, because they come from polecat.me's chat logs. Check as often as every 5 minutes, or less to save battery.</li>
     </ul>
   </section>
 
@@ -115,10 +119,9 @@
     <section class="panel">
       <h2>Make it yours</h2>
       <ul class="checks">
-        <li><b>Five themes</b>, including destiny.gg's own and Aerith's light and dark.</li>
-        <li><b>Emoji name icons</b>, a private tag only you see.</li>
         <li><b>Dim or hide chat from people watching other streams.</b></li>
         <li><b>Text size</b>, and your phone's font or the site's.</li>
+        <li><b>Your pick of platform</b> when Destiny is live on several.</li>
         <li><b>Settings → Sync</b> keeps it all the same on your other phones, stored encrypted.</li>
       </ul>
     </section>
