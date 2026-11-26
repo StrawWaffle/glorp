@@ -166,7 +166,8 @@ private fun EmbedList(
             onPick = onOtherStreams,
         )
         val streams = live.liveStreams
-        val embeds = live.embeds.filter { !live.isBanned(it.embed) }
+        // Each embed once: the rows are keyed by it, and the list comes straight from the site.
+        val embeds = live.embeds.filter { !live.isBanned(it.embed) }.distinctBy { it.embed.key }
         LazyColumn(Modifier.navigationBarsPadding()) {
             if (picked) item { Entry("Follow bigscreen", "Back to what destiny.gg shows", null) { onPick(null) } }
             items(streams, key = { "d:" + it.embed.key }) { stream ->

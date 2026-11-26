@@ -78,8 +78,10 @@ private class LinksState(private val api: Linkers, private val scope: CoroutineS
             val page = api.page(query, next)
             loading = false
             if (page == null) { failed = true; return@launch }
+            // Each post once: a page can repeat one from an earlier page (new links shift
+            // the offsets) or even list it twice itself, and the list keys posts by id.
             val known = posts.mapTo(HashSet()) { it.id }
-            posts = posts + page.posts.filter { it.id !in known }
+            posts = posts + page.posts.filter { known.add(it.id) }
             next = page.next
             if (!page.hasMore || page.posts.isEmpty()) ended = true
         }
