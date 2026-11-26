@@ -6,6 +6,7 @@
 //
 //	GET /mentions?nick=<name>&since=<ms>  →  {"mentions":[{"nick","text","at"}...]}
 //	GET /health                           →  {"connected":true,"messages":n,"since":ms}
+//	GET /votes, GET /votes/live           →  dinkdonk.mov movie-night votes (votes.go)
 //
 // It keeps nothing about who asks.
 package main
@@ -38,14 +39,23 @@ func main() {
 	}
 
 	store := NewStore(*keep)
-	chat := &Chat{URL: *chatURL, OnMessage: func(m Message) { store.Add(m, time.Now()) }}
+	votes := NewVotes(dinkdonkTitle(&http.Client{Timeout: 10 * time.Second}))
+	chat := &Chat{
+		URL:       *chatURL,
+		OnMessage: func(m Message) { store.Add(m, time.Now()) },
+		OnBroadcast: func(text string, at int64) {
+			if vote, ok := voteIn(text, at); ok {
+				go votes.Add(vote, time.Now())
+			}
+		},
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go chat.Run(ctx)
 
 	server := &http.Server{
 		Addr:              *listen,
-		Handler:           routes(store, chat, newLimiter(60, time.Minute)),
+		Handler:           routes(store, chat, votes, newLimiter(60, time.Minute)),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      10 * time.Second,
 	}
@@ -65,8 +75,16 @@ var nickShape = regexp.MustCompile(`^\w{3,20}$`)
 
 const maxMentions = 50
 
-func routes(store *Store, chat *Chat, limit *limiter) http.Handler {
+func routes(store *Store, chat *Chat, votes *Votes, limit *limiter) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /votes", func(w http.ResponseWriter, r *http.Request) {
+		if !limit.allow(clientIP(r)) {
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "slow down"})
+			return
+		}
+		writeJSON(w, http.StatusOK, votes.State(time.Now()))
+	})
+	mux.HandleFunc("GET /votes/live", votes.serveLive)
 	mux.HandleFunc("GET /mentions", func(w http.ResponseWriter, r *http.Request) {
 		if !limit.allow(clientIP(r)) {
 			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "slow down"})

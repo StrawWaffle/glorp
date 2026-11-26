@@ -43,6 +43,8 @@ interface NotifyControls {
      * [catchUp]: connected again off screen, so first look for what came while it was down.
      */
     fun setLive(connected: Boolean, catchUp: Boolean = false) {}
+    /** A movie night is on: listen for its votes (on Android, a foreground service), while the app may start it. */
+    fun listenForVotes() {}
 }
 
 /** Where a tapped notification asked the app to go (an [Alert.open]), until the app takes it. */
@@ -52,7 +54,7 @@ object OpenRequests {
 
 /** Something worth a notification, where tapping it goes, and any buttons on it. */
 data class Alert(val kind: Kind, val title: String, val text: String, val open: String, val actions: List<AlertAction> = emptyList()) {
-    enum class Kind { Live, Mention, Whisper, Bigscreen }
+    enum class Kind { Live, Mention, Whisper, Bigscreen, Vote, MovieNight }
 }
 
 /** A button on a notification: done without opening the app ([BigscreenOptions.apply] reads [command]). */
@@ -69,7 +71,9 @@ class NotifyOptions(private val prefs: ChatPrefs, private val settings: ChatSett
     val whispers: Boolean get() = (settings["notificationwhisper"] as? JsonPrimitive)?.booleanOrNull == true
     /** Hosts, channels followed on chat's embeds list, pile-ons. */
     val bigscreen: BigscreenOptions by lazy { BigscreenOptions(prefs) }
-    val any: Boolean get() = live || mentions || whispers || bigscreen.any
+    /** dinkdonk.mov's movie nights: votes opening, and reminders before booked sessions. */
+    val movieNight: MovieNightOptions by lazy { MovieNightOptions(prefs) }
+    val any: Boolean get() = live || mentions || whispers || bigscreen.any || movieNight.any
 
     /** Minutes between looks. Under 15, Android's own lower limit for repeating work, each check books the next. */
     val intervalMinutes: Int get() = prefs.get(INTERVAL)?.toIntOrNull()?.takeIf { it in INTERVALS } ?: 30

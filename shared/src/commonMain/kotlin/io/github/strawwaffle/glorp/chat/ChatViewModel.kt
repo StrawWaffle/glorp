@@ -1067,7 +1067,16 @@ class ChatViewModel(
      */
     val liveAlerts: kotlinx.coroutines.flow.SharedFlow<LiveAlert> = _liveAlerts
 
+    private val _votesHeard = kotlinx.coroutines.flow.MutableSharedFlow<io.github.strawwaffle.glorp.notify.MovieVote>(extraBufferCapacity = 4)
+
+    /** dinkdonk.mov polls and ratings, as chat's broadcasts announce them. */
+    val votesHeard: kotlinx.coroutines.flow.SharedFlow<io.github.strawwaffle.glorp.notify.MovieVote> = _votesHeard
+
     private fun alertFor(line: ChatLine) {
+        if (line.kind == ChatLine.Kind.Broadcast) {
+            io.github.strawwaffle.glorp.notify.voteFromBroadcast(line.text, line.at)?.let { _votesHeard.tryEmit(it) }
+            return
+        }
         val nick = line.nick ?: return
         val me = _account.value?.nick ?: return
         if (nick.equals(me, ignoreCase = true)) return

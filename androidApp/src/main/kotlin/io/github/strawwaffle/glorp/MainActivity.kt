@@ -77,6 +77,9 @@ class MainActivity : ComponentActivity() {
         override fun show(alert: Alert) {
             if (permitted) Notifier.post(applicationContext, alert)
         }
+        override fun listenForVotes() {
+            io.github.strawwaffle.glorp.notify.VoteListener.start(applicationContext)
+        }
         override fun setLive(connected: Boolean, catchUp: Boolean) {
             if (Notifier.liveChat != connected) AppLog.note("notify", if (connected) "chat live: the background check stays quiet" else "chat closed: the background check notifies")
             if (!connected || !catchUp) {
@@ -107,7 +110,7 @@ class MainActivity : ComponentActivity() {
         // trying players without posting links in chat.
         val embed = if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("embed") else null
         val frames = if (BuildConfig.DEV_IMPORT) devFrames() else emptyList()
-        // Dev builds: `--es notify-test mention|whisper|live` posts a sample notification, to try where tapping it goes.
+        // Dev builds: `--es notify-test mention|whisper|live|vote|movienight` posts a sample notification, to try where tapping it goes.
         if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("notify-test")?.let(::postTestNotification)
         // Dev builds: `--es expire-test 30`: the first player's address "expires" after 30 s.
         if (BuildConfig.DEV_IMPORT) intent?.getStringExtra("expire-test")?.toLongOrNull()?.let {
@@ -131,6 +134,7 @@ class MainActivity : ComponentActivity() {
         takeOpenRequest(intent)
         // Where the background check asks for mentions (see Notifier).
         SharedChatPrefs(applicationContext).put(NotifyOptions.SERVER, BuildConfig.MENTIONS_URL.ifBlank { null })
+        SharedChatPrefs(applicationContext).put(io.github.strawwaffle.glorp.notify.MovieNightOptions.SERVER, BuildConfig.VOTES_URL.ifBlank { null })
         setContent {
             GlorpApp(
                 origin = BuildConfig.SITE_ORIGIN,
@@ -155,6 +159,8 @@ class MainActivity : ComponentActivity() {
         val alert = when (kind) {
             "live" -> Alert(Alert.Kind.Live, "Destiny is live on Kick", "chillin like a villain", AlertCheck.OPEN_LIVE)
             "whisper" -> Alert(Alert.Kind.Whisper, "Whisper from StrawWaffle", "you there?", AlertCheck.OPEN_WHISPER + "StrawWaffle")
+            "vote" -> io.github.strawwaffle.glorp.notify.voteAlert(io.github.strawwaffle.glorp.notify.MovieVote("poll", "90Ypt", "SEEN MOVIES ALLOWED", 0))
+            "movienight" -> io.github.strawwaffle.glorp.notify.movieNightOn()
             else -> Alert(
                 Alert.Kind.Mention, "mrmouton mentioned you", "YeeLaugh",
                 // As the site's mentions give it: to the second.

@@ -284,6 +284,24 @@ fun GlorpApp(
         LaunchedEffect(banner) { if (banner != null) { delay(6_000); banner = null } }
         // Hosts, followed channels and pile-ons heard on the live socket: always a notification.
         LaunchedEffect(chat) { chat.bigscreenAlerts.collect { notify?.show(it) } }
+        // A dinkdonk vote announced in chat: a notification unless chat is in view (the broadcast
+        // shows there), and the night is on, so the listener takes over once the app is left.
+        LaunchedEffect(chat) {
+            val dinkdonk = io.github.strawwaffle.glorp.community.DinkDonkClient(chat.http)
+            chat.votesHeard.collect { heard ->
+                val options = notifyOptions.movieNight
+                if (!options.votes) return@collect
+                options.nightUntil = maxOf(options.nightUntil, heard.at + 3 * 60 * 60_000L)
+                notify?.listenForVotes()
+                if (!options.firstTime(heard)) return@collect
+                val inApp = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && !fullscreenNow
+                if (inApp) return@collect
+                val title = runCatching {
+                    if (heard.kind == "poll") dinkdonk.pollResult(heard.id)?.title else dinkdonk.ratingResult(heard.id)?.title
+                }.getOrNull()
+                notify?.show(io.github.strawwaffle.glorp.notify.voteAlert(heard.copy(title = title)))
+            }
+        }
         CompositionLocalProvider(
             LocalFullscreen provides remember(fullscreen) { Fullscreen(fullscreen) { fullscreenWanted = it } },
             LocalLinkTitles provides chat.linkTitles.takeIf { chat.input.options.linkTitles },

@@ -104,6 +104,7 @@ object Notifier {
                 if (permitted(context)) found.filter { !liveChat || it.kind == Alert.Kind.Live || it.kind == Alert.Kind.Bigscreen }.forEach { post(context, it) }
             }
             AppLog.note("notify", "background check: ${alerts.size} new")
+            runCatching { movieNightCheck(context, client) }.onFailure { AppLog.note("movienight", "check failed", it) }
         } finally {
             client.close()
         }
@@ -116,12 +117,20 @@ object Notifier {
             putExtra(EXTRA_OPEN, alert.open)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         } ?: return
-        val tap = PendingIntent.getActivity(
-            context, alert.open.hashCode(), open,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val icon = context.resources.getIdentifier("ic_notification", "drawable", context.packageName)
-            .takeIf { it != 0 } ?: android.R.drawable.stat_notify_chat
+        // A vote or a schedule opens on dinkdonk.mov itself, where the voting is.
+        val tap = if (alert.kind == Alert.Kind.Vote || alert.kind == Alert.Kind.MovieNight) {
+            PendingIntent.getActivity(
+                context, alert.open.hashCode(),
+                Intent(Intent.ACTION_VIEW, android.net.Uri.parse(alert.open)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        } else {
+            PendingIntent.getActivity(
+                context, alert.open.hashCode(), open,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+        val icon = smallIcon(context)
         val id = alert.open.hashCode()
         val builder = Notification.Builder(context, channelOf(alert.kind))
             .setSmallIcon(icon)
@@ -130,10 +139,19 @@ object Notifier {
             .setStyle(Notification.BigTextStyle().bigText(alert.text))
             .setContentIntent(tap)
             .setAutoCancel(true)
-            .setCategory(if (alert.kind == Alert.Kind.Live || alert.kind == Alert.Kind.Bigscreen) Notification.CATEGORY_EVENT else Notification.CATEGORY_MESSAGE)
+            .setCategory(if (alert.kind in setOf(Alert.Kind.Live, Alert.Kind.Bigscreen, Alert.Kind.Vote, Alert.Kind.MovieNight)) Notification.CATEGORY_EVENT else Notification.CATEGORY_MESSAGE)
         if (alert.kind == Alert.Kind.Bigscreen) builder.addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, "Watch", tap).build())
+        if (alert.kind == Alert.Kind.Vote) {
+            builder.addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, if (alert.open.contains("/rate/")) "Rate" else "Vote", tap).build())
+            // Gone once the vote has closed.
+            builder.setTimeoutAfter(6 * 60_000L)
+        }
         // The other buttons act without opening the app (AlertActionReceiver).
         alert.actions.forEachIndexed { index, action ->
+            if (action.command == LISTEN_COMMAND) {
+                builder.addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, action.label, VoteListener.startIntent(context)).build())
+                return@forEachIndexed
+            }
             val intent = Intent(context, AlertActionReceiver::class.java)
                 .putExtra(AlertActionReceiver.EXTRA_COMMAND, action.command)
                 .putExtra(AlertActionReceiver.EXTRA_ID, id)
@@ -151,7 +169,12 @@ object Notifier {
         Alert.Kind.Mention -> "mentions"
         Alert.Kind.Whisper -> "whispers"
         Alert.Kind.Bigscreen -> "bigscreen"
+        Alert.Kind.Vote -> "votes"
+        Alert.Kind.MovieNight -> "movienight"
     }
+
+    fun smallIcon(context: Context): Int =
+        context.resources.getIdentifier("ic_notification", "drawable", context.packageName).takeIf { it != 0 } ?: android.R.drawable.stat_notify_chat
 
     private fun channels(context: Context, manager: NotificationManager) {
         listOf(
@@ -159,6 +182,8 @@ object Notifier {
             NotificationChannel("mentions", "Mentions", NotificationManager.IMPORTANCE_DEFAULT),
             NotificationChannel("whispers", "Whispers", NotificationManager.IMPORTANCE_HIGH),
             NotificationChannel("bigscreen", "Bigscreen: hosts and embeds", NotificationManager.IMPORTANCE_DEFAULT),
+            NotificationChannel("votes", "Movie night: votes open", NotificationManager.IMPORTANCE_HIGH),
+            NotificationChannel("movienight", "Movie night: starting", NotificationManager.IMPORTANCE_DEFAULT),
         ).forEach(manager::createNotificationChannel)
     }
 

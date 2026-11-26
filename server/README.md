@@ -9,6 +9,19 @@ keeps nothing about who asks.
     GET /mentions?nick=<name>&since=<ms>   {"mentions":[{"nick":"…","text":"…","at":1795400612944}]}
     GET /health                            {"connected":true,"messages":161,"since":1795404963119}
 
+It also watches chat's broadcasts for dinkdonk.mov's movie-night votes
+(every poll and rating opens with a broadcast that is just its link, and
+closes after three to five minutes) and tells phones at once:
+
+    GET /votes        {"open":[{"kind":"poll","id":"…","url":"…","title":"…","at":ms}],"nightUntil":ms}
+    GET /votes/live   websocket: {"type":"state",…} on connecting, then {"type":"vote","vote":{…}}
+
+`nightUntil` is three hours after the last vote (0 when no night is on).
+The live socket carries nothing else, pinged every 30 s; Glorp holds it only
+during a movie night. Each vote's title (the poll's question, the rated film)
+is read once from its results page on dinkdonk.mov. At most 4 sockets per
+caller and 2000 in all; nothing about who listens is kept.
+
 A mention is the name as a word (as chat highlights it) in someone else's
 message; at most the newest 50 after `since` (default: the last hour). Each
 caller may ask 60 times a minute. `/health` answers 503 while chat isn't

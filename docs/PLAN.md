@@ -342,6 +342,23 @@ and returns within 30 minutes stays quiet. Following and muting happen by
 long-pressing a row in "What chat is watching" or from the notification's
 buttons (`AlertActionReceiver`); Settings lists both.
 
+**Movie-night votes** (`notify/MovieNight.kt`, `MovieNightAndroid.kt`,
+`server/votes.go`). dinkdonk.mov opens each poll and rating with a chat
+broadcast that is just its link (`https://dinkdonk.mov/poll/<id>`,
+`/rate/<id>`), and closes it after about 3 minutes (5 for a rating), too
+soon for any background check. With chat connected, the broadcast itself
+notifies (unless chat is in view). The server watches broadcasts and serves
+`/votes` (open votes, and `nightUntil`, three hours after the last one) and a
+quiet `/votes/live` socket. On Android a foreground service (`VoteListener`,
+type `specialUse`) holds that socket until the night ends; Android 12+ lets
+it start only from the app on screen (hearing a vote in chat starts it) or
+from a tapped notification, so the background check, finding a night on,
+starts it if it may and otherwise posts "Movie night is on" with a "Listen
+for votes" button. Unscheduled nights are common (a vacation schedule with
+votes every night), so the first vote of such a night can be missed; the
+schedule (`/schedule`, read twice a day) books a reminder 15 minutes before
+each booked session, with the same button.
+
 ## From d.gg utilities (read 2026-11-23)
 
 vyneer's userscript (`dgg-chat-gui-scripts/dgg-utilities.user.js`, v1.9)

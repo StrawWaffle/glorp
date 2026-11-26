@@ -556,6 +556,9 @@ private fun NotificationSettings(
     var hostFilter by remember { mutableStateOf(bigscreen.hostFilter) }
     var pileOns by remember { mutableStateOf(bigscreen.pileOns) }
     var pileOnAt by remember { mutableStateOf(bigscreen.pileOnAt) }
+    val movieNight = options.movieNight
+    var votes by remember { mutableStateOf(movieNight.votes) }
+    var reminders by remember { mutableStateOf(movieNight.reminders) }
     Column {
         Text(
             "In picture in picture, full screen, or playing with the screen off, whispers and mentions notify as they arrive. " +
@@ -591,6 +594,18 @@ private fun NotificationSettings(
             fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
+        SettingsHeading("Movie nights (dinkdonk.mov)")
+        SwitchRow(
+            "A poll or rating opens",
+            "They close after about 3 minutes. During a movie night Glorp keeps a small connection to its server " +
+                "for them, and Android shows a notification while it listens. With chat open, chat's announcement does it",
+            votes,
+        ) { on -> turn(on) { movieNight.setVotes(on); votes = on } }
+        SwitchRow(
+            "A movie night is about to start",
+            "A quarter of an hour before each session on dinkdonk.mov's schedule",
+            reminders,
+        ) { on -> turn(on) { movieNight.setReminders(on); reminders = on } }
         SettingsHeading("Chat")
         SwitchRow(
             "Someone mentions me",

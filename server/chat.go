@@ -34,7 +34,9 @@ const (
 type Chat struct {
 	URL       string
 	OnMessage func(Message)
-	connected atomic.Bool
+	// Broadcasts (chat's system announcements): text and when, in milliseconds.
+	OnBroadcast func(text string, at int64)
+	connected   atomic.Bool
 }
 
 func (c *Chat) Connected() bool { return c.connected.Load() }
@@ -125,6 +127,11 @@ func (c *Chat) connectOnce(ctx context.Context) time.Time {
 			for _, m := range messagesIn(string(data)) {
 				c.OnMessage(m)
 			}
+			if c.OnBroadcast != nil {
+				for _, b := range broadcastsIn(string(data)) {
+					c.OnBroadcast(b.Text, b.At)
+				}
+			}
 		}
 	}
 }
@@ -154,6 +161,31 @@ func messagesIn(raw string) []Message {
 		var out []Message
 		for _, line := range lines {
 			out = append(out, messagesIn(line)...)
+		}
+		return out
+	}
+	return nil
+}
+
+// broadcastsIn reads chat's broadcasts in one frame, or in a HISTORY
+// backlog: `BROADCAST {"data":"…","timestamp":…}`, with no nick.
+func broadcastsIn(raw string) []Message {
+	event, payload, _ := strings.Cut(raw, " ")
+	switch strings.ToUpper(event) {
+	case "BROADCAST":
+		var w wireMessage
+		if json.Unmarshal([]byte(payload), &w) != nil || w.Data == "" || w.Timestamp == 0 {
+			return nil
+		}
+		return []Message{{Text: w.Data, At: w.Timestamp}}
+	case "HISTORY":
+		var lines []string
+		if json.Unmarshal([]byte(payload), &lines) != nil {
+			return nil
+		}
+		var out []Message
+		for _, line := range lines {
+			out = append(out, broadcastsIn(line)...)
 		}
 		return out
 	}

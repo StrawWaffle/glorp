@@ -67,7 +67,7 @@ func TestEndpoints(t *testing.T) {
 	now := time.Now()
 	s.Add(Message{Nick: "Friend", Text: "hi Glorp", At: now.UnixMilli()}, now)
 	chat := &Chat{}
-	h := routes(s, chat, newLimiter(2, time.Minute))
+	h := routes(s, chat, NewVotes(func(Vote) string { return "" }), newLimiter(2, time.Minute))
 
 	get := func(path string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()

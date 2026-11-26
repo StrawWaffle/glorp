@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Notifications for Destiny going live, mentions and whispers (see Notifier.kt), and keeping their check after a restart. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -50,5 +51,17 @@
         <receiver
             android:name="io.github.strawwaffle.glorp.notify.AlertActionReceiver"
             android:exported="false" />
+        <receiver
+            android:name="io.github.strawwaffle.glorp.notify.MovieNightReminder"
+            android:exported="false" />
+        <!-- Holds a socket to Glorp's server during a movie night, for votes that close in minutes. -->
+        <service
+            android:name="io.github.strawwaffle.glorp.notify.VoteListener"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Listens for community movie-night polls, which close within minutes, for the length of a movie night" />
+        </service>
     </application>
 </manifest>

@@ -34,6 +34,8 @@ android {
         // The mentions service (server/), for mention notifications without the
         // site's login; empty leaves them to the site's own list (cookies only).
         buildConfigField("String", "MENTIONS_URL", "\"${providers.gradleProperty("glorp.mentionsUrl").orElse("").get()}\"")
+        // Movie-night votes come from the same server in every build: they're read-only and about destiny.gg.
+        buildConfigField("String", "VOTES_URL", "\"${providers.gradleProperty("glorp.mentionsUrl").orElse("").get()}\"")
     }
 
     // The release key lives outside the repo (see AGENTS.md). Every release
