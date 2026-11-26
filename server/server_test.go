@@ -98,3 +98,13 @@ func TestRetryDelayStaysInItsWindow(t *testing.T) {
 		t.Fatal(d)
 	}
 }
+
+func TestClientIPBehindCloudflare(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/votes", nil)
+	r.RemoteAddr = "172.18.0.5:41234"
+	r.Header.Set("CF-Connecting-IP", "203.0.113.7")
+	r.Header.Set("X-Forwarded-For", "203.0.113.7, 172.18.0.1")
+	if got := clientIP(r); got != "203.0.113.7" {
+		t.Fatalf("clientIP: %q", got)
+	}
+}

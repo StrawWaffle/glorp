@@ -119,10 +119,14 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
-// clientIP is the caller, behind a reverse proxy if there is one. Used only
+// clientIP is the caller, behind a reverse proxy or Cloudflare's tunnel if there is one. Used only
 // to slow down one caller asking too often; never stored or logged.
 func clientIP(r *http.Request) string {
 	if ip := r.Header.Get("X-Real-IP"); ip != "" {
+		return ip
+	}
+	// Behind the Cloudflare tunnel, which sets no X-Real-IP.
+	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
 		return ip
 	}
 	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
