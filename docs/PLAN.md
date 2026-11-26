@@ -327,6 +327,21 @@ cookies. Checks can run every 5 or 10 minutes as chained one-off jobs, since
 Android repeats jobs no more often than every 15. Pull, not push: no
 Google push service, and no list of users anywhere.
 
+**Bigscreen notifications** (`notify/Bigscreen.kt`): what Destiny hosts
+(anyone but muted, or only channels followed), channels the user follows
+showing up on chat's embeds list (each with its own reach: on the list,
+top 3, #1), and optional pile-ons (anything past 25/50/100/200 watching in
+chat). Not a general "went live" service: it only reads the site's live
+socket (`dggApi:hosting`, `dggApi:embeds`), which the background check opens
+for a few seconds (`LiveSocket.snapshot`) and the app already holds on
+screen. Kick and Twitch embeds are channels; a YouTube embed is a video, so
+its channel comes from YouTube's oEmbed (`author_url`, under a kilobyte,
+once per video, kept for the newest 300). What was told is shared by the app
+and the background check (`bigscreen.seen`); something that leaves its range
+and returns within 30 minutes stays quiet. Following and muting happen by
+long-pressing a row in "What chat is watching" or from the notification's
+buttons (`AlertActionReceiver`); Settings lists both.
+
 ## From d.gg utilities (read 2026-11-23)
 
 vyneer's userscript (`dgg-chat-gui-scripts/dgg-utilities.user.js`, v1.9)

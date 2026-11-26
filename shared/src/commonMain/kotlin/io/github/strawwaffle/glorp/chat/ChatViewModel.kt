@@ -40,6 +40,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -1102,8 +1103,31 @@ class ChatViewModel(
         if (liveJob?.isActive == true) return
         liveJob = viewModelScope.launch {
             ready.await()
+            launch { watchBigscreen() }
             LiveSocket(client, site, (session as? Session.Cookies)?.cookieHeader, reportedWatching)
                 .run { update -> _live.value = _live.value.with(update) }
+        }
+    }
+
+    /** Which channel an embed is from, for following and muting (YouTube asks oEmbed once per video). */
+    val channels by lazy { io.github.strawwaffle.glorp.notify.ChannelLookup(client, prefs) }
+
+    /** The bigscreen notification settings and lists. */
+    val bigscreen: io.github.strawwaffle.glorp.notify.BigscreenOptions get() = io.github.strawwaffle.glorp.notify.NotifyOptions(prefs, settings).bigscreen
+
+    private val _bigscreenAlerts = kotlinx.coroutines.flow.MutableSharedFlow<io.github.strawwaffle.glorp.notify.Alert>(extraBufferCapacity = 8)
+
+    /** Hosts, followed channels and pile-ons, as the live socket tells of them while the app is on screen. */
+    val bigscreenAlerts: kotlinx.coroutines.flow.SharedFlow<io.github.strawwaffle.glorp.notify.Alert> = _bigscreenAlerts
+
+    // What the live socket pushes arrives in a burst on connecting: look once it settles.
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    private suspend fun watchBigscreen() {
+        _live.debounce(3_000).collect { state ->
+            if (!state.known || !state.listed) return@collect
+            val options = bigscreen
+            if (!options.any) return@collect
+            io.github.strawwaffle.glorp.notify.BigscreenWatch(prefs, options, channels::channelOf).check(state).forEach { _bigscreenAlerts.tryEmit(it) }
         }
     }
 

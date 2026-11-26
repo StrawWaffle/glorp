@@ -47,5 +47,8 @@
         <receiver
             android:name="io.github.strawwaffle.glorp.update.InstallResultReceiver"
             android:exported="false" />
+        <receiver
+            android:name="io.github.strawwaffle.glorp.notify.AlertActionReceiver"
+            android:exported="false" />
     </application>
 </manifest>

@@ -87,6 +87,8 @@ data class LiveState(
     val embeds: List<EmbedListing> = emptyList(),
     /** Whether the site has said yet which of Destiny's streams are live. */
     val known: Boolean = false,
+    /** Whether the site has sent chat's embeds list yet. */
+    val listed: Boolean = false,
 ) {
     companion object {
         /** Kick unless the settings say otherwise. */

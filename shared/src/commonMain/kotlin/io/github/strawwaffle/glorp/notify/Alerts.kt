@@ -50,10 +50,13 @@ object OpenRequests {
     val pending = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 }
 
-/** Something worth a notification, and where tapping it goes. */
-data class Alert(val kind: Kind, val title: String, val text: String, val open: String) {
-    enum class Kind { Live, Mention, Whisper }
+/** Something worth a notification, where tapping it goes, and any buttons on it. */
+data class Alert(val kind: Kind, val title: String, val text: String, val open: String, val actions: List<AlertAction> = emptyList()) {
+    enum class Kind { Live, Mention, Whisper, Bigscreen }
 }
+
+/** A button on a notification: done without opening the app ([BigscreenOptions.apply] reads [command]). */
+data class AlertAction(val label: String, val command: String)
 
 /**
  * What notifications are wanted and how often to look. Mentions and whispers
@@ -64,7 +67,9 @@ class NotifyOptions(private val prefs: ChatPrefs, private val settings: ChatSett
     val live: Boolean get() = prefs.get(LIVE) == "true"
     val mentions: Boolean get() = (settings["notificationhighlight"] as? JsonPrimitive)?.booleanOrNull == true
     val whispers: Boolean get() = (settings["notificationwhisper"] as? JsonPrimitive)?.booleanOrNull == true
-    val any: Boolean get() = live || mentions || whispers
+    /** Hosts, channels followed on chat's embeds list, pile-ons. */
+    val bigscreen: BigscreenOptions by lazy { BigscreenOptions(prefs) }
+    val any: Boolean get() = live || mentions || whispers || bigscreen.any
 
     /** Minutes between looks. Under 15, Android's own lower limit for repeating work, each check books the next. */
     val intervalMinutes: Int get() = prefs.get(INTERVAL)?.toIntOrNull()?.takeIf { it in INTERVALS } ?: 30
@@ -102,6 +107,8 @@ class AlertCheck(
     private val nick: String?,
     /** Glorp's mentions service (server/), which needs no login; null to use the site's list. */
     private val server: String? = null,
+    /** One look at the site's live socket (what's hosted, chat's embeds), for bigscreen notifications. */
+    private val liveSnapshot: (suspend () -> io.github.strawwaffle.glorp.site.LiveState?)? = null,
 ) {
     /**
      * Looks at each kind in turn. [onFound] gets each kind's alerts as soon as
@@ -114,6 +121,11 @@ class AlertCheck(
     suspend fun run(onFound: (List<Alert>) -> Unit = {}): List<Alert> = buildList {
         fun found(alerts: List<Alert>) { if (alerts.isNotEmpty()) { addAll(alerts); onFound(alerts) } }
         if (options.live) found(listOfNotNull(live()))
+        if (options.bigscreen.any && liveSnapshot != null) {
+            liveSnapshot.invoke()?.let { state ->
+                found(BigscreenWatch(prefs, options.bigscreen, ChannelLookup(client, prefs)::channelOf).check(state))
+            }
+        }
         if (cookies != null && options.whispers) found(whispers(cookies))
         if (nick != null && options.mentions) {
             // polecat.me first; Glorp's own service when polecat can't be asked; the site's list last.
@@ -226,6 +238,9 @@ class AlertCheck(
         /** What tapping a live notification opens: the app, on what bigscreen shows. */
         const val OPEN_LIVE = "glorp:live"
 
+        /** Prefix of a bigscreen notification's target: the embed (`kick/name`) follows. */
+        const val OPEN_EMBED = "glorp:embed:"
+
         /** Opens the app on chat (a mention heard live, still in chat). */
         const val OPEN_CHAT = "glorp:chat"
 
@@ -278,7 +293,7 @@ internal fun parseServerMentions(body: String): List<LogMessage>? = runCatching 
     }
 }.getOrNull()
 
-private fun platformName(platform: String) = when (platform.lowercase()) {
+internal fun platformName(platform: String) = when (platform.lowercase()) {
     "youtube" -> "YouTube"
     "twitch" -> "Twitch"
     "kick" -> "Kick"

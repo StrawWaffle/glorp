@@ -3,6 +3,7 @@ package io.github.strawwaffle.glorp.ui
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -152,15 +153,30 @@ internal fun label(embed: Embed, live: LiveState): String {
     return embed.key
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-internal fun Entry(name: String, detail: String?, watchers: Int?, platform: String? = null, onClick: () -> Unit) {
+internal fun Entry(
+    name: String,
+    detail: String?,
+    watchers: Int?,
+    platform: String? = null,
+    /** A note beside the name: whether it notifies, or is muted. */
+    mark: String? = null,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth()
+            .combinedClickable(onLongClickLabel = if (onLongClick != null) "Notifications" else null, onLongClick = onLongClick, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (platform != null) PlatformIcon(platform, 20.dp, Modifier.padding(end = 12.dp))
         Column(Modifier.weight(1f)) {
-            Text(name, color = Palette.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(name, color = Palette.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                mark?.let { Text(it, color = Palette.Glorp, fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(start = 6.dp)) }
+            }
             detail?.let { Text(it, color = Palette.TextDim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
         watchers?.let { Text("$it", color = Palette.Glorp, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp)) }

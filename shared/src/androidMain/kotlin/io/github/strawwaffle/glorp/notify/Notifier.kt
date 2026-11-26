@@ -93,11 +93,16 @@ object Notifier {
         val cookies = KeystoreSessionStore(context).load() as? Session.Cookies
         val client = createHttpClient()
         try {
-            val alerts = AlertCheck(client, Site.guess(origin), prefs, options, cookies, prefs.get(NotifyOptions.NICK), prefs.get(NotifyOptions.SERVER))
-                .run { found ->
-                    // While chat is connected it has already told of whispers and mentions; going live it never does.
-                    if (permitted(context)) found.filter { !liveChat || it.kind == Alert.Kind.Live }.forEach { post(context, it) }
-                }
+            val site = Site.guess(origin)
+            val alerts = AlertCheck(
+                client, site, prefs, options, cookies, prefs.get(NotifyOptions.NICK), prefs.get(NotifyOptions.SERVER),
+                // Bigscreen: a few seconds on the site's live socket, signed out.
+                liveSnapshot = { io.github.strawwaffle.glorp.site.LiveSocket(client, site).snapshot() },
+            ).run { found ->
+                // While chat is connected it has already told of whispers and mentions; going live
+                // and bigscreen it never does (bigscreen's memory is shared, so nothing repeats).
+                if (permitted(context)) found.filter { !liveChat || it.kind == Alert.Kind.Live || it.kind == Alert.Kind.Bigscreen }.forEach { post(context, it) }
+            }
             AppLog.note("notify", "background check: ${alerts.size} new")
         } finally {
             client.close()
@@ -117,22 +122,35 @@ object Notifier {
         )
         val icon = context.resources.getIdentifier("ic_notification", "drawable", context.packageName)
             .takeIf { it != 0 } ?: android.R.drawable.stat_notify_chat
-        val notification = Notification.Builder(context, channelOf(alert.kind))
+        val id = alert.open.hashCode()
+        val builder = Notification.Builder(context, channelOf(alert.kind))
             .setSmallIcon(icon)
             .setContentTitle(alert.title)
             .setContentText(alert.text)
             .setStyle(Notification.BigTextStyle().bigText(alert.text))
             .setContentIntent(tap)
             .setAutoCancel(true)
-            .setCategory(if (alert.kind == Alert.Kind.Live) Notification.CATEGORY_EVENT else Notification.CATEGORY_MESSAGE)
-            .build()
-        manager.notify(alert.open.hashCode(), notification)
+            .setCategory(if (alert.kind == Alert.Kind.Live || alert.kind == Alert.Kind.Bigscreen) Notification.CATEGORY_EVENT else Notification.CATEGORY_MESSAGE)
+        if (alert.kind == Alert.Kind.Bigscreen) builder.addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, "Watch", tap).build())
+        // The other buttons act without opening the app (AlertActionReceiver).
+        alert.actions.forEachIndexed { index, action ->
+            val intent = Intent(context, AlertActionReceiver::class.java)
+                .putExtra(AlertActionReceiver.EXTRA_COMMAND, action.command)
+                .putExtra(AlertActionReceiver.EXTRA_ID, id)
+            val pending = PendingIntent.getBroadcast(
+                context, id * 31 + index, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            builder.addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, action.label, pending).build())
+        }
+        manager.notify(id, builder.build())
     }
 
     private fun channelOf(kind: Alert.Kind) = when (kind) {
         Alert.Kind.Live -> "live"
         Alert.Kind.Mention -> "mentions"
         Alert.Kind.Whisper -> "whispers"
+        Alert.Kind.Bigscreen -> "bigscreen"
     }
 
     private fun channels(context: Context, manager: NotificationManager) {
@@ -140,6 +158,7 @@ object Notifier {
             NotificationChannel("live", "Destiny goes live", NotificationManager.IMPORTANCE_DEFAULT),
             NotificationChannel("mentions", "Mentions", NotificationManager.IMPORTANCE_DEFAULT),
             NotificationChannel("whispers", "Whispers", NotificationManager.IMPORTANCE_HIGH),
+            NotificationChannel("bigscreen", "Bigscreen: hosts and embeds", NotificationManager.IMPORTANCE_DEFAULT),
         ).forEach(manager::createNotificationChannel)
     }
 
@@ -185,5 +204,26 @@ class AlertJob : JobService() {
     override fun onDestroy() {
         scope.cancel()
         super.onDestroy()
+    }
+}
+
+/**
+ * A bigscreen notification's button (Mute, Stop following, Follow): changes
+ * the lists without opening the app, then clears the notification.
+ */
+class AlertActionReceiver : android.content.BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val command = intent.getStringExtra(EXTRA_COMMAND) ?: return
+        val prefs = SharedChatPrefs(context)
+        NotifyOptions(prefs, ChatSettings(prefs)).bigscreen.apply(command)
+        context.getSystemService(NotificationManager::class.java)?.cancel(intent.getIntExtra(EXTRA_ID, 0))
+        // Following or unfollowing can turn the background check on or off.
+        Notifier.schedule(context)
+        AppLog.note("notify", "notification button: ${command.substringBefore('	')}")
+    }
+
+    companion object {
+        const val EXTRA_COMMAND = "io.github.strawwaffle.glorp.COMMAND"
+        const val EXTRA_ID = "io.github.strawwaffle.glorp.NOTIFICATION"
     }
 }

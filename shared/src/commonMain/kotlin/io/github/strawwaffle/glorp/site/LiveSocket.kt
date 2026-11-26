@@ -56,6 +56,33 @@ class LiveSocket(
 ) {
     private val url = "wss://live." + site.origin.substringAfter("://").removePrefix("www.").substringBefore('/')
 
+    /**
+     * One look, for the background check: connects, reads what the server
+     * sends on connecting (Destiny's streams, what's hosted, chat's embeds),
+     * and closes. A few seconds and a few kilobytes; null if it couldn't.
+     */
+    suspend fun snapshot(): LiveState? = kotlinx.coroutines.withTimeoutOrNull(10.seconds) {
+        var state = LiveState()
+        var hosting = false
+        var embeds = false
+        try {
+            client.webSocket(urlString = url, request = { header(HttpHeaders.UserAgent, ChatSocket.USER_AGENT) }) {
+                for (frame in incoming) {
+                    if (frame !is Frame.Text) continue
+                    val update = parseLiveMessage(frame.readText()) ?: continue
+                    state = state.with(update)
+                    if (update is LiveUpdate.Hosting) hosting = true
+                    if (update is LiveUpdate.Embeds) embeds = true
+                    if (state.known && hosting && embeds) break
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+        state.takeIf { it.known && hosting && embeds }
+    }
+
     suspend fun run(onUpdate: (LiveUpdate) -> Unit) {
         var attempts = 0
         while (currentCoroutineContext().isActive) {
@@ -127,7 +154,7 @@ fun LiveState.with(update: LiveUpdate): LiveState = when (update) {
     is LiveUpdate.Streams -> copy(streams = update.streams, known = true)
     is LiveUpdate.Hosting -> copy(hosting = update.embed)
     is LiveUpdate.Banned -> copy(banned = update.keys)
-    is LiveUpdate.Embeds -> copy(embeds = update.embeds)
+    is LiveUpdate.Embeds -> copy(embeds = update.embeds, listed = true)
 }
 
 private fun JsonElement?.str(): String? = (this as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull

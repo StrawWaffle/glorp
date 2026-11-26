@@ -36,6 +36,7 @@ import io.github.strawwaffle.glorp.notify.AlertCheck
 import io.github.strawwaffle.glorp.notify.NotifyControls
 import io.github.strawwaffle.glorp.notify.NotifyOptions
 import io.github.strawwaffle.glorp.notify.OpenRequests
+import io.github.strawwaffle.glorp.ui.BigscreenFollows
 import io.github.strawwaffle.glorp.community.rustleLinkOf
 import io.github.strawwaffle.glorp.ui.PlayerBar
 import io.github.strawwaffle.glorp.ui.WhisperBanner
@@ -214,6 +215,11 @@ fun GlorpApp(
             when {
                 target == AlertCheck.OPEN_LIVE -> { chat.watch(null); playerShown = true; screen = "chat" }
                 target == AlertCheck.OPEN_CHAT -> { fullscreenWanted = false; screen = "chat" }
+                target.startsWith(AlertCheck.OPEN_EMBED) -> {
+                    io.github.strawwaffle.glorp.site.Embed.parse(target.removePrefix(AlertCheck.OPEN_EMBED))?.let { chat.watch(it) }
+                    playerShown = true
+                    screen = "chat"
+                }
                 target.startsWith(AlertCheck.OPEN_WHISPER) -> { communityArg = target.removePrefix(AlertCheck.OPEN_WHISPER); screen = "whispers" }
                 rustleLinkOf(target) != null -> { communityArg = target; screen = "rustle" }
                 io.github.strawwaffle.glorp.community.polecatLinkOf(target) != null -> { communityArg = target; screen = "mentions" }
@@ -276,6 +282,8 @@ fun GlorpApp(
             }
         }
         LaunchedEffect(banner) { if (banner != null) { delay(6_000); banner = null } }
+        // Hosts, followed channels and pile-ons heard on the live socket: always a notification.
+        LaunchedEffect(chat) { chat.bigscreenAlerts.collect { notify?.show(it) } }
         CompositionLocalProvider(
             LocalFullscreen provides remember(fullscreen) { Fullscreen(fullscreen) { fullscreenWanted = it } },
             LocalLinkTitles provides chat.linkTitles.takeIf { chat.input.options.linkTitles },
@@ -354,6 +362,10 @@ fun GlorpApp(
                     onWhispers = { communityArg = inbox.sorted.firstOrNull { it.unread > 0 }?.nick; screen = "whispers" },
                     otherStreams = chat.input.options.otherStreams,
                     onOtherStreams = chat.input.options::treatOtherStreams,
+                    follows = BigscreenFollows(chat.bigscreen, chat.channels) {
+                        // Following asks for Android's permission the first time, and wakes the background check.
+                        if (notify != null && !notify.permitted) notify.ask { notifyVersion++ } else notifyVersion++
+                    },
                 )
                 banner?.let { heard ->
                     WhisperBanner(heard.nick, heard.text, onOpen = { banner = null; communityArg = heard.nick; screen = "whispers" }, onClose = { banner = null })

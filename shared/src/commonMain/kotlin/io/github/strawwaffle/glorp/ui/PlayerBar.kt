@@ -37,6 +37,16 @@ import androidx.compose.ui.unit.sp
 import io.github.strawwaffle.glorp.chat.OtherStreams
 import io.github.strawwaffle.glorp.site.Embed
 import io.github.strawwaffle.glorp.site.LiveState
+import io.github.strawwaffle.glorp.site.EmbedListing
+import io.github.strawwaffle.glorp.notify.BigscreenOptions
+import io.github.strawwaffle.glorp.notify.Channel
+import io.github.strawwaffle.glorp.notify.ChannelLookup
+import io.github.strawwaffle.glorp.notify.Reach
+import io.github.strawwaffle.glorp.notify.followablePlatforms
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.runtime.LaunchedEffect
 
 /**
  * The bar between the player and chat, there with the player hidden too: the
@@ -61,6 +71,8 @@ fun PlayerBar(
     /** What chat from people watching another stream does; set from the list too. */
     otherStreams: OtherStreams = OtherStreams.Show,
     onOtherStreams: (OtherStreams) -> Unit = {},
+    /** Following and muting from the list (long-press); null where there are no notifications. */
+    follows: BigscreenFollows? = null,
 ) {
     var listOpen by remember { mutableStateOf(false) }
     Row(
@@ -92,7 +104,7 @@ fun PlayerBar(
         BarIcon(if (playerShown) GlorpIcons.ExpandLess else GlorpIcons.ExpandMore, if (playerShown) "Hide the player" else "Show the player", onTogglePlayer)
     }
     if (listOpen) {
-        EmbedList(live, picked, otherStreams, onOtherStreams, onPick = { listOpen = false; onPick(it) }, onDismiss = { listOpen = false })
+        EmbedList(live, picked, otherStreams, onOtherStreams, follows, onPick = { listOpen = false; onPick(it) }, onDismiss = { listOpen = false })
     }
 }
 
@@ -132,9 +144,12 @@ private fun EmbedList(
     picked: Boolean,
     otherStreams: OtherStreams,
     onOtherStreams: (OtherStreams) -> Unit,
+    follows: BigscreenFollows?,
     onPick: (Embed?) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // Bumped when a follow or mute changes, to redraw the marks.
+    var version by remember { mutableStateOf(0) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(), containerColor = Palette.Navy) {
         Text(
             "What chat is watching",
@@ -158,9 +173,7 @@ private fun EmbedList(
                 Entry("Destiny on ${PlatformIcons.name(stream.embed.platform)}", stream.title, null, stream.embed.platform) { onPick(stream.embed) }
             }
             items(embeds, key = { "e:" + it.embed.key }) { listing ->
-                Entry(listing.displayName ?: listing.embed.key, listing.title ?: listing.embed.key, listing.watchers, listing.embed.platform) {
-                    onPick(listing.embed)
-                }
+                EmbedEntry(listing, follows, version, onChanged = { version++; follows?.onChanged?.invoke() }) { onPick(listing.embed) }
             }
             if (streams.isEmpty() && embeds.isEmpty()) {
                 item { Text("Nothing right now.", color = Palette.TextDim, modifier = Modifier.padding(16.dp)) }
@@ -181,5 +194,71 @@ private fun barNote(picked: Boolean, otherStreams: OtherStreams): String {
         others != null -> "Other streams' chat $others"
         picked -> "Picked from chat · tap for more"
         else -> "Tap for what chat is watching"
+    }
+}
+
+/** What the embeds list needs to follow and mute: the lists, who a video is from, and a word when they change. */
+class BigscreenFollows(val options: BigscreenOptions, val lookup: ChannelLookup, val onChanged: () -> Unit)
+
+/**
+ * One embed on the list. Long-press: notify about it (on the list, top 3,
+ * #1) or mute it. A YouTube video is followed by its channel, looked up
+ * when the menu opens if it isn't known yet.
+ */
+@Composable
+private fun EmbedEntry(listing: EmbedListing, follows: BigscreenFollows?, version: Int, onChanged: () -> Unit, onPick: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    var channel by remember(listing.embed.key) { mutableStateOf(follows?.lookup?.cached(listing.embed, listing)) }
+    val embedKey = listing.embed.key.lowercase()
+    val key = channel?.key ?: embedKey
+    val options = follows?.options
+    val followed = remember(version, key) { options?.followOf(key) }
+    val muted = remember(version, key) { options != null && (options.isMuted(key) || options.isMuted(embedKey)) }
+    val mark = when {
+        muted -> "\uD83D\uDD15 muted"
+        followed != null -> "\uD83D\uDD14" + when (followed.reach) { Reach.Listed -> ""; Reach.Top3 -> " top 3"; Reach.First -> " #1" }
+        else -> null
+    }
+    Box {
+        Entry(
+            listing.displayName ?: listing.embed.key, listing.title ?: listing.embed.key, listing.watchers, listing.embed.platform,
+            mark = mark,
+            onLongClick = if (options != null) ({ menu = true }) else null,
+            onClick = onPick,
+        )
+        if (menu && options != null && follows != null) {
+            val followable = listing.embed.platform.lowercase() in followablePlatforms
+            if (followable && channel == null) LaunchedEffect(listing.embed.key) { channel = follows.lookup.channelOf(listing.embed, listing) }
+            val name = channel?.name ?: listing.displayName ?: listing.embed.id
+            val target = channel ?: Channel(embedKey, name)
+            fun done() { menu = false; onChanged() }
+            DropdownMenu(expanded = true, onDismissRequest = { menu = false }, modifier = Modifier.background(Palette.Navy)) {
+                Text(
+                    if (followable) "Notify me about $name" else "Notifications for $name",
+                    color = Palette.TextDim, fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+                when {
+                    followable && channel == null -> Text("Finding the channel\u2026", color = Palette.TextDim, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                    followable -> {
+                        for (reach in Reach.entries) {
+                            DropdownMenuItem(
+                                text = { Text((if (followed?.reach == reach) "\u2713 " else "") + reach.menu, color = Palette.White) },
+                                onClick = { options.follow(target, reach); done() },
+                            )
+                        }
+                        if (followed != null) DropdownMenuItem(text = { Text("Stop following", color = Palette.White) }, onClick = { options.unfollow(key); done() })
+                    }
+                }
+                HorizontalDivider(color = Palette.NavyLight)
+                DropdownMenuItem(
+                    text = { Text(if (muted) "Unmute" else "Mute it (never notify)", color = Palette.Orange) },
+                    onClick = {
+                        if (muted) { options.unmute(key); options.unmute(embedKey) } else options.mute(target)
+                        done()
+                    },
+                )
+            }
+        }
     }
 }

@@ -53,6 +53,11 @@ import io.github.strawwaffle.glorp.chat.LocalOptions
 import io.github.strawwaffle.glorp.chat.OtherStreams
 import io.github.strawwaffle.glorp.notify.NotifyControls
 import io.github.strawwaffle.glorp.notify.NotifyOptions
+import io.github.strawwaffle.glorp.notify.BigscreenOptions
+import io.github.strawwaffle.glorp.notify.Channel
+import io.github.strawwaffle.glorp.notify.HostFilter
+import io.github.strawwaffle.glorp.notify.Reach
+import io.github.strawwaffle.glorp.notify.channelFromInput
 import io.github.strawwaffle.glorp.site.Flairs
 import io.github.strawwaffle.glorp.chat.highlightWords
 
@@ -539,6 +544,18 @@ private fun NotificationSettings(
         }
     }
     val signedOutNote = if (cookies) null else "Needs the computer sign-in, because the site only shows whispers to its own login"
+    val bigscreen = options.bigscreen
+    // The two lists are pages of their own; Back returns here.
+    var page by remember { mutableStateOf<String?>(null) }
+    OnBack(enabled = page != null) { page = null }
+    when (page) {
+        "following" -> return FollowingPage(bigscreen, onBack = { page = null }) { turn(true) {} }
+        "muted" -> return MutedPage(bigscreen, onBack = { page = null }) { onChanged() }
+    }
+    var hosts by remember { mutableStateOf(bigscreen.hosts) }
+    var hostFilter by remember { mutableStateOf(bigscreen.hostFilter) }
+    var pileOns by remember { mutableStateOf(bigscreen.pileOns) }
+    var pileOnAt by remember { mutableStateOf(bigscreen.pileOnAt) }
     Column {
         Text(
             "In picture in picture, full screen, or playing with the screen off, whispers and mentions notify as they arrive. " +
@@ -548,6 +565,33 @@ private fun NotificationSettings(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
         SwitchRow("Destiny goes live", null, live) { on -> turn(on) { options.setLive(on); live = on } }
+        SettingsHeading("Bigscreen")
+        SwitchRow("Destiny hosts someone", null, hosts) { on -> turn(on) { bigscreen.setHosts(on); hosts = on } }
+        if (hosts) {
+            Choices(
+                "Which hosts", null, HostFilter.entries, hostFilter,
+                label = { if (it == HostFilter.AllButMuted) "Anyone but muted" else "Only channels I follow" },
+            ) { bigscreen.setHostFilter(it); hostFilter = it }
+        }
+        LinkRow(
+            "Channels I follow",
+            "When chat puts them on its embeds list \u00b7 " + count(bigscreen.followed.size, "channel"),
+        ) { page = "following" }
+        SwitchRow("Chat piles onto something", "Anything on chat's embeds list, once this many in chat watch it", pileOns) { on ->
+            turn(on) { bigscreen.setPileOns(on); pileOns = on }
+        }
+        if (pileOns) {
+            Choices("Watching", null, BigscreenOptions.PILE_ON_STEPS, pileOnAt, label = { "$it+" }) { bigscreen.setPileOnAt(it); pileOnAt = it }
+        }
+        LinkRow("Muted", "Never notify for these \u00b7 " + count(bigscreen.muted.size, "channel")) { page = "muted" }
+        Text(
+            "Long-press anything in \u201cWhat chat is watching\u201d to follow or mute it. " +
+                "Glorp looks at the site's live socket for a few seconds on each check below.",
+            color = Palette.TextDim,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        SettingsHeading("Chat")
         SwitchRow(
             "Someone mentions me",
             // From polecat.me's logger (Glorp's own service as a backup), which needs no sign-in.
@@ -634,6 +678,137 @@ private fun SyncSettings(sync: io.github.strawwaffle.glorp.chat.GlorpSync, scanC
             }
             SettingsHeading("Stop")
             androidx.compose.material3.OutlinedButton(onClick = { sync.stop() }) { Text("Stop syncing on this phone", color = Palette.Orange) }
+        }
+    }
+}
+
+private fun count(n: Int, what: String) = if (n == 1) "1 $what" else "$n ${what}s"
+
+/** A row that opens a page of its own. */
+@Composable
+private fun LinkRow(title: String, detail: String?, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Palette.White, fontSize = 15.sp)
+            detail?.let { Text(it, color = Palette.TextDim, fontSize = 12.sp) }
+        }
+        Text("\u203a", color = Palette.TextDim, fontSize = 20.sp)
+    }
+}
+
+@Composable
+private fun PageTop(title: String, onBack: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp)) {
+        TextButton(onClick = onBack) { Text("\u2039 Notifications", color = Palette.Blue) }
+        Text(title, color = Palette.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+    }
+}
+
+/**
+ * The channels followed on chat's embeds list, each with when it notifies,
+ * and a field to add one by its link or name.
+ */
+@Composable
+private fun FollowingPage(options: BigscreenOptions, onBack: () -> Unit, onFollowed: () -> Unit) {
+    var list by remember { mutableStateOf(options.followed) }
+    var draft by remember { mutableStateOf("") }
+    var problem by remember { mutableStateOf<String?>(null) }
+    fun add() {
+        val channel = channelFromInput(draft)
+        if (channel == null) {
+            problem = "That isn't a Kick or Twitch channel, or a YouTube @handle or channel link."
+            return
+        }
+        options.follow(channel, options.followOf(channel.key)?.reach ?: Reach.Listed)
+        list = options.followed
+        draft = ""
+        problem = null
+        onFollowed()
+    }
+    Column {
+        PageTop("Channels I follow", onBack)
+        BasicTextField(
+            draft,
+            onValueChange = { draft = it; problem = null },
+            textStyle = TextStyle(color = Palette.White, fontSize = 15.sp),
+            cursorBrush = SolidColor(Palette.White),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { add() }),
+            decorationBox = { field ->
+                if (draft.isEmpty()) Text("Add: kick.com/\u2026, twitch.tv/\u2026, youtube.com/@\u2026", color = Palette.TextDim, fontSize = 15.sp)
+                field()
+            },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                .background(Palette.Navy, RoundedCornerShape(6.dp)).padding(10.dp),
+        )
+        problem?.let { Text(it, color = Palette.Orange, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp)) }
+        if (draft.isNotBlank()) {
+            Row(Modifier.fillMaxWidth().padding(end = 8.dp), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = ::add) { Text("Follow", color = Palette.Blue) }
+            }
+        }
+        if (list.isEmpty()) {
+            Text(
+                "Nobody yet. Long-press something in \u201cWhat chat is watching\u201d to follow it from there.",
+                color = Palette.TextDim, fontSize = 13.sp, modifier = Modifier.padding(16.dp),
+            )
+        }
+        for (followed in list) {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                PlatformIcon(followed.key.substringBefore('/'), 20.dp, Modifier.padding(end = 12.dp))
+                Text(followed.name, color = Palette.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = { options.unfollow(followed.key); list = options.followed }) { Text("Remove", color = Palette.TextDim) }
+            }
+            ReachChips(followed.reach) { reach ->
+                options.follow(Channel(followed.key, followed.name), reach)
+                list = options.followed
+            }
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun ReachChips(current: Reach, onPick: (Reach) -> Unit) {
+    FlowRow(Modifier.padding(start = 48.dp, end = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (reach in Reach.entries) {
+            val picked = reach == current
+            Text(
+                reach.label,
+                color = if (picked) Palette.White else Palette.TextDim,
+                fontSize = 13.sp,
+                fontWeight = if (picked) FontWeight.SemiBold else FontWeight.Normal,
+                modifier = Modifier.heightIn(min = 36.dp)
+                    .background(if (picked) Palette.NavyLight else Palette.Navy, RoundedCornerShape(8.dp))
+                    .selectable(selected = picked, role = androidx.compose.ui.semantics.Role.RadioButton) { onPick(reach) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+/** Channels that never notify, with a way back for each. */
+@Composable
+private fun MutedPage(options: BigscreenOptions, onBack: () -> Unit, onChanged: () -> Unit) {
+    var list by remember { mutableStateOf(options.muted) }
+    Column {
+        PageTop("Muted", onBack)
+        if (list.isEmpty()) {
+            Text(
+                "Nothing muted. Mute something from its notification, or by long-pressing it in \u201cWhat chat is watching\u201d.",
+                color = Palette.TextDim, fontSize = 13.sp, modifier = Modifier.padding(16.dp),
+            )
+        }
+        for (channel in list) {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                PlatformIcon(channel.key.substringBefore('/'), 20.dp, Modifier.padding(end = 12.dp))
+                Text(channel.name, color = Palette.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = { options.unmute(channel.key); list = options.muted; onChanged() }) { Text("Unmute", color = Palette.Blue) }
+            }
         }
     }
 }
