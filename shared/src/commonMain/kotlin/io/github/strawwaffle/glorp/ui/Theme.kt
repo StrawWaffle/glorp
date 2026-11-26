@@ -122,6 +122,19 @@ enum class ColorTheme(
         field = Color(0xFF111111), fieldBorder = Color(0xFF222222),
     ),
 
+    // destiny.gg as it looked around 2022: near-black chat, the blue-grey of the
+    // old header for the bar and mentions, cyan links, the subscriber blue for
+    // accents and the old Subscribe red for warnings. Sampled from screenshots.
+    Destiny2022(
+        "destiny.gg 2022", light = false,
+        background = Color(0xFF111111), surface = Color(0xFF181818), raised = Color(0xFF2B2B2B),
+        action = Color(0xFF12A0CB), text = Color(0xFFDBDBDB), attention = Color(0xFFE25560),
+        accent = Color(0xFF5AACE9), textDim = Color(0xFF8C8C8C), greentext = Color(0xFF6CA528),
+        bar = Color(0xFF607286), onBar = Color(0xFFFFFFFF), onAction = Color(0xFF111111),
+        mention = Color(0xFF1C2733), mentionBar = Color(0xFF839CB3), tagged = Color(0xFF181818),
+        field = Color(0xFF181818), fieldBorder = Color(0xFF2B2B2B),
+    ),
+
     // Aerith's themes for the site, light and dark: cream and brown, a
     // sky-blue bar, teal for mentions, buttons on round tiles. Stolen from
     // Aerith, with thanks.

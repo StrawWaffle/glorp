@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Glorp
 // @namespace    https://strawwaffle.github.io/glorp/
-// @version      3.1
+// @version      3.2
 // @description  Glorp's own chat features in destiny.gg's chat on a computer: themes, name icons, hiding other streams' chat, sticky mentions, settings synced with the Glorp app, and signing Glorp in without the developer tools.
 // @match        https://www.destiny.gg/*
 // @match        https://www.omniliberal.dev/*
@@ -155,12 +155,14 @@
     // Glorp's own, from its homepage: near-black green and lime, or pale green.
     Glorp: { bg: "#0a0f08", surface: "#131b10", raised: "#1b2716", action: "#b7fa44", text: "#eef6e4", dim: "#9eb38c", green: "#8bd450", mention: "#1f2b0f", tagged: "#1b2716", faint: "#5d7249", mentionBar: "#b7fa44", page: "#0a0f08", card: "#131b10", bar: "#131b10", onBar: "#eef6e4", actionBg: "#263a10", actionFill: "#3d6b14" },
     GlorpLight: { light: true, bg: "#fbfef5", surface: "#eef6e2", raised: "#d3e5bb", action: "#3f7d12", text: "#1c2a12", dim: "#5d7249", green: "#4e8f1a", mention: "#eaf7d0", tagged: "#eef6e2", faint: "#9eb38c", mentionBar: "#78b52a", page: "#eef6e2", card: "#fbfef5", bar: "#4e8f1a", onBar: "#ffffff", actionBg: "#e3f5c4", actionFill: "#3f7d12" },
+    // destiny.gg around 2022: near-black chat, the old header's blue-grey, cyan links, subscriber blue.
+    Destiny2022: { bg: "#111111", surface: "#181818", raised: "#2b2b2b", action: "#12a0cb", text: "#dbdbdb", dim: "#8c8c8c", green: "#6ca528", mention: "#1c2733", tagged: "#181818", faint: "#555555", mentionBar: "#839cb3", field: "#181818", fieldBorder: "#2b2b2b", page: "#2c2c2c", card: "#3c4754", bar: "#607286", onBar: "#ffffff", actionBg: "#16323d", actionFill: "#12a0cb" },
     // Aerith's: cream and brown or slate, a sky-blue bar, teal for mentions, buttons on round tiles.
     AerithLight: { light: true, bg: "#faf8e8", surface: "#efecd8", raised: "#dcd6b8", action: "#308fd6", text: "#5a4a38", dim: "#918168", green: "#55a637", mention: "#e4f6f0", tagged: "#efe9d2", faint: "#b3a68a", mentionBar: "#6de1c1", tile: "#efecd8", field: "#ffffff", fieldBorder: "#b3a68a", dash: "#dcd6b8", page: "#efe9d2", card: "#faf8e8", bar: "#6fb4ec", onBar: "#ffffff", actionBg: "#e2f0fb", actionFill: "#308fd6" },
     AerithDark: { bg: "#2b3444", surface: "#1f2a3c", raised: "#3b444e", action: "#7bc3e9", text: "#f1ecda", dim: "#b6ae98", green: "#85d28b", mention: "#27463f", tagged: "#243040", faint: "#717888", mentionBar: "#6de1c1", tile: "#243040", field: "#1a2332", fieldBorder: "#6fb4ec", dash: "#3b4658", page: "#1f2a3c", card: "#2b3444", bar: "#3f6f9e", onBar: "#f3eedc", actionBg: "#2c4a66", actionFill: "#3f6f9e" },
   };
   // "Destiny" (destiny.gg) is the site as it is: picking it here syncs it to the app.
-  var THEME_LABELS = [["", "Leave the site as it is"], ["Glorp", "Glorp dark"], ["GlorpLight", "Glorp light"], ["Destiny", "destiny.gg"], ["AerithLight", "Aerith light"], ["AerithDark", "Aerith dark"]];
+  var THEME_LABELS = [["", "Leave the site as it is"], ["Glorp", "Glorp dark"], ["GlorpLight", "Glorp light"], ["Destiny", "destiny.gg"], ["Destiny2022", "destiny.gg 2022"], ["AerithLight", "Aerith light"], ["AerithDark", "Aerith dark"]];
   // chat-gui's colours (abstracts/_vars.scss) and the role each plays.
   var ROLES = {
     "rgb(8, 8, 8)": "bg", "rgb(3, 3, 3)": "bg", "rgb(17, 17, 17)": "bg", "rgb(0, 0, 0)": "bg",
