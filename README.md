@@ -131,9 +131,11 @@ Google block sign-in there. Glorp signs in two other ways.
   computer that's signed in to destiny.gg, copy the two values it asks for
   from the browser, and scan the code it shows with Glorp. The page sends
   nothing anywhere. Its code is in [`pages/signin`](pages/signin). With
-  Violentmonkey, or Tampermonkey's beta, the
+  Tampermonkey (5.3 or later) or Violentmonkey, the
   [Glorp userscript](https://strawwaffle.dev/glorp/userscript/glorp.user.js)
-  reads the two values for you and shows the code on destiny.gg itself.
+  reads the two values for you and shows the code on destiny.gg itself, once
+  the manager is allowed to read HTTP-only cookies (the sign-in page says
+  where).
 - **A login key.** This covers chat and whispers. Create one on your
   account's developer page and paste it into Glorp.
 
