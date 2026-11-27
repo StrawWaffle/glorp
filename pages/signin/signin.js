@@ -35,6 +35,24 @@
     return /[\s;:]/.test(value);
   }
 
+  // What the site's cookies look like: sid is 32 lowercase hex characters;
+  // rememberme is a long URL-encoded token (a couple of hundred characters of
+  // letters, digits and %2B / %2F). Anything far from that is most likely the
+  // wrong cell, the cookie's name, or the two values swapped.
+  var SID = /^[0-9a-f]{26,64}$/i;
+  var TOKEN = /^[A-Za-z0-9%+\/=_-]{80,}$/;
+
+  function oddities(s, r) {
+    if (r && s === r) return "sid and rememberme are the same. Copy each cookie's own Value.";
+    if (TOKEN.test(s) && SID.test(r)) return "These look swapped: sid is the short one, rememberme the long one.";
+    if (/^(sid|rememberme)$/i.test(s) || /^(sid|rememberme)$/i.test(r)) return "That's the cookie's name. Copy the Value column instead.";
+    if (/^(true|false|\/|www\.)|destiny\.gg|omniliberal\.dev|^\d{4}-\d{2}-\d{2}/i.test(s + " " + r))
+      return "That looks like another column (Domain, Path or Expires). Copy the Value column.";
+    if (!SID.test(s)) return "sid doesn't look right: it's usually 32 letters and digits.";
+    if (r && !TOKEN.test(r)) return "rememberme doesn't look right: it's usually a long code of a couple of hundred characters.";
+    return null;
+  }
+
   // Back to before: no code anywhere on the page, and the warning to agree to again.
   function hide() {
     code = null;
@@ -47,17 +65,46 @@
   }
 
   // The code is made only once the warning is agreed to; first the warning shows.
+  // A warning about odd-looking values is shown once; pressing again with the
+  // same values goes ahead anyway, in case the site changes its format.
+  var warnedFor = null;
+  // The values the warning step was opened for, so another press can point at
+  // it instead of starting over.
+  var openFor = null;
+
+  function nudge() {
+    confirm.classList.remove("nudge");
+    void confirm.offsetWidth; // restart the animation
+    confirm.classList.add("nudge");
+    result.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    ack.focus();
+  }
+
   form.addEventListener("submit", function (event) {
     event.preventDefault();
-    hide();
     var s = clean(sid.value, "sid");
     var r = clean(rememberme.value, "rememberme");
+    var values = s + "|" + r;
+    // Pressed again while the warning step waits: point at it, keep its state.
+    if (!result.hidden && !confirm.hidden && openFor === values) {
+      nudge();
+      return;
+    }
+    hide();
     problem.hidden = true;
     if (!s || fails(s) || fails(r)) {
       problem.textContent = !s ? "Copy the value of sid first." : "That doesn't look like a cookie's value. Copy just the Value column.";
       problem.hidden = false;
       return;
     }
+    var odd = oddities(s, r);
+    if (odd && warnedFor !== values) {
+      warnedFor = values;
+      problem.textContent = odd + " Press Make the code again to use them anyway.";
+      problem.hidden = false;
+      return;
+    }
+    openFor = values;
     result.hidden = false;
     result.scrollIntoView({ block: "center" });
     ack.focus();

@@ -271,6 +271,20 @@ button:disabled {
 }
 .warning { color: var(--warn); font-weight: 700; margin-top: 0; }
 
+/* Pressing "Make the code" again while this step waits points at it. */
+#confirm { border-radius: 16px; }
+#confirm.nudge { animation: nudge 0.5s ease-in-out; outline: 3px solid var(--warn); outline-offset: 6px; }
+@keyframes nudge {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #confirm.nudge { animation: none; }
+}
+
 /* Dark on white in every theme, as scanners expect. */
 #qr {
   width: min(320px, 100%);
