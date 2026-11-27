@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Glorp
 // @namespace    https://strawwaffle.github.io/glorp/
-// @version      3.2
+// @version      3.3
 // @description  Glorp's own chat features in destiny.gg's chat on a computer: themes, name icons, hiding other streams' chat, sticky mentions, settings synced with the Glorp app, and signing Glorp in without the developer tools.
 // @match        https://www.destiny.gg/*
 // @match        https://www.omniliberal.dev/*
@@ -893,18 +893,31 @@
   }
 
   // ---- Sign in to Glorp (reads the login cookies, shows the code Glorp scans) ----------
+  // Why the last read came back empty, as the manager put it, to show the user.
+  var cookieError = null;
+  var manager = (typeof GM_info !== "undefined" && GM_info.scriptHandler) || "";
+
   function readCookie(name) {
     return new Promise(function (resolve) {
-      var details = { url: origin, name: name };
+      // The trailing slash matters: Tampermonkey checks the URL against
+      // @match https://www.destiny.gg/* as given, and the bare origin fails it.
+      var details = { url: origin + "/", name: name };
+      // Chrome only lists partitioned cookies when asked; Tampermonkey takes an
+      // empty partitionKey for "all". Violentmonkey doesn't need it.
+      if (/tampermonkey/i.test(manager)) details.partitionKey = {};
+      function failed(error) {
+        cookieError = error ? String(error && error.message || error) : cookieError;
+        resolve(null);
+      }
       try {
         if (typeof GM !== "undefined" && GM.cookie && GM.cookie.list) {
-          GM.cookie.list(details).then(function (list) { resolve(pick(list)); }, function () { resolve(null); });
+          GM.cookie.list(details).then(function (list) { resolve(pick(list)); }, failed);
         } else if (typeof GM_cookie !== "undefined" && GM_cookie.list) {
-          GM_cookie.list(details, function (list, error) { resolve(error ? null : pick(list)); });
+          GM_cookie.list(details, function (list, error) { if (error) failed(error); else resolve(pick(list)); });
         } else {
-          resolve(null);
+          failed("This userscript manager has no GM_cookie.");
         }
-      } catch (e) { resolve(null); }
+      } catch (e) { failed(e); }
     });
     function pick(list) {
       var found = (list || []).filter(function (c) { return c.name === name && c.value; })[0];
@@ -949,7 +962,10 @@
           "(as named in Violentmonkey 2.50; other versions may word or place them differently):</p>" +
           "<ol><li>Violentmonkey's dashboard, <b>Settings</b>.</li>" +
           "<li>This script's own <b>Settings</b> tab: in the dashboard, open <b>Glorp</b> with its edit button.</li></ol>" +
-          "<p>In Tampermonkey, only the beta can read them. Or you may not be signed in here: sign in with Remember me ticked.</p>" +
+          "<p>In Tampermonkey (5.3 or later), open its <b>Dashboard</b> → <b>Settings</b>, set <b>Config mode</b> to <b>Advanced</b>, " +
+          "then under <b>Security</b> set <b>Allow scripts to access cookies</b> to <b>All</b>, and reload this page.</p>" +
+          "<p>Or you may not be signed in here: sign in with Remember me ticked.</p>" +
+          (cookieError ? "<p class='quiet'>" + manager.replace(/[<>&]/g, "") + " said: " + cookieError.replace(/[<>&]/g, "") + "</p>" : "") +
           "<p class='quiet'>Without a manager that can, <a href='https://strawwaffle.dev/glorp/signin/?site=" + encodeURIComponent(site) + "'>Glorp's sign-in page</a> shows how to copy them by hand.</p>";
         return;
       }
