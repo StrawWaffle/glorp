@@ -43,6 +43,8 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
+import io.github.strawwaffle.glorp.diag.AppLog
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Constraints
@@ -300,6 +302,11 @@ internal object ChatImages {
         val result = runCatching { loader.execute(request) }.getOrNull()
         if (result !is SuccessResult) {
             slot.failures++
+            // Kept to the first failures in a row, so a picture that never loads doesn't fill the log.
+            if (slot.failures <= 3) {
+                val why = (result as? coil3.request.ErrorResult)?.throwable?.let { it::class.simpleName } ?: "no answer"
+                AppLog.note("images", "${url.substringBefore('?').substringAfterLast('/')} didn't load ($why), again in ${retryDelayMs(slot.failures) / 1000} s")
+            }
             delay(retryDelayMs(slot.failures))
             slot.loading = false
             slot.retry.intValue++
@@ -468,10 +475,22 @@ internal fun ChatText(
                     }
                 }
                 is InlineItem.ComboItem -> drawCombo(item, rect, now, measurer) { url -> ChatImages.get(url, context) }
-                is InlineItem.EmoteItem -> ChatImages.get(item.emote.url, context)?.let { p ->
-                    val elapsed = if (!animate || item.sentAt <= 0 || now == SETTLED_MS) SETTLED_MS else now - item.sentAt
-                    val at = emoteRect(item.emote, rect)
-                    drawEmote(item.emote, p, at.left, at.top, at.height, elapsed, still = !animate, measurer) { url -> ChatImages.get(url, context) }
+                is InlineItem.EmoteItem -> {
+                    val p = ChatImages.get(item.emote.url, context)
+                    if (p == null) {
+                        // Not loaded (yet, or it failed and waits to be tried
+                        // again): its name where it goes, so the line is never
+                        // left with a hole.
+                        val name = measurer.measure(
+                            item.emote.prefix, emoteNameStyle, overflow = TextOverflow.Clip, softWrap = false, maxLines = 1,
+                            constraints = Constraints(maxWidth = rect.width.toInt().coerceAtLeast(1)), density = this,
+                        )
+                        this.drawText(name, topLeft = Offset(rect.left, rect.bottom - name.firstBaseline))
+                    } else {
+                        val elapsed = if (!animate || item.sentAt <= 0 || now == SETTLED_MS) SETTLED_MS else now - item.sentAt
+                        val at = emoteRect(item.emote, rect)
+                        drawEmote(item.emote, p, at.left, at.top, at.height, elapsed, still = !animate, measurer) { url -> ChatImages.get(url, context) }
+                    }
                 }
             }
         }
@@ -497,6 +516,9 @@ internal fun ChatText(
         layout(constraints.maxWidth, layout.size.height) {}
     }
 }
+
+/** An emote's name, drawn in its place until its picture is there. */
+private val emoteNameStyle get() = TextStyle(color = Palette.TextDim, fontSize = 12.sp)
 
 /** The line's layout, kept for drawing and for finding what a tap hit. Not state: a new layout comes with a new measure. */
 private class LayoutHolder {
