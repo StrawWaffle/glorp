@@ -128,8 +128,12 @@ opens inside the app; pick your login provider (Twitch, Google, Kick, Reddit,
 Discord or X) and sign in as on the site. Passkeys don't work inside apps, so
 use your password or an authenticator code.
 
-Glorp keeps the login on the phone, encrypted with a key from Android's
-keystore.
+Glorp never stores your password. What it keeps is the session destiny.gg
+hands out after you log in (its `sid` and `rememberme` cookies), on the phone
+only, encrypted with an AES key in Android's Keystore. Glorp can use that key
+but can't read it out, so the stored session is unreadable to other apps, to a
+copy of Glorp's files and to backups (which are off for Glorp anyway). It's
+sent only to destiny.gg, and signing out in Glorp deletes it.
 
 Developer and fallback: builds made with `-Pglorp.computerSignIn=true` also
 offer the older sign-in from a computer, a QR code made by

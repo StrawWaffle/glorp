@@ -11,10 +11,12 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Keeps the login encrypted with an AES key that lives in the Android
- * Keystore and never leaves it. The ciphertext sits in the app's private
+ * Keeps the sign-in session (the site's cookies or a login key, never a
+ * password) encrypted with an AES key that lives in the Android Keystore and
+ * never leaves it: the app can use the key but not read it, so the stored
+ * ciphertext is useless to anything else. It sits in the app's private
  * preferences. If the key is gone (a restored backup, a wiped keystore) the
- * login is simply forgotten.
+ * session is simply forgotten.
  */
 class KeystoreSessionStore(context: Context) : SessionStore {
     private val prefs = context.getSharedPreferences("session", Context.MODE_PRIVATE)

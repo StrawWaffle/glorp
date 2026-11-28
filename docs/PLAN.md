@@ -67,8 +67,9 @@ with memory and battery throughout.
    the cookies in are kept behind the `glorp.computerSignIn` build flag, off
    on Android and on where there's no sign-in web view yet (iOS), and
    `pages/signin/` now redirects to the home page. The cookies are checked with
-   `/api/chat/me`, which renews `sid`. Logins are kept encrypted with an
-   Android Keystore key. Sending messages, `/me`, whispers out
+   `/api/chat/me`, which renews `sid`. The session (not a password; Glorp never
+   sees one stored) is kept encrypted with an Android Keystore key that can't
+   be exported, and deleted on sign-out. Sending messages, `/me`, whispers out
    (`/w nick text`) and in, the server's error codes in chat-gui's words,
    mentions highlighted, a stop after `banned` or `toomanyconnections`.
    The input completes emotes (only those the user's tier allows), names
