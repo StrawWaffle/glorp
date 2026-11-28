@@ -98,8 +98,10 @@ internal fun SiteSignIn(
         }
         if (!landed) {
             Text(
-                "Remember me is ticked for you. Google sign-in may not work inside apps; " +
-                    "if it fails, use Sign in from a computer.",
+                // Passkeys can't work here: a WebView only passes them on for sites that
+                // name the app in their assetlinks.json, or for browsers Google approves.
+                "Remember me is ticked for you. Passkeys don't work inside apps; use your password " +
+                    "or an authenticator code. Google sign-in may not work either; if it fails, use Sign in from a computer.",
                 color = Palette.TextDim,
                 fontSize = 13.sp,
                 modifier = Modifier.fillMaxWidth().background(Palette.Navy).padding(horizontal = 12.dp, vertical = 8.dp),

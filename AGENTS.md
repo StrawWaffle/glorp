@@ -76,6 +76,10 @@
   `rememberme` from the web view's cookies, checks them like any cookie login
   and wipes the web views' cookies and storage. Google may still refuse at its
   password step, so "Sign in from a computer" (the QR) stays as the fallback.
+  Passkeys can't work there: WebView's WebAuthn (`setWebAuthenticationSupport`)
+  serves only sites whose `assetlinks.json` names the app (`FOR_APP`), or any
+  site for browsers Google Password Manager has approved (`FOR_BROWSER`); the
+  sign-in screen says to use a password or an authenticator code instead.
   The player's web view is no place to try logins: it has no
   `WebViewClient` (the web view cancels cross-site redirects) and, left to
   wrap its content, gives pages a zero-height `vh`, which blanks Twitch's.
