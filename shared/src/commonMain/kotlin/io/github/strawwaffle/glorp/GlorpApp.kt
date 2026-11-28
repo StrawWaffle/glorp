@@ -108,7 +108,15 @@ fun GlorpApp(
     scanCode: (((String?) -> Unit) -> Unit)? = null,
     /** Offer signing in with a login key (a build flag, off by default; see SignInScreen). */
     loginKeys: Boolean = false,
+    /**
+     * Offer signing in from a computer (the QR code) and typing in the cookies.
+     * Android turns it off by default (a build flag: the sign-in web view does
+     * every login); where there's no sign-in web view yet (iOS) it's the way
+     * in, so it's on there whatever is passed.
+     */
+    computerSignIn: Boolean = !siteLoginAvailable,
 ) {
+    val offerComputer = computerSignIn || !siteLoginAvailable
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
     // Keep a stream's sound going with the screen off: on unless turned off in the menu.
     var backgroundAudio by remember { mutableStateOf(prefs.get(BACKGROUND_AUDIO) != "false") }
@@ -484,6 +492,7 @@ fun GlorpApp(
                             scanCode = scanCode,
                             readCode = { readSignInCode(it, chat.site) },
                             loginKeys = loginKeys,
+                            computerSignIn = offerComputer,
                             onSiteSignIn = if (siteLoginAvailable) {
                                 { siteSignIn = if (forWhispers) "whispers" else "chat" }
                             } else null,
@@ -552,7 +561,7 @@ fun GlorpApp(
                         if (error == null) { siteSignIn = null; screen = next }
                     }
                 },
-                onComputer = { siteSignIn = null },
+                onComputer = if (offerComputer) { { siteSignIn = null } } else null,
                 onClose = { siteSignIn = null },
             )
         }

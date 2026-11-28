@@ -43,12 +43,26 @@ class ProblemReport(
         val header = "Recent log (UTC):\n"
         // Room for the note on what was left out, too.
         var room = budget - crashPart.length - header.length - 32
-        val kept = ArrayDeque<String>()
-        for (line in log.asReversed()) {
-            if (line.length + 1 > room) break
-            kept.addFirst(line)
+        // Sign-in lines first (up to half the room), newest first, so a report
+        // about signing in still has them after a busy while; then the rest,
+        // newest first. They're shown in the log's own order.
+        val keep = BooleanArray(log.size)
+        var signinRoom = room / 2
+        for (i in log.indices.reversed()) {
+            val line = log[i]
+            if (!isSignIn(line) || line.length + 1 > signinRoom) continue
+            keep[i] = true
+            signinRoom -= line.length + 1
             room -= line.length + 1
         }
+        for (i in log.indices.reversed()) {
+            if (keep[i]) continue
+            val line = log[i]
+            if (line.length + 1 > room) break
+            keep[i] = true
+            room -= line.length + 1
+        }
+        val kept = log.filterIndexed { i, _ -> keep[i] }
         val cut = log.size - kept.size
         val note = if (cut > 0) "($cut earlier lines left out)\n" else ""
         return crashPart + header + note + kept.joinToString("\n")
@@ -91,3 +105,6 @@ fun crashText(error: Throwable, thread: String, version: String, atIso: String, 
         log.takeLast(60).forEach { append(it).append('\n') }
     }
 }
+
+/** A log line written by a sign-in (`HH:MM:SS signin: …`). */
+private fun isSignIn(line: String) = line.indexOf(" ${AppLog.SIGNIN}: ").let { it in 0..9 }

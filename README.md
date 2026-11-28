@@ -54,8 +54,8 @@ the way it does in a browser.
 - Tapping a link shows its preview. Tapping an emote shows who made it and
   lets you favourite it. Hold the emote there to see what it does when
   pointed at on the site. The eye button's same-stream dimming is there too.
-- Signed in with cookies, your chat settings follow your account and the site
-  sees what you're watching.
+- Signed in, your chat settings follow your account and the site sees what
+  you're watching.
 
 ### Better on a phone
 
@@ -123,23 +123,18 @@ It needs Android 8 or newer.
 
 ## Signing in
 
-- **With destiny.gg's login page.** Glorp opens the site's own login page
-  inside the app; sign in with any of its logins and Glorp keeps the site's
-  login cookies. Google sign-in may not work inside apps; if it doesn't, use
-  the computer.
-- **From a computer**, when the login page doesn't work in the app. Open
-  [Glorp's sign-in page](https://strawwaffle.dev/glorp/signin/) on a
-  computer that's signed in to destiny.gg, copy the two values it asks for
-  from the browser, and scan the code it shows with Glorp. The page sends
-  nothing anywhere. Its code is in [`pages/signin`](pages/signin). With
-  Tampermonkey (5.3 or later) or Violentmonkey, the
-  [Glorp userscript](https://strawwaffle.dev/glorp/userscript/glorp.user.js)
-  reads the two values for you and shows the code on destiny.gg itself, once
-  the manager is allowed to read HTTP-only cookies (the sign-in page says
-  where).
+In Glorp, open the menu and choose **Sign in**. destiny.gg's own login page
+opens inside the app; pick your login provider (Twitch, Google, Kick, Reddit,
+Discord or X) and sign in as on the site. Passkeys don't work inside apps, so
+use your password or an authenticator code.
 
 Glorp keeps the login on the phone, encrypted with a key from Android's
 keystore.
+
+Developer and fallback: builds made with `-Pglorp.computerSignIn=true` also
+offer the older sign-in from a computer, a QR code made by
+[`pages/signin/legacy.html`](pages/signin/legacy.html) from the browser's
+login cookies (the iOS app will use it until it has its own sign-in).
 
 ## Problems and ideas
 
@@ -174,7 +169,7 @@ Open Font License.
 
 - `androidApp/`, `shared/` and `grayjay/` hold the app, in Kotlin
   Multiplatform.
-- `pages/` holds the website and the computer sign-in page.
+- `pages/` holds the website, and the old computer sign-in page (`signin/legacy.html`).
   `.github/workflows/pages.yml` publishes it to GitHub Pages.
 - `server/` and `compose.yaml` run a small service that watches destiny.gg
   chat, so the app can notify mentions without the site's login. See

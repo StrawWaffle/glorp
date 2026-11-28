@@ -14,6 +14,7 @@ internal actual fun SiteLoginView(
     onProgress: (Int) -> Unit,
     onLanded: (String?) -> Unit,
     goBack: (() -> Boolean) -> Unit,
+    trace: io.github.strawwaffle.glorp.auth.SignInTrace,
     modifier: Modifier,
 ) {
     Text("Signing in here isn't available on iOS yet.", color = Palette.TextDim, modifier = modifier)

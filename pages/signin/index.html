@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- Nothing typed here can leave the page: no requests are allowed at all. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex">
+<meta http-equiv="refresh" content="0; url=../">
 <title>Glorp sign-in</title>
 <link rel="icon" href="../glorp.png">
 <link rel="stylesheet" href="style.css">
@@ -14,109 +14,10 @@
 </head>
 <body>
 <main>
-  <header>
-    <img src="../glorp.png" alt="Glorp, a green furry alien with antennae">
-    <h1>Sign in to Glorp from this computer</h1>
-  </header>
-
   <section class="panel">
-    <p>
-      A login key gets you chat and whispers. Settings that follow your account, whisper history,
-      notifications, <code>/stalk</code> and what you're watching need destiny.gg's login cookies instead.
-      destiny.gg doesn't let web pages read those cookies, so you copy them from your browser here,
-      and this page turns them into a code for Glorp to scan.
-    </p>
-    <p class="quiet">
-      This page sends nothing anywhere. The browser won't let it make requests, it stores nothing, and its code is
-      <a href="https://github.com/StrawWaffle/glorp/tree/main/pages/signin">on GitHub</a>.
-    </p>
+    <p>Sign-in is now in the Glorp app: open the menu and choose Sign in.</p>
+    <p><a href="../">Glorp's home page</a></p>
   </section>
-
-  <section class="panel">
-    <h2>With a userscript</h2>
-    <p>
-      If you use Tampermonkey or Violentmonkey, the
-      <a href="../userscript/glorp.user.js">Glorp userscript</a> reads the cookies for you, once the manager is allowed to.
-    </p>
-    <ul>
-      <li>
-        In Tampermonkey (5.3 or later), open its <b>Dashboard</b> → <b>Settings</b>, set <b>Config mode</b> to <b>Advanced</b>,
-        then under <b>Security</b> set <b>Allow scripts to access cookies</b> to <b>All</b>.
-      </li>
-      <li>
-        In Violentmonkey, tick <b>Allow GM_cookie to access HTTP-only cookies</b> twice: once in the dashboard's
-        <b>Settings</b>, and once in the script's own <b>Settings</b> tab (open <b>Glorp</b> from the dashboard with its edit button).
-      </li>
-    </ul>
-    <p>
-      (These are their names in Tampermonkey 5.5 and Violentmonkey 2.50; other versions may word or place them differently.)
-      Then reload destiny.gg and choose <b>Sign in to Glorp</b> in the Glorp button's panel in chat, in the manager's menu, or on your profile page.
-      It shows the same code as this page and sends your login nowhere.
-    </p>
-  </section>
-
-  <section class="panel">
-    <h2>By hand</h2>
-    <ol class="steps">
-      <li>
-        <p>Sign in to <a id="site-link" href="https://www.destiny.gg/login" target="_blank" rel="noopener"><span class="site-name">destiny.gg</span></a> in this browser, with <strong>Remember me</strong> ticked.</p>
-      </li>
-      <li>
-        <p>On a <span class="site-name">destiny.gg</span> tab, open the developer tools with <kbd>F12</kbd> or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd>. On a Mac it's <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>I</kbd>.</p>
-      </li>
-      <li>
-        <p>Find the site's cookies.</p>
-        <ul>
-          <li>In Chrome, Edge or Brave, <b>Application</b> tab → <b>Storage</b> → <b>Cookies</b> → <code class="site-origin">https://www.destiny.gg</code></li>
-          <li>In Firefox, <b>Storage</b> tab → <b>Cookies</b> → <code class="site-origin">https://www.destiny.gg</code></li>
-          <li>In Safari, turn on <b>Show features for web developers</b> in Settings → Advanced, then <b>Develop</b> → <b>Show Web Inspector</b> → <b>Storage</b> → <b>Cookies</b></li>
-        </ul>
-      </li>
-      <li>
-        <p>Copy the <b>Value</b> of each of these into the boxes. Double-click a value to select all of it.</p>
-        <form id="form" autocomplete="off">
-          <label for="sid">sid</label>
-          <input id="sid" type="password" spellcheck="false" autocapitalize="off">
-          <label for="rememberme">rememberme</label>
-          <input id="rememberme" type="password" spellcheck="false" autocapitalize="off">
-          <p class="quiet">Without rememberme, Glorp gets signed out again when this browser session ends.</p>
-          <p id="problem" class="problem" hidden></p>
-          <button id="show" type="submit" class="primary">Make the code</button>
-        </form>
-      </li>
-      <li>
-        <p>In Glorp, open the menu, then <b>Sign in</b> → <b>Sign in from a computer</b> → <b>Scan the code</b>.</p>
-      </li>
-    </ol>
-  </section>
-
-  <section id="result" class="panel" hidden>
-    <div id="confirm">
-      <h2>Before the code shows</h2>
-      <p class="warning">
-        The code is your destiny.gg login. Anyone who scans it, or sees it on a stream or a shared screen,
-        is signed in as you until you sign out on the site.
-      </p>
-      <label class="check"><input id="ack" type="checkbox"> Nobody else can see this screen, and I'm not streaming or sharing it.</label>
-      <div class="actions">
-        <button id="reveal" type="button" class="primary" disabled>Show the code</button>
-        <button id="cancel" type="button">Never mind</button>
-      </div>
-    </div>
-    <div id="shown" hidden>
-      <h2>Your sign-in code</h2>
-      <div id="qr" aria-label="Sign-in code"></div>
-      <div class="actions">
-        <button id="hide" type="button" class="primary">Hide it</button>
-        <button id="copy" type="button">Copy it as text</button>
-      </div>
-      <p class="quiet">Scan it in Glorp, then hide it. The text works too, pasted into the box under the scan button. The code hides itself if you switch tabs.</p>
-    </div>
-  </section>
-
-  <footer>Set in Nunito and Gaegu, under the SIL Open Font License.</footer>
 </main>
-<script src="qrcode.js"></script>
-<script src="signin.js"></script>
 </body>
 </html>

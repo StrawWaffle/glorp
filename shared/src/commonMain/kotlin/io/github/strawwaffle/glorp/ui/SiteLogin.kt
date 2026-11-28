@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.strawwaffle.glorp.auth.Session
+import io.github.strawwaffle.glorp.auth.SignInTrace
 import io.github.strawwaffle.glorp.auth.WebSignIn
 
 /** Whether this platform has the sign-in web view. */
@@ -54,12 +55,14 @@ internal expect fun SiteLoginView(
     onProgress: (Int) -> Unit,
     onLanded: (String?) -> Unit,
     goBack: (() -> Boolean) -> Unit,
+    /** Where the attempt's steps are logged. */
+    trace: SignInTrace,
     modifier: Modifier,
 )
 
 /**
  * The screen around [SiteLoginView]: a bar with Close and the load progress,
- * the note about Google, and what went wrong. Found cookies go to [onCookies],
+ * the note about passkeys, and what went wrong. Found cookies go to [onCookies],
  * which checks them with the site the way every cookie login is checked, and
  * reports back an error or null.
  */
@@ -69,7 +72,8 @@ internal fun SiteSignIn(
     host: String,
     busy: Boolean,
     onCookies: (Session.Cookies, (String?) -> Unit) -> Unit,
-    onComputer: () -> Unit,
+    /** Where to go when this fails; null leaves just "Try again" (the computer sign-in is off). */
+    onComputer: (() -> Unit)?,
     onClose: () -> Unit,
 ) {
     // A new attempt gets a new web view; the old one has forgotten everything.
@@ -79,13 +83,15 @@ internal fun SiteSignIn(
     var landed by remember { mutableStateOf(false) }
     // Back steps back through the login's pages first, then closes.
     var webBack by remember { mutableStateOf<() -> Boolean>({ false }) }
-    OnBack(enabled = true) { if (landed || !webBack()) onClose() }
+    val trace = remember(attempt) { SignInTrace() }
+    val close = { if (!landed) trace.cancelled(); onClose() }
+    OnBack(enabled = true) { if (landed || !webBack()) close() }
     Column(Modifier.fillMaxSize().background(Palette.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         Row(
             Modifier.fillMaxWidth().background(Palette.Navy).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onClose) { Text("Close", color = Palette.Blue) }
+            TextButton(onClick = close) { Text("Close", color = Palette.Blue) }
             Text("Sign in to $host", color = Palette.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
         }
         if (!landed && progress in 0..99) {
@@ -100,8 +106,8 @@ internal fun SiteSignIn(
             Text(
                 // Passkeys can't work here: a WebView only passes them on for sites that
                 // name the app in their assetlinks.json, or for browsers Google approves.
-                "Remember me is ticked for you. Passkeys don't work inside apps; use your password " +
-                    "or an authenticator code. Google sign-in may not work either; if it fails, use Sign in from a computer.",
+                "Remember me is ticked for you. Passkeys don't work inside apps; use your password or an authenticator code." +
+                    if (onComputer != null) " If it fails, use Sign in from a computer." else "",
                 color = Palette.TextDim,
                 fontSize = 13.sp,
                 modifier = Modifier.fillMaxWidth().background(Palette.Navy).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -115,14 +121,16 @@ internal fun SiteSignIn(
                         landed = true
                         val session = WebSignIn.session(cookies)
                         if (session == null) {
-                            problem = "You reached $host, but it didn't hand over a login (no sid cookie). " +
-                                "Try again, or sign in from a computer."
+                            trace.finished("no sid cookie")
+                            problem = "You reached $host, but it didn't hand over a login. " +
+                                if (onComputer != null) "Try again, or sign in from a computer." else "Try again."
                         } else {
                             problem = null
-                            onCookies(session) { error -> problem = error }
+                            onCookies(session) { error -> trace.finished(error); problem = error }
                         }
                     },
                     goBack = { webBack = it },
+                    trace = trace,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
@@ -138,7 +146,7 @@ internal fun SiteSignIn(
                             onClick = { problem = null; landed = false; progress = 0; attempt++ },
                             colors = ButtonDefaults.buttonColors(containerColor = Palette.Blue, contentColor = Palette.OnAction),
                         ) { Text("Try again") }
-                        TextButton(onClick = onComputer) { Text("Sign in from a computer", color = Palette.Blue) }
+                        if (onComputer != null) TextButton(onClick = onComputer) { Text("Sign in from a computer", color = Palette.Blue) }
                     }
                 }
             }

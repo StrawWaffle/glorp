@@ -165,7 +165,11 @@ class ChatViewModel(
      * see [forgetAccount].
      */
     private fun setAccount(account: Account?) {
-        if (accountChanged(_account.value, account, prefs.get(io.github.strawwaffle.glorp.notify.NotifyOptions.NICK))) forgetAccount()
+        val before = _account.value
+        if (accountChanged(before, account, prefs.get(io.github.strawwaffle.glorp.notify.NotifyOptions.NICK))) {
+            AppLog.note("signin", "account ${before?.nick ?: prefs.get(io.github.strawwaffle.glorp.notify.NotifyOptions.NICK) ?: "none"} -> ${account?.nick ?: "signed out"}")
+            forgetAccount()
+        }
         _account.value = account
     }
 
@@ -457,6 +461,11 @@ class ChatViewModel(
                     _signingIn.value = true
                     val result = checkSession(client, site, candidate)
                     _signingIn.value = false
+                    AppLog.note("signin", "/api/chat/me: " + when (result) {
+                        is SessionCheck.Valid -> "ok, ${result.account.nick}"
+                        SessionCheck.Invalid -> "the site refused the login"
+                        SessionCheck.Unreachable -> "couldn't ask (no answer, or not JSON)"
+                    })
                     when (result) {
                         is SessionCheck.Valid -> {
                             adopt(result.session, result.account)
@@ -464,11 +473,12 @@ class ChatViewModel(
                             reconnect()
                             onResult(null)
                         }
-                        SessionCheck.Invalid -> onResult("$host doesn't recognise those cookies. They may have expired.")
+                        SessionCheck.Invalid -> onResult("$host didn't accept that login. It may have expired; sign in again.")
                         SessionCheck.Unreachable -> onResult("Couldn't reach $host. Check the connection and try again.")
                     }
                 }
                 is Session.LoginKey -> {
+                    AppLog.note("signin", "trying a login key with chat")
                     _signingIn.value = true
                     pending = Pending(candidate, session, onResult)
                     session = candidate
@@ -487,6 +497,7 @@ class ChatViewModel(
         pending = null
         pendingTimeout?.cancel()
         _signingIn.value = false
+        AppLog.note("signin", if (account != null) "chat took the login key: ${account.nick}" else "chat didn't take the login key")
         if (account != null) {
             adopt(attempt.key, account)
             notice("Signed in as ${account.nick}.")
@@ -499,6 +510,7 @@ class ChatViewModel(
     }
 
     fun signOut() {
+        AppLog.note("signin", "signed out here")
         settingsLoadedFor = null
         settingsUpload?.cancel()
         session = null
@@ -815,8 +827,12 @@ class ChatViewModel(
 
     private suspend fun refresh(current: Session.Cookies) {
         when (val result = checkSession(client, site, current)) {
-            is SessionCheck.Valid -> adopt(result.session, result.account)
+            is SessionCheck.Valid -> {
+                if (result.session != current) AppLog.note("signin", "the site renewed sid from rememberme")
+                adopt(result.session, result.account)
+            }
             SessionCheck.Invalid -> {
+                AppLog.note("signin", "signed out by the site: the stored login no longer works")
                 session = null
                 store.save(null)
                 notice("Your login on $host has expired. Sign in again to chat.")
@@ -1018,10 +1034,12 @@ class ChatViewModel(
                                     // A new `sid`: connect with it. The same one the site
                                     // accepts and chat doesn't: nothing to fix from here.
                                     is SessionCheck.Valid -> if (result.session != stale) {
+                                        AppLog.note("signin", "chat refused sid; the site renewed it from rememberme")
                                         adopt(result.session, result.account)
                                         reconnect()
                                     }
                                     SessionCheck.Invalid -> if (session == stale) {
+                                        AppLog.note("signin", "signed out by the site while chat was open")
                                         session = null
                                         store.save(null)
                                         setAccount(null)

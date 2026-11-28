@@ -75,7 +75,7 @@ class LookBack(
         when (val reply = RustleApi(client).search(query)) {
             // Newest first from the search; shown oldest first, as chat reads.
             is RustleReply.Ok -> Result.Lines(reply.value.take(limit).map { LogLine(it.at, it.username, it.text) }.reversed(), "rustlesearch")
-            is RustleReply.Limited -> Result.Failed("rustlesearch's daily limit is used up. Sign in with the site's cookies to ask destiny.gg instead.")
+            is RustleReply.Limited -> Result.Failed("rustlesearch's daily limit is used up. Sign in with destiny.gg to ask the site instead.")
             is RustleReply.Failed -> Result.Failed("rustlesearch didn't answer: ${reply.message}")
         }
 

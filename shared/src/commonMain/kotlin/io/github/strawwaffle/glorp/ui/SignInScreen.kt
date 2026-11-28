@@ -45,14 +45,14 @@ import io.github.strawwaffle.glorp.auth.Session
  *   web view ([SiteSignIn]). Its `sid` and `rememberme` cookies open
  *   everything (settings that follow the account, whisper history,
  *   notifications, /stalk, what you're watching). Every login the site
- *   offers loads there; Google's may refuse at the password, as it says it
- *   does in apps.
- * - "From a computer", for when that fails: the same cookies, which the site
- *   keeps out of reach of pages, so Glorp's sign-in page (on GitHub Pages)
- *   has you copy them from the browser on a computer and shows them as a QR
- *   code to scan here.
- * - By hand: the cookies typed in, or (behind [loginKeys]) a login key from
- *   the developer page.
+ *   offers loads there (passkeys can't, see SiteSignIn).
+ * - Behind [computerSignIn] (off on Android, where the web view does it all;
+ *   on where there's no sign-in web view yet, iOS): "From a computer", the
+ *   same cookies, which the site keeps out of reach of pages, so Glorp's
+ *   sign-in page (pages/signin/legacy.html) has you copy them from the
+ *   browser on a computer and shows them as a QR code to scan here; and the
+ *   cookies typed in by hand.
+ * - Behind [loginKeys]: a login key from the developer page.
  *
  * The site's OAuth for apps doesn't help: chat takes only login keys made by
  * hand, and turns away any token an app holds (ApiController::userByAuthToken).
@@ -73,12 +73,15 @@ fun SignInScreen(
      * opens more. A key already in use keeps working either way.
      */
     loginKeys: Boolean = false,
+    /** Offer the QR code from a computer and typing in the cookies (a build flag; see GlorpApp). */
+    computerSignIn: Boolean = false,
     /** Opens the site's login page in the app (full screen, over everything); null where there's none. */
     onSiteSignIn: (() -> Unit)? = null,
 ) {
     var way by remember { mutableStateOf(Way.Choose) }
     var problem by remember { mutableStateOf<String?>(null) }
     val submit: (Session) -> Unit = { session -> problem = null; onSession(session) { problem = it } }
+    val log: (String) -> Unit = { io.github.strawwaffle.glorp.diag.AppLog.note("signin", it) }
     OnBack(enabled = way != Way.Choose) { way = Way.Choose }
 
     Column(Modifier.fillMaxSize().background(Palette.Black)) {
@@ -99,17 +102,19 @@ fun SignInScreen(
                     Way.Choose -> {
                         if (onSiteSignIn != null) {
                             SiteOption(host, busy) { problem = null; onSiteSignIn() }
-                            Text("Having trouble?", color = Palette.TextDim, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            if (computerSignIn) Text("Having trouble?", color = Palette.TextDim, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
-                        ComputerSignIn(host, busy, scanCode, readCode, submit) { problem = it }
-                        Text("Other ways", color = Palette.TextDim, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        if (computerSignIn) ComputerSignIn(host, busy, scanCode, readCode, submit, log) { problem = it }
+                        if (computerSignIn || loginKeys) Text("Other ways", color = Palette.TextDim, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         if (loginKeys) {
                             TextButton(onClick = { way = Way.Key; problem = null }) { Text("Paste a login key", color = Palette.Blue) }
                         }
-                        TextButton(onClick = { way = Way.Cookies; problem = null }) { Text("Type in the browser's cookies", color = Palette.Blue) }
+                        if (computerSignIn) {
+                            TextButton(onClick = { way = Way.Cookies; problem = null }) { Text("Type in the browser's cookies", color = Palette.Blue) }
+                        }
                     }
-                    Way.Key -> LoginKeyForm(origin, host, busy, submit)
-                    Way.Cookies -> CookieForm(host, busy, submit)
+                    Way.Key -> LoginKeyForm(origin, host, busy) { log("method login key"); submit(it) }
+                    Way.Cookies -> CookieForm(host, busy) { log("method cookies typed in"); submit(it) }
                 }
             }
             if (busy) {
@@ -124,7 +129,7 @@ fun SignInScreen(
 private enum class Way { Choose, Key, Cookies }
 
 /** Where the computer half of the QR sign-in lives. */
-const val SIGN_IN_PAGE = "https://strawwaffle.dev/glorp/signin/"
+const val SIGN_IN_PAGE = "https://strawwaffle.dev/glorp/signin/legacy.html"
 
 @Composable
 private fun Option(title: String, detail: String, content: @Composable () -> Unit) {
@@ -158,6 +163,7 @@ private fun ComputerSignIn(
     scanCode: (((String?) -> Unit) -> Unit)?,
     readCode: (String) -> Session?,
     submit: (Session) -> Unit,
+    log: (String) -> Unit,
     onProblem: (String) -> Unit,
 ) = Option(
     "Sign in from a computer",
@@ -178,15 +184,22 @@ private fun ComputerSignIn(
     }
     Step("2", "It shows how to copy two values from the browser, and turns them into a code.")
     Step("3", "Scan the code here.")
-    val use: (String?) -> Unit = { text ->
-        if (text != null) {
+    val use: (String?, String) -> Unit = { text, how ->
+        if (text == null) log("method computer code ($how): nothing read")
+        else {
             val session = readCode(text)
-            if (session == null) onProblem("That isn't a Glorp sign-in code for $host.") else submit(session)
+            if (session == null) {
+                log("method computer code ($how): not a code for $host")
+                onProblem("That isn't a Glorp sign-in code for $host.")
+            } else {
+                log("method computer code ($how)")
+                submit(session)
+            }
         }
     }
     if (scanCode != null) {
         Button(
-            onClick = { scanCode(use) },
+            onClick = { scanCode { use(it, "scanned") } },
             enabled = !busy,
             colors = ButtonDefaults.buttonColors(containerColor = Palette.Blue, contentColor = Palette.OnAction),
         ) { Text("Scan the code") }
@@ -201,7 +214,7 @@ private fun ComputerSignIn(
         modifier = Modifier.fillMaxWidth(),
     )
     if (typed.isNotEmpty()) {
-        OutlinedButton(onClick = { use(typed) }, enabled = !busy) { Text("Sign in with the code", color = Palette.White) }
+        OutlinedButton(onClick = { use(typed, "pasted") }, enabled = !busy) { Text("Sign in with the code", color = Palette.White) }
     }
 }
 
@@ -248,7 +261,7 @@ private fun LoginKeyForm(origin: String, host: String, busy: Boolean, submit: (S
     ) { Text("Sign in") }
     Text(
         "The key stays on this phone, encrypted, and works for chat until you remove it on the developer page. " +
-            "Settings that follow your account, whisper history and notifications need the computer sign-in instead.",
+            "Settings that follow your account, whisper history and notifications need Sign in with $host instead.",
         color = Palette.TextDim,
         fontSize = 12.sp,
     )

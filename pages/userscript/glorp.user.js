@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Glorp
 // @namespace    https://strawwaffle.github.io/glorp/
-// @version      3.3
-// @description  Glorp's own chat features in destiny.gg's chat on a computer: themes, name icons, hiding other streams' chat, sticky mentions, settings synced with the Glorp app, and signing Glorp in without the developer tools.
+// @version      3.4
+// @description  Glorp's own chat features in destiny.gg's chat on a computer: themes, name icons, hiding other streams' chat, sticky mentions, and settings synced with the Glorp app.
 // @match        https://www.destiny.gg/*
 // @match        https://www.omniliberal.dev/*
 // @grant        GM_cookie
@@ -41,6 +41,10 @@
   var ICON = "data:image/png;base64,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";
   var DEFAULT_SERVER = "https://glorp-sync.netlify.app";
   var SCRIPT_URL = "https://strawwaffle.dev/glorp/userscript/glorp.user.js";
+  // Signing the Glorp app in from here (the QR code): the app signs in by
+  // itself now, so the entries are hidden. The code stays for builds that
+  // still take the code (iOS, for now).
+  var COMPUTER_SIGN_IN = false;
 
   // ---- Stored state -------------------------------------------------------
   // settings: what syncs, each as { v: value, t: when it was last changed }.
@@ -848,8 +852,10 @@
     form.appendChild(el("div", { id: "glorp-sync" }));
     renderSync();
 
-    form.appendChild(el("h4", { text: "Glorp app" }));
-    form.appendChild(el("div", { "class": "form-group" }, [el("button", { "class": "btn btn-dark", text: "Sign in to Glorp", onclick: openSignIn })]));
+    if (COMPUTER_SIGN_IN) {
+      form.appendChild(el("h4", { text: "Glorp app" }));
+      form.appendChild(el("div", { "class": "form-group" }, [el("button", { "class": "btn btn-dark", text: "Sign in to Glorp", onclick: openSignIn })]));
+    }
 
     form.appendChild(el("h4", { text: "This userscript" }));
     form.appendChild(el("div", { id: "glorp-update" }));
@@ -966,7 +972,7 @@
           "then under <b>Security</b> set <b>Allow scripts to access cookies</b> to <b>All</b>, and reload this page.</p>" +
           "<p>Or you may not be signed in here: sign in with Remember me ticked.</p>" +
           (cookieError ? "<p class='quiet'>" + manager.replace(/[<>&]/g, "") + " said: " + cookieError.replace(/[<>&]/g, "") + "</p>" : "") +
-          "<p class='quiet'>Without a manager that can, <a href='https://strawwaffle.dev/glorp/signin/?site=" + encodeURIComponent(site) + "'>Glorp's sign-in page</a> shows how to copy them by hand.</p>";
+          "<p class='quiet'>Without a manager that can, <a href='https://strawwaffle.dev/glorp/signin/legacy.html?site=" + encodeURIComponent(site) + "'>Glorp's sign-in page</a> shows how to copy them by hand.</p>";
         return;
       }
       body.innerHTML =
@@ -1128,7 +1134,7 @@
       });
     }
     if (typeof GM_registerMenuCommand !== "undefined") {
-      GM_registerMenuCommand("Sign in to Glorp", openSignIn);
+      if (COMPUTER_SIGN_IN) GM_registerMenuCommand("Sign in to Glorp", openSignIn);
       GM_registerMenuCommand("Check for updates", function () {
         checkUpdate().then(function (isNewer) {
           if (isNewer) window.open(SCRIPT_URL, "_blank");
@@ -1137,7 +1143,7 @@
       });
     }
     // A link where the site lists your account.
-    if (window.top === window && /^\/profile/.test(location.pathname)) {
+    if (COMPUTER_SIGN_IN && window.top === window && /^\/profile/.test(location.pathname)) {
       var link = el("a", { href: "#", text: "Sign in to Glorp", style: "display:inline-block;margin:12px 0;color:#70b8ff", onclick: function (e) { e.preventDefault(); openSignIn(); } });
       var main = document.querySelector("main") || document.body;
       main.insertBefore(link, main.firstChild);

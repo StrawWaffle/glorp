@@ -1,4 +1,4 @@
-# Publishes pages/ (the computer sign-in page) to GitHub Pages.
+# Publishes pages/ (the website, and the old computer sign-in page) to GitHub Pages.
 name: Pages
 
 on:

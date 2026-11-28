@@ -94,13 +94,13 @@ private fun ConversationList(inbox: Inbox, history: Boolean, onCookies: () -> Un
                 if (!history) {
                     Text(
                         "Signed in with a login key, so only whispers from while Glorp is open show here. " +
-                            "Sign in with the site's cookies for your history.",
+                            "Sign in with destiny.gg for your history.",
                         color = Palette.TextDim,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                     Text(
-                        "Sign in with cookies",
+                        "Sign in with destiny.gg",
                         color = Palette.Blue,
                         fontSize = 14.sp,
                         modifier = Modifier.clickable(onClick = onCookies).padding(vertical = 8.dp),

@@ -3,7 +3,7 @@ package io.github.strawwaffle.glorp.site
 import io.github.strawwaffle.glorp.auth.Session
 
 /**
- * The sign-in code Glorp's computer sign-in page (pages/signin on GitHub
+ * The sign-in code Glorp's computer sign-in page (pages/signin/legacy.html on GitHub
  * Pages) shows as a QR code: `glorp-signin:1:<site host>:<sid>:<rememberme>`.
  * The host keeps a code for one site from signing in to another.
  */

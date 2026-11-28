@@ -7,7 +7,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -24,7 +26,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import io.github.strawwaffle.glorp.auth.WebSignIn
-import io.github.strawwaffle.glorp.diag.AppLog
 
 internal actual val siteLoginAvailable: Boolean = true
 
@@ -36,6 +37,7 @@ internal actual fun SiteLoginView(
     onProgress: (Int) -> Unit,
     onLanded: (String?) -> Unit,
     goBack: (() -> Boolean) -> Unit,
+    trace: io.github.strawwaffle.glorp.auth.SignInTrace,
     modifier: Modifier,
 ) {
     val context = LocalContext.current
@@ -45,6 +47,8 @@ internal actual fun SiteLoginView(
     var done by remember { mutableStateOf(false) }
 
     val view = remember {
+        val webView = WebView.getCurrentWebViewPackage()?.versionName ?: "unknown"
+        trace.note("web view opened (WebView $webView, Android ${android.os.Build.VERSION.RELEASE})")
         WebView(context).apply {
             // Exactly the space it's given. A web view left to wrap its content
             // gives pages a zero-height viewport, so a page laid out in `vh`
@@ -65,11 +69,13 @@ internal actual fun SiteLoginView(
         }
     }
 
-    fun finish(page: WebView) {
+    fun finish(page: WebView, url: String?) {
         if (done) return
         done = true
         val cookies = CookieManager.getInstance().getCookie(origin)
-        AppLog.note("signin", "the login landed on the site; ${if (cookies.isNullOrEmpty()) "no cookies" else "cookies read"}")
+        trace.landed(url)
+        val names = WebSignIn.parseCookies(cookies)
+        trace.cookies(sid = !names["sid"].isNullOrEmpty(), rememberMe = !names["rememberme"].isNullOrEmpty())
         page.stopLoading()
         page.loadUrl("about:blank")
         forget()
@@ -85,12 +91,22 @@ internal actual fun SiteLoginView(
             }
 
             override fun onPageStarted(page: WebView, url: String?, favicon: Bitmap?) {
-                if (!done && WebSignIn.landedSignedIn(url, origin)) finish(page)
+                if (done) return
+                trace.visited(url)
+                if (WebSignIn.landedSignedIn(url, origin)) finish(page, url)
+            }
+
+            override fun onReceivedError(page: WebView, request: WebResourceRequest, error: WebResourceError) {
+                if (!done && request.isForMainFrame) trace.error(error.errorCode, request.url.toString(), error.description?.toString())
+            }
+
+            override fun onReceivedHttpError(page: WebView, request: WebResourceRequest, response: WebResourceResponse) {
+                if (!done && request.isForMainFrame) trace.error(response.statusCode, request.url.toString())
             }
 
             override fun onPageFinished(page: WebView, url: String?) {
                 if (done) return
-                if (WebSignIn.landedSignedIn(url, origin)) finish(page)
+                if (WebSignIn.landedSignedIn(url, origin)) finish(page, url)
                 else if (WebSignIn.isLoginPage(url, origin)) page.evaluateJavascript(WebSignIn.TICK_REMEMBER_ME, null)
             }
         }

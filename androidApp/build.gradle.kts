@@ -39,6 +39,11 @@ android {
         // Signing in with a login key, hidden from the sign-in screen unless
         // built with -Pglorp.loginKeys=true. Keys already in use keep working.
         buildConfigField("boolean", "LOGIN_KEYS", providers.gradleProperty("glorp.loginKeys").orElse("false").get().toBoolean().toString())
+        // Signing in from a computer (the QR code from pages/signin/legacy.html)
+        // and typing in the cookies, hidden unless built with
+        // -Pglorp.computerSignIn=true: the sign-in web view does every login.
+        // Logins already stored, and dev-session, keep working either way.
+        buildConfigField("boolean", "COMPUTER_SIGN_IN", providers.gradleProperty("glorp.computerSignIn").orElse("false").get().toBoolean().toString())
     }
 
     // The site dev and debug builds talk to: the test site unless built with

@@ -14,14 +14,21 @@ import kotlin.time.Instant
 object AppLog {
     private const val KEEP = 300
 
-    private class Entry(val at: Long, val tag: String, val text: String)
+    /** Sign-in lines are kept apart, so a busy log can't push the last sign-in out. */
+    private const val KEEP_SIGNIN = 80
+    const val SIGNIN = "signin"
 
+    private class Entry(val seq: Long, val at: Long, val tag: String, val text: String)
+
+    private var seq = 0L
     private val entries = MutableStateFlow<List<Entry>>(emptyList())
+    private val signin = MutableStateFlow<List<Entry>>(emptyList())
 
     fun note(tag: String, text: String) {
-        val entry = Entry(Clock.System.now().toEpochMilliseconds(), tag, redact(text))
+        val entry = Entry(seq++, Clock.System.now().toEpochMilliseconds(), tag, redact(text))
         println("Glorp $tag: ${entry.text}")
-        entries.update { (if (it.size >= KEEP) it.drop(it.size - KEEP + 1) else it) + entry }
+        val (list, keep) = if (tag == SIGNIN) signin to KEEP_SIGNIN else entries to KEEP
+        list.update { (if (it.size >= keep) it.drop(it.size - keep + 1) else it) + entry }
     }
 
     /** An exception as one line: its kind and message, without the stack. */
@@ -29,9 +36,12 @@ object AppLog {
         note(tag, "$what: ${error::class.simpleName}: ${error.message.orEmpty().take(300)}")
 
     /** The log, oldest first, one line per entry with the time in UTC. */
-    fun lines(): List<String> = entries.value.map { "${clock(it.at)} ${it.tag}: ${it.text}" }
+    fun lines(): List<String> = (entries.value + signin.value).sortedBy { it.seq }.map { "${clock(it.at)} ${it.tag}: ${it.text}" }
 
-    internal fun clear() = entries.update { emptyList() }
+    internal fun clear() {
+        entries.update { emptyList() }
+        signin.update { emptyList() }
+    }
 
     private fun clock(ms: Long): String = Instant.fromEpochMilliseconds(ms).toString().substring(11, 19)
 }

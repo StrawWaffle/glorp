@@ -61,9 +61,12 @@ with memory and battery throughout.
    the phone's browser and pasted into the app; chat takes it as the
    `authtoken` cookie (now hidden behind the `glorp.loginKeys` build flag).
    The site's own login page runs in the app's sign-in web view, which hands
-   over its `sid`/`rememberme` cookies once the login lands on `/profile`
-   (Google may refuse in-app sign-in at its password step). Those cookies,
-   or the same ones from a computer or pasted by hand, are checked with
+   over its `sid`/`rememberme` cookies once the login lands on `/profile`;
+   every provider works there (passkeys can't, inside an app). Signing in
+   from a computer (a QR code from `pages/signin/legacy.html`) and typing
+   the cookies in are kept behind the `glorp.computerSignIn` build flag, off
+   on Android and on where there's no sign-in web view yet (iOS), and
+   `pages/signin/` now redirects to the home page. The cookies are checked with
    `/api/chat/me`, which renews `sid`. Logins are kept encrypted with an
    Android Keystore key. Sending messages, `/me`, whispers out
    (`/w nick text`) and in, the server's error codes in chat-gui's words,

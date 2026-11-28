@@ -152,6 +152,7 @@ class MainActivity : ComponentActivity() {
                 diagnostics = Crashes.diagnostics(applicationContext, BuildConfig.VERSION_NAME),
                 scanCode = ::scanCode,
                 loginKeys = BuildConfig.LOGIN_KEYS,
+                computerSignIn = BuildConfig.COMPUTER_SIGN_IN,
             )
         }
     }
@@ -269,6 +270,15 @@ class MainActivity : ComponentActivity() {
         if (!file.exists()) return
         val text = file.readText()
         file.delete()
-        Session.decode(text.trim().replace("\r", ""))?.let(sessions::save)
+        val session = Session.decode(text.trim().replace("\r", ""))
+        io.github.strawwaffle.glorp.diag.AppLog.note(
+            "signin",
+            "dev-session imported: " + when (session) {
+                is Session.Cookies -> "cookies"
+                is Session.LoginKey -> "login key"
+                null -> "unreadable, ignored"
+            },
+        )
+        session?.let(sessions::save)
     }
 }

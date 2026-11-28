@@ -71,7 +71,7 @@ fun TagsScreen(tags: Tags, options: LocalOptions, synced: Boolean) {
                 Text("Tags", color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                 Text(
                     (if (synced) "Tag colours and notes are saved with your destiny.gg account, as on the site. "
-                    else "Tag colours and notes are kept on this phone; signed in with the site's cookies, they follow your account. ") +
+                    else "Tag colours and notes are kept on this phone; signed in with destiny.gg's login page, they follow your account. ") +
                         "Icons are Glorp's own and stay on this phone.",
                     color = Palette.TextDim,
                     fontSize = 12.sp,

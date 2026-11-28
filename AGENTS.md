@@ -74,8 +74,18 @@
   (`ui/SiteLogin*.kt`, `auth/WebSignIn.kt`): every provider's page loads
   there. Once the login lands on `/profile` the app takes `sid` and
   `rememberme` from the web view's cookies, checks them like any cookie login
-  and wipes the web views' cookies and storage. Google may still refuse at its
-  password step, so "Sign in from a computer" (the QR) stays as the fallback.
+  and wipes the web views' cookies and storage. All six providers (Twitch,
+  Google, Kick, Reddit, Discord, X) sign in there on the real site.
+  "Sign in from a computer" (the QR code from `pages/signin/legacy.html`, and
+  typing in the cookies) is hidden unless built with
+  `-Pglorp.computerSignIn=true` (`BuildConfig.COMPUTER_SIGN_IN`); the shared
+  code keeps it on where there's no sign-in web view (`siteLoginAvailable`
+  false: iOS, for now). `pages/signin/` itself only redirects to the home
+  page; the userscript's sign-in sits behind `COMPUTER_SIGN_IN = false`. Its
+  `@require` pins `pages/signin/qrcode.js` by commit, so leave that file where
+  it is. Sign-in steps are logged as `signin:` lines (method, provider, hosts
+  and paths without queries, errors, cookies present yes/no, the result),
+  never values.
   Passkeys can't work there: WebView's WebAuthn (`setWebAuthenticationSupport`)
   serves only sites whose `assetlinks.json` names the app (`FOR_APP`), or any
   site for browsers Google Password Manager has approved (`FOR_BROWSER`); the

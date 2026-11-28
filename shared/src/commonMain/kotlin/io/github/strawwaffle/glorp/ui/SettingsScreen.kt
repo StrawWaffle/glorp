@@ -177,7 +177,7 @@ fun SettingsScreen(
         item {
             Text(
                 if (synced) "Chat settings are saved with your destiny.gg account, as on the site."
-                else "Chat settings are kept on this phone. Signed in with the site's cookies, they follow your account.",
+                else "Chat settings are kept on this phone. Signed in with destiny.gg's login page, they follow your account.",
                 color = Palette.TextDim,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -543,7 +543,7 @@ private fun NotificationSettings(
             onChanged()
         }
     }
-    val signedOutNote = if (cookies) null else "Needs the computer sign-in, because the site only shows whispers to its own login"
+    val signedOutNote = if (cookies) null else "Needs Sign in with destiny.gg (not a login key), because the site only shows whispers to its own login"
     val bigscreen = options.bigscreen
     // The two lists are pages of their own; Back returns here.
     var page by remember { mutableStateOf<String?>(null) }
