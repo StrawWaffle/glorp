@@ -24,6 +24,29 @@ data class Account(
     val modPowers: Boolean get() = hasModPowers(features + roles)
 }
 
+/**
+ * Whether two sign-ins are the same person: the same user id where both are
+ * known, and the same name. A different id or name (another provider's
+ * account, a renamed one) counts as someone else; so does signing out.
+ */
+fun sameUser(a: Account?, b: Account?): Boolean {
+    if (a == null || b == null) return a == null && b == null
+    if (a.userId != null && b.userId != null && a.userId != b.userId) return false
+    return a.nick.equals(b.nick, ignoreCase = true)
+}
+
+/**
+ * Whether what the last account left behind has to go, going from [before]
+ * to [after]: someone else signed in, or signed out. With nobody known in
+ * memory yet (offline at launch, then a sign-in), [storedNick], the name the
+ * app last had, stands in for who was there.
+ */
+fun accountChanged(before: Account?, after: Account?, storedNick: String?): Boolean = when {
+    before != null -> !sameUser(before, after)
+    after == null -> false
+    else -> storedNick != null && !storedNick.equals(after.nick, ignoreCase = true)
+}
+
 sealed interface SessionCheck {
     /** Signed in. [session] may carry a fresh `sid` the site just issued. */
     data class Valid(val account: Account, val session: Session.Cookies) : SessionCheck

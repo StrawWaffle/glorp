@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.strawwaffle.glorp.site.Site
 import io.github.strawwaffle.glorp.site.checkSession
+import io.github.strawwaffle.glorp.site.accountChanged
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -153,6 +154,48 @@ class ChatViewModel(
     // they answer, and "throttled" after a message isn't about a whisper.
     private var lastSentWhisper = false
     private var conversationsLoaded = false
+    private var conversationsJob: Job? = null
+
+    /** Counts changes of who is signed in; answers asked for under an earlier one are dropped. */
+    private var accountEpoch = 0
+
+    /**
+     * Who is signed in. When that's someone else than before (another
+     * account, or nobody), everything that was the last account's goes:
+     * see [forgetAccount].
+     */
+    private fun setAccount(account: Account?) {
+        if (accountChanged(_account.value, account, prefs.get(io.github.strawwaffle.glorp.notify.NotifyOptions.NICK))) forgetAccount()
+        _account.value = account
+    }
+
+    /**
+     * Drops what belonged to the account signed in before: its whisper
+     * conversations, drafts and unconfirmed whispers, the `/r` target, the
+     * background check's "seen" markers (moved to now, so the new account's
+     * old whispers and mentions don't all notify), and anything of its
+     * settings still waiting to be sent. The settings themselves are replaced
+     * by the new account's copy when it loads (see [resolveSettings]: a
+     * device last synced for another account takes the account's copy and
+     * uploads nothing).
+     */
+    private fun forgetAccount() {
+        accountEpoch++
+        _inbox.value = Inbox()
+        _opening.value = null
+        whisperingTo = null
+        whisperInput.setDraft("")
+        unconfirmed.clear()
+        lastSentWhisper = false
+        conversationsJob?.cancel()
+        conversationsJob = null
+        conversationsLoaded = false
+        input.replyTo = null
+        settingsUpload?.cancel()
+        settingsUpload = null
+        settingsLoadedFor = null
+        io.github.strawwaffle.glorp.notify.AlertCheck.heardUntilNow(prefs)
+    }
 
     private fun messages(): io.github.strawwaffle.glorp.site.Messages? =
         (session as? Session.Cookies)?.let { io.github.strawwaffle.glorp.site.Messages(client, site, it) }
@@ -166,9 +209,10 @@ class ChatViewModel(
         val me = _account.value?.nick ?: return
         if (_inbox.value[nick]?.loaded == true) return
         val api = messages() ?: return
+        val epoch = accountEpoch
         viewModelScope.launch {
             val history = api.inbox(nick, me) ?: return@launch
-            _inbox.value = _inbox.value.history(nick, history)
+            if (epoch == accountEpoch) _inbox.value = _inbox.value.history(nick, history)
         }
     }
 
@@ -202,8 +246,9 @@ class ChatViewModel(
         if (conversationsLoaded && !force) return
         val api = messages() ?: return
         conversationsLoaded = true
-        viewModelScope.launch {
-            api.conversations()?.let { _inbox.value = _inbox.value.listed(it) }
+        val epoch = accountEpoch
+        conversationsJob = viewModelScope.launch {
+            api.conversations()?.let { if (epoch == accountEpoch) _inbox.value = _inbox.value.listed(it) }
             delay(60.seconds)
             conversationsLoaded = false
         }
@@ -458,7 +503,7 @@ class ChatViewModel(
         settingsUpload?.cancel()
         session = null
         store.save(null)
-        _account.value = null
+        setAccount(null)
         notice("Signed out.")
         reconnect()
     }
@@ -784,7 +829,7 @@ class ChatViewModel(
     private fun adopt(newSession: Session, account: Account) {
         session = newSession
         store.save(newSession)
-        _account.value = account
+        setAccount(account)
         val userId = account.userId
         if (newSession is Session.Cookies && userId != null) loadSettings(newSession, userId)
     }
@@ -957,7 +1002,7 @@ class ChatViewModel(
                         watchMods()
                         // Chat doesn't say the user id; the site's pages did.
                         val known = _account.value
-                        _account.value = if (known != null && known.nick.equals(me.nick, ignoreCase = true)) me.copy(userId = known.userId) else me
+                        setAccount(if (known != null && known.nick.equals(me.nick, ignoreCase = true)) me.copy(userId = known.userId) else me)
                         loadConversations()
                         false
                     }
@@ -979,7 +1024,7 @@ class ChatViewModel(
                                     SessionCheck.Invalid -> if (session == stale) {
                                         session = null
                                         store.save(null)
-                                        _account.value = null
+                                        setAccount(null)
                                         log.add(ChatLine.info("Your login on $host no longer works. Sign in again to chat.", now()))
                                         _lines.value = log.snapshot()
                                     }
@@ -997,7 +1042,7 @@ class ChatViewModel(
                         // removed on the site.
                         session = null
                         store.save(null)
-                        _account.value = null
+                        setAccount(null)
                         log.add(ChatLine.info("Your login on $host no longer works. Sign in again to chat.", now()))
                     }
                     else -> false
