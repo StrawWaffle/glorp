@@ -38,6 +38,9 @@
 - Dev builds (`debug`, package `…glorp.dev`) talk to destiny.gg's test site
   `https://www.omniliberal.dev`; release builds to `https://www.destiny.gg`.
   Try anything that writes (sending messages, settings) on the test site first.
+  `-Pglorp.devSite=https://www.destiny.gg` points a dev build at the real site,
+  for testing sign-in providers. Anything it writes then hits the real site, so
+  use it with care. Only `https://` origins are accepted.
 - Release builds are signed with the key in the owner's secrets folder,
   `%USERPROFILE%\.secrets\glorp\release.jks`, described by `release.properties`
   there. Every release must use it, or installed copies can't update; it is

@@ -41,6 +41,12 @@ android {
         buildConfigField("boolean", "LOGIN_KEYS", providers.gradleProperty("glorp.loginKeys").orElse("false").get().toBoolean().toString())
     }
 
+    // The site dev and debug builds talk to: the test site unless built with
+    // -Pglorp.devSite=https://www.destiny.gg (for trying sign-in providers;
+    // anything written then lands on the real site). Releases always use destiny.gg.
+    val devSite = providers.gradleProperty("glorp.devSite").orElse("https://www.omniliberal.dev").get().trimEnd('/')
+    require(Regex("""https://[A-Za-z0-9.-]+(:\d+)?""").matches(devSite)) { "glorp.devSite must be an https:// origin, not $devSite" }
+
     // The release key lives outside the repo (see AGENTS.md). Every release
     // must be signed with it, or phones refuse the update.
     val releaseKey = File(System.getProperty("user.home"), ".secrets/glorp/release.properties")
@@ -55,14 +61,14 @@ android {
     }
 
     buildTypes {
-        // Debug and dev builds talk to destiny.gg's test site, so experiments
+        // Debug and dev builds talk to destiny.gg's test site (devSite), so experiments
         // never touch the real chat, and install beside a release as
         // "Glorp (dev)". Both can take a test login from a file (see
         // MainActivity).
         debug {
             applicationIdSuffix = ".dev"
             manifestPlaceholders["appLabel"] = "Glorp (dev)"
-            buildConfigField("String", "SITE_ORIGIN", "\"https://www.omniliberal.dev\"")
+            buildConfigField("String", "SITE_ORIGIN", "\"$devSite\"")
             buildConfigField("boolean", "DEV_IMPORT", "true")
             buildConfigField("boolean", "SELF_UPDATE", "false")
             // The mentions service watches destiny.gg, not the test site.
@@ -87,7 +93,7 @@ android {
             manifestPlaceholders["appLabel"] = "Glorp (dev)"
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
-            buildConfigField("String", "SITE_ORIGIN", "\"https://www.omniliberal.dev\"")
+            buildConfigField("String", "SITE_ORIGIN", "\"$devSite\"")
             buildConfigField("boolean", "DEV_IMPORT", "true")
             buildConfigField("boolean", "SELF_UPDATE", "false")
             buildConfigField("String", "MENTIONS_URL", "\"\"")
