@@ -108,6 +108,12 @@ footer ul.thanks li { margin: 2px 0; }
 .feature .shot-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .feature.with-pair { grid-template-columns: 614px minmax(0, 1fr); }
 .shot-wide { grid-column: 1 / -1; width: 100%; max-width: 668px; justify-self: center; margin-top: 22px; }
+/* Side by side, a wide shot sits under the text and the tall one runs down
+   beside both, so the text column doesn't leave a gap under its list. */
+@media (min-width: 901px) {
+  .feature:has(.shot-wide) > .shot { grid-row: 1 / span 2; }
+  .feature:has(.shot-wide) > .shot-wide { grid-column: 1; grid-row: 2; max-width: none; justify-self: stretch; margin-top: 14px; }
+}
 .shot-wide figcaption, .themes figcaption { font: 700 18px/1.25 "Gaegu", "Nunito", cursive; text-align: center; margin-top: 8px; }
 
 .themes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
