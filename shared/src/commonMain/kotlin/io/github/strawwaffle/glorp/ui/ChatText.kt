@@ -248,14 +248,26 @@ internal sealed interface LineTap {
  * from here on a line's first frame once loaded. A load finishing redraws
  * the lines that wanted it. Kept to the most recent [MOST], as their bitmaps
  * are held while here (Coil's own cache still has the rest).
+ *
+ * A load that fails (no network for a moment) is tried again after a while,
+ * [retryDelayMs] growing from 1 s to a minute, by redrawing the lines still
+ * waiting for it: a line is only drawn again when something it read changes,
+ * so without that a badge missed once stayed a gap until the line went away.
+ * Nothing is retried for a picture no line draws any more.
  */
 internal object ChatImages {
     private const val MOST = 160
-    // One state slot per picture: a line drawing it is redrawn when that one
-    // loads, not when any does. Kept in order of use, so the emotes drawn most
-    // stay and the least used go first.
-    private val slots = LinkedHashMap<String, androidx.compose.runtime.MutableState<Painter?>>(16, 0.75f, true)
-    private val loading = HashSet<String>()
+
+    /** One picture: a line drawing it is redrawn when it loads, or when a failed load may be tried again. */
+    private class Slot {
+        val painter = androidx.compose.runtime.mutableStateOf<Painter?>(null)
+        val retry = androidx.compose.runtime.mutableIntStateOf(0)
+        var loading = false
+        var failures = 0
+    }
+
+    // Kept in order of use, so the emotes drawn most stay and the least used go first.
+    private val slots = LinkedHashMap<String, Slot>(16, 0.75f, true)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     /** Pictures that play by themselves (GIF, animated PNG or AVIF): a line drawing one gets a layer of its own. */
@@ -263,32 +275,49 @@ internal object ChatImages {
 
     fun plays(url: String): Boolean = playing[url] == true
 
+    /** How long to wait before trying a picture again after its [failures]th failed load in a row. */
+    internal fun retryDelayMs(failures: Int): Long = (1_000L shl (failures - 1).coerceIn(0, 6)).coerceAtMost(60_000L)
+
     fun get(url: String, context: PlatformContext): Painter? {
-        val slot = slots.getOrPut(url) { androidx.compose.runtime.mutableStateOf(null) }
-        slot.value?.let { return it }
-        if (loading.add(url)) {
-            scope.launch {
-                val loader = SingletonImageLoader.get(context)
-                // Cached by the file's own name: the site puts its version in
-                // the address, which changes on every release though the picture doesn't.
-                val key = cacheKey(url)
-                val request = ImageRequest.Builder(context).data(url).size(coil3.size.Size.ORIGINAL)
-                    .memoryCacheKey(key).diskCacheKey(key).build()
-                val result = runCatching { loader.execute(request) }.getOrNull()
-                loading.remove(url)
-                if (result is SuccessResult) {
-                    val moving = playingPainter(result.image, context)
-                    if (moving != null) playing[url] = true
-                    slots.getOrPut(url) { androidx.compose.runtime.mutableStateOf(null) }.value = moving ?: result.image.asPainter(context)
-                    while (slots.size > MOST) {
-                        val oldest = slots.keys.first()
-                        slots.remove(oldest)?.value = null
-                        playing.remove(oldest)
-                    }
-                }
-            }
+        val slot = slots.getOrPut(url) { Slot() }
+        slot.painter.value?.let { return it }
+        // Read, so this line is drawn (and asks) again when a retry is due.
+        slot.retry.intValue
+        if (!slot.loading) {
+            slot.loading = true
+            scope.launch { load(url, slot, context) }
         }
         return null
+    }
+
+    private suspend fun load(url: String, slot: Slot, context: PlatformContext) {
+        val loader = SingletonImageLoader.get(context)
+        // Cached by the file's own name: the site puts its version in
+        // the address, which changes on every release though the picture doesn't.
+        val key = cacheKey(url)
+        val request = ImageRequest.Builder(context).data(url).size(coil3.size.Size.ORIGINAL)
+            .memoryCacheKey(key).diskCacheKey(key).build()
+        val result = runCatching { loader.execute(request) }.getOrNull()
+        if (result !is SuccessResult) {
+            slot.failures++
+            delay(retryDelayMs(slot.failures))
+            slot.loading = false
+            slot.retry.intValue++
+            return
+        }
+        slot.loading = false
+        slot.failures = 0
+        val moving = playingPainter(result.image, context)
+        if (moving != null) playing[url] = true
+        val painter = moving ?: result.image.asPainter(context)
+        // The lines that asked read this slot, even if it was pushed out while loading.
+        slot.painter.value = painter
+        slots.getOrPut(url) { slot }.painter.value = painter
+        while (slots.size > MOST) {
+            val oldest = slots.keys.first()
+            slots.remove(oldest)?.painter?.value = null
+            playing.remove(oldest)
+        }
     }
 
     /** The picture's file name (`66596c571d8e5.png`), unique per upload; the whole address for anything else. */
