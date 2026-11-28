@@ -59,10 +59,11 @@ with memory and battery throughout.
    lists what's still unread.
 3. **Logged in** (started): a login key made on the site's developer page in
    the phone's browser and pasted into the app; chat takes it as the
-   `authtoken` cookie. (The site's own login page can't run in a web view:
-   Twitch's and Kick's bot protection blank it and Google refuses in-app
-   sign-in.) Pasting the browser's `sid`/`rememberme` cookies is the other
-   way, needed later for site pages a key doesn't open; those are checked with
+   `authtoken` cookie (now hidden behind the `glorp.loginKeys` build flag).
+   The site's own login page runs in the app's sign-in web view, which hands
+   over its `sid`/`rememberme` cookies once the login lands on `/profile`
+   (Google may refuse in-app sign-in at its password step). Those cookies,
+   or the same ones from a computer or pasted by hand, are checked with
    `/api/chat/me`, which renews `sid`. Logins are kept encrypted with an
    Android Keystore key. Sending messages, `/me`, whispers out
    (`/w nick text`) and in, the server's error codes in chat-gui's words,

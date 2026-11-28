@@ -41,17 +41,21 @@ import io.github.strawwaffle.glorp.auth.Session
 /**
  * Signing in, easiest first:
  *
- * - "From a computer": the site's login cookies, which open everything
- *   (settings that follow the account, whisper history, notifications,
- *   /stalk, what you're watching). The site keeps them out of reach of
- *   pages, so Glorp's sign-in page (on GitHub Pages) has you copy them from
- *   the browser on a computer and shows them as a QR code to scan here.
- * - By hand: a login key from the developer page, or the cookies typed in.
+ * - "Sign in with <site>": the site's own login page in the app's sign-in
+ *   web view ([SiteSignIn]). Its `sid` and `rememberme` cookies open
+ *   everything (settings that follow the account, whisper history,
+ *   notifications, /stalk, what you're watching). Every login the site
+ *   offers loads there; Google's may refuse at the password, as it says it
+ *   does in apps.
+ * - "From a computer", for when that fails: the same cookies, which the site
+ *   keeps out of reach of pages, so Glorp's sign-in page (on GitHub Pages)
+ *   has you copy them from the browser on a computer and shows them as a QR
+ *   code to scan here.
+ * - By hand: the cookies typed in, or (behind [loginKeys]) a login key from
+ *   the developer page.
  *
- * The site's login page can't run inside the app: Twitch's and Kick's bot
- * protection blank it in a web view, and Google refuses in-app sign-in. Its
- * OAuth for apps doesn't help: chat takes only login keys made by hand, and
- * turns away any token an app holds (ApiController::userByAuthToken).
+ * The site's OAuth for apps doesn't help: chat takes only login keys made by
+ * hand, and turns away any token an app holds (ApiController::userByAuthToken).
  */
 @Composable
 fun SignInScreen(
@@ -64,10 +68,18 @@ fun SignInScreen(
     scanCode: (((String?) -> Unit) -> Unit)? = null,
     /** Reads a sign-in code from the computer page. */
     readCode: (String) -> Session? = { null },
+    /**
+     * Offer signing in with a login key. Off for now: the site's login page
+     * opens more. A key already in use keeps working either way.
+     */
+    loginKeys: Boolean = false,
+    /** Opens the site's login page in the app (full screen, over everything); null where there's none. */
+    onSiteSignIn: (() -> Unit)? = null,
 ) {
     var way by remember { mutableStateOf(Way.Choose) }
     var problem by remember { mutableStateOf<String?>(null) }
     val submit: (Session) -> Unit = { session -> problem = null; onSession(session) { problem = it } }
+    OnBack(enabled = way != Way.Choose) { way = Way.Choose }
 
     Column(Modifier.fillMaxSize().background(Palette.Black)) {
         Row(
@@ -85,9 +97,15 @@ fun SignInScreen(
                 problem?.let { Text(it, color = Palette.Orange, fontSize = 14.sp) }
                 when (way) {
                     Way.Choose -> {
+                        if (onSiteSignIn != null) {
+                            SiteOption(host, busy) { problem = null; onSiteSignIn() }
+                            Text("Having trouble?", color = Palette.TextDim, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
                         ComputerSignIn(host, busy, scanCode, readCode, submit) { problem = it }
                         Text("Other ways", color = Palette.TextDim, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        TextButton(onClick = { way = Way.Key; problem = null }) { Text("Paste a login key", color = Palette.Blue) }
+                        if (loginKeys) {
+                            TextButton(onClick = { way = Way.Key; problem = null }) { Text("Paste a login key", color = Palette.Blue) }
+                        }
                         TextButton(onClick = { way = Way.Cookies; problem = null }) { Text("Type in the browser's cookies", color = Palette.Blue) }
                     }
                     Way.Key -> LoginKeyForm(origin, host, busy, submit)
@@ -118,6 +136,19 @@ private fun Option(title: String, detail: String, content: @Composable () -> Uni
         Text(detail, color = Palette.TextDim, fontSize = 13.sp)
         content()
     }
+}
+
+@Composable
+private fun SiteOption(host: String, busy: Boolean, open: () -> Unit) = Option(
+    "Sign in with $host",
+    "Use $host's own login page, here in the app, with any of its logins. For everything: chat and whispers, " +
+        "settings that follow your account, whisper history, notifications, /stalk and /mentions.",
+) {
+    Button(
+        onClick = open,
+        enabled = !busy,
+        colors = ButtonDefaults.buttonColors(containerColor = Palette.Blue, contentColor = Palette.OnAction),
+    ) { Text("Sign in with $host") }
 }
 
 @Composable

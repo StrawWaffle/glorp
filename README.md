@@ -123,10 +123,11 @@ It needs Android 8 or newer.
 
 ## Signing in
 
-destiny.gg's login page can't run inside an app, because Twitch, Kick and
-Google block sign-in there. Glorp signs in two other ways.
-
-- **From a computer.** This unlocks everything. Open
+- **With destiny.gg's login page.** Glorp opens the site's own login page
+  inside the app; sign in with any of its logins and Glorp keeps the site's
+  login cookies. Google sign-in may not work inside apps; if it doesn't, use
+  the computer.
+- **From a computer**, when the login page doesn't work in the app. Open
   [Glorp's sign-in page](https://strawwaffle.dev/glorp/signin/) on a
   computer that's signed in to destiny.gg, copy the two values it asks for
   from the browser, and scan the code it shows with Glorp. The page sends
@@ -136,8 +137,6 @@ Google block sign-in there. Glorp signs in two other ways.
   reads the two values for you and shows the code on destiny.gg itself, once
   the manager is allowed to read HTTP-only cookies (the sign-in page says
   where).
-- **A login key.** This covers chat and whispers. Create one on your
-  account's developer page and paste it into Glorp.
 
 Glorp keeps the login on the phone, encrypted with a key from Android's
 keystore.

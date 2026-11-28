@@ -151,6 +151,7 @@ class MainActivity : ComponentActivity() {
                 notify = notify,
                 diagnostics = Crashes.diagnostics(applicationContext, BuildConfig.VERSION_NAME),
                 scanCode = ::scanCode,
+                loginKeys = BuildConfig.LOGIN_KEYS,
             )
         }
     }

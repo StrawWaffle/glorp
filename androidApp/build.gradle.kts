@@ -36,6 +36,9 @@ android {
         buildConfigField("String", "MENTIONS_URL", "\"${providers.gradleProperty("glorp.mentionsUrl").orElse("").get()}\"")
         // Movie-night votes come from the same server in every build: they're read-only and about destiny.gg.
         buildConfigField("String", "VOTES_URL", "\"${providers.gradleProperty("glorp.mentionsUrl").orElse("").get()}\"")
+        // Signing in with a login key, hidden from the sign-in screen unless
+        // built with -Pglorp.loginKeys=true. Keys already in use keep working.
+        buildConfigField("boolean", "LOGIN_KEYS", providers.gradleProperty("glorp.loginKeys").orElse("false").get().toBoolean().toString())
     }
 
     // The release key lives outside the repo (see AGENTS.md). Every release

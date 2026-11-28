@@ -74,6 +74,11 @@ import io.github.strawwaffle.glorp.ui.OnBack
 import io.github.strawwaffle.glorp.ui.LocalPictureInPicture
 import io.github.strawwaffle.glorp.ui.PictureInPicture
 import io.github.strawwaffle.glorp.ui.SignInScreen
+import io.github.strawwaffle.glorp.ui.SiteSignIn
+import io.github.strawwaffle.glorp.ui.siteLoginAvailable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import io.github.strawwaffle.glorp.ui.WhispersScreen
 import io.github.strawwaffle.glorp.ui.glorpImageLoader
 import io.github.strawwaffle.glorp.ui.ReportScreen
@@ -101,6 +106,8 @@ fun GlorpApp(
     diagnostics: Diagnostics? = null,
     /** Scans a QR code (the computer sign-in); null where there's no scanner. */
     scanCode: (((String?) -> Unit) -> Unit)? = null,
+    /** Offer signing in with a login key (a build flag, off by default; see SignInScreen). */
+    loginKeys: Boolean = false,
 ) {
     setSingletonImageLoaderFactory { context -> glorpImageLoader(context) }
     // Keep a stream's sound going with the screen off: on unless turned off in the menu.
@@ -171,6 +178,8 @@ fun GlorpApp(
         // app; signing in goes back to the menu.
         var screen by rememberSaveable { mutableStateOf("chat") }
         var communityArg by rememberSaveable { mutableStateOf<String?>(null) }
+        // The site's login page, over everything while it's open; the screen to show once signed in.
+        var siteSignIn by rememberSaveable { mutableStateOf<String?>(null) }
         val live by chat.live.collectAsStateWithLifecycle()
         val picked by chat.picked.collectAsStateWithLifecycle()
         val poll by chat.poll.collectAsStateWithLifecycle()
@@ -328,6 +337,7 @@ fun GlorpApp(
                 animations = !settings.disableAnimations,
             ),
         ) {
+        Box(Modifier.fillMaxSize()) {
         ChatScreen(
             { lines.value }, flairs, emotes, state, account,
             onSend = chat::send,
@@ -354,7 +364,8 @@ fun GlorpApp(
             onClosePoll = chat::dismissPoll,
             pinned = pinned,
             onShowPin = chat::showPin,
-            player = if (!playerShown) null else {
+            // The login page takes the whole screen; the player stops meanwhile.
+            player = if (!playerShown || siteSignIn != null) null else {
                 {
                     Bigscreen(
                         embed = embed,
@@ -472,6 +483,10 @@ fun GlorpApp(
                             onClose = { screen = "menu" },
                             scanCode = scanCode,
                             readCode = { readSignInCode(it, chat.site) },
+                            loginKeys = loginKeys,
+                            onSiteSignIn = if (siteLoginAvailable) {
+                                { siteSignIn = if (forWhispers) "whispers" else "chat" }
+                            } else null,
                         )
                     }
                 }
@@ -526,6 +541,22 @@ fun GlorpApp(
                 else -> null
             },
         )
+        siteSignIn?.let { next ->
+            SiteSignIn(
+                origin = origin,
+                host = chat.host,
+                busy = signingIn,
+                onCookies = { session, result ->
+                    chat.signIn(session) { error ->
+                        result(error)
+                        if (error == null) { siteSignIn = null; screen = next }
+                    }
+                },
+                onComputer = { siteSignIn = null },
+                onClose = { siteSignIn = null },
+            )
+        }
+        }
         }
     } }
 }

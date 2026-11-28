@@ -67,11 +67,18 @@
   `files/dev-frames` next to `dev-session`, one per line, as the server sends
   them (`POLLSTART {...}`); `sleep N` waits N ms and `$NOW` becomes the time.
   Dev builds play them into chat once it connects, then delete the file.
-- Signing in: login keys (the site's developer page, Create Login Key) are what
-  chat accepts as the `authtoken` cookie; the site's pages don't accept them.
-  The site's login page can't run in a web view (Twitch's and Kick's bot
-  protection blank it, Google refuses), so the app sends people to their
-  browser to make a key.
+- Signing in: the site's own login page runs in a sign-in web view of its own
+  (`ui/SiteLogin*.kt`, `auth/WebSignIn.kt`): every provider's page loads
+  there. Once the login lands on `/profile` the app takes `sid` and
+  `rememberme` from the web view's cookies, checks them like any cookie login
+  and wipes the web views' cookies and storage. Google may still refuse at its
+  password step, so "Sign in from a computer" (the QR) stays as the fallback.
+  The player's web view is no place to try logins: it has no
+  `WebViewClient` (the web view cancels cross-site redirects) and, left to
+  wrap its content, gives pages a zero-height `vh`, which blanks Twitch's.
+  Login keys (developer page, Create Login Key; chat takes them as the
+  `authtoken` cookie, the site's pages don't) are hidden from the sign-in
+  screen unless built with `-Pglorp.loginKeys=true`; keys in use keep working.
 
 ## Licence
 
